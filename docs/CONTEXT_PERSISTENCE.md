@@ -45,6 +45,8 @@ cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3
 
 - `GET /` dashboard UI
 - `GET /health`
+- `GET /healthz`
+- `GET /ready`
 - `GET /metrics`
 - `GET /state/risk`
 - `GET /state/books`
@@ -56,3 +58,9 @@ cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3
 - `POST /ops/halt`
 - `POST /ops/resume`
 - `POST /ops/flatten`
+
+## Schema References
+
+- `docs/api/dashboard-openapi.yaml`
+- `schemas/config.schema.json`
+- `schemas/tradingview-webhook.schema.json`

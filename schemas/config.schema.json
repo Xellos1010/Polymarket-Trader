@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polymarket-trader.local/schemas/config.schema.json",
+  "title": "AppConfig",
+  "description": "Logical schema for config/config.toml (represented as JSON)",
+  "type": "object",
+  "required": ["engine", "venues", "signals", "risk", "storage", "ops"],
+  "properties": {
+    "engine": {
+      "type": "object",
+      "required": ["mode", "loop_ms"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["replay", "paper", "live"] },
+        "loop_ms": { "type": "integer", "minimum": 50 },
+        "replay_path": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "venues": {
+      "type": "object",
+      "required": ["polymarket", "coinbase"],
+      "properties": {
+        "polymarket": {
+          "type": "object",
+          "required": ["gamma_api", "data_api", "clob_api", "clob_ws", "chain_id", "filters"],
+          "properties": {
+            "gamma_api": { "type": "string", "pattern": "^https?://" },
+            "data_api": { "type": "string", "pattern": "^https?://" },
+            "clob_api": { "type": "string", "pattern": "^https?://" },
+            "clob_ws": { "type": "string", "pattern": "^wss?://" },
+            "private_key": { "type": ["string", "null"] },
+            "use_server_time": { "type": ["boolean", "null"] },
+            "chain_id": { "type": "integer", "minimum": 1 },
+            "filters": {
+              "type": "object",
+              "required": ["tag_id", "max_spread", "min_liquidity", "min_volume24h", "require_fee_enabled", "require_orderbook", "allowed_slugs", "assets"],
+              "properties": {
+                "tag_id": { "type": "integer", "minimum": 1 },
+                "max_spread": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+                "min_liquidity": { "type": "number", "minimum": 0 },
+                "min_volume24h": { "type": "number", "minimum": 0 },
+                "require_fee_enabled": { "type": "boolean" },
+                "require_orderbook": { "type": "boolean" },
+                "allowed_slugs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+                "assets": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "coinbase": {
+          "type": "object",
+          "required": ["api_base", "products", "hedge_threshold_usd", "hedge_max_slippage_bps"],
+          "properties": {
+            "api_base": { "type": "string", "pattern": "^https?://" },
+            "api_key": { "type": ["string", "null"] },
+            "api_secret": { "type": ["string", "null"] },
+            "passphrase": { "type": ["string", "null"] },
+            "products": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "hedge_threshold_usd": { "type": "number", "exclusiveMinimum": 0 },
+            "hedge_max_slippage_bps": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "signals": {
+      "type": "object",
+      "required": ["wallet", "tradingview"],
+      "properties": {
+        "wallet": {
+          "type": "object",
+          "required": ["refresh_secs", "top_n", "allowlist_path", "enforce_allowlist"],
+          "properties": {
+            "refresh_secs": { "type": "integer", "minimum": 1 },
+            "top_n": { "type": "integer", "minimum": 1 },
+            "allowlist_path": { "type": "string" },
+            "enforce_allowlist": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "tradingview": {
+          "type": "object",
+          "required": ["enabled", "bind_addr", "k_wallet", "k_tv"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "bind_addr": { "type": "string" },
+            "endpoint_secret": { "type": ["string", "null"] },
+            "k_wallet": { "type": "number" },
+            "k_tv": { "type": "number" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "risk": {
+      "type": "object",
+      "required": ["daily_loss_limit_pct", "max_notional_per_market", "max_total_open_notional", "max_markets_quoted_simultaneously", "max_unhedged_delta", "max_order_age_secs", "stale_book_threshold_ms", "min_expected_net"],
+      "properties": {
+        "daily_loss_limit_pct": { "type": "number", "exclusiveMinimum": 0 },
+        "max_notional_per_market": { "type": "number", "exclusiveMinimum": 0 },
+        "max_total_open_notional": { "type": "number", "exclusiveMinimum": 0 },
+        "max_markets_quoted_simultaneously": { "type": "integer", "minimum": 1 },
+        "max_unhedged_delta": { "type": "number", "exclusiveMinimum": 0 },
+        "max_order_age_secs": { "type": "integer", "minimum": 1 },
+        "stale_book_threshold_ms": { "type": "integer", "minimum": 1 },
+        "min_expected_net": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "required": ["sqlite_path", "parquet_dir", "snapshot_roll_secs"],
+      "properties": {
+        "sqlite_path": { "type": "string" },
+        "parquet_dir": { "type": "string" },
+        "snapshot_roll_secs": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "ops": {
+      "type": "object",
+      "required": ["log_level", "dashboard_bind", "metrics_flush_secs", "market_refresh_secs", "wallet_refresh_secs", "risk_watchdog_ms"],
+      "properties": {
+        "log_level": { "type": "string" },
+        "dashboard_bind": { "type": "string" },
+        "metrics_flush_secs": { "type": "integer", "minimum": 1 },
+        "market_refresh_secs": { "type": "integer", "minimum": 1 },
+        "wallet_refresh_secs": { "type": "integer", "minimum": 1 },
+        "risk_watchdog_ms": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

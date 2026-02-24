@@ -91,6 +91,8 @@ pub fn router(state: DashboardState) -> Router {
     Router::new()
         .route("/", get(get_dashboard))
         .route("/health", get(get_health))
+        .route("/healthz", get(get_health))
+        .route("/ready", get(get_health))
         .route("/metrics", get(get_metrics))
         .route("/state/risk", get(get_risk_state))
         .route("/state/books", get(get_books))

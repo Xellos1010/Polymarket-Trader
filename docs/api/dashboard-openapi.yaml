@@ -1,0 +1,270 @@
+openapi: 3.0.3
+info:
+  title: Polymarket Trader Operator API
+  version: 0.1.0
+  description: Operator and dashboard endpoints exposed by pt-dashboard.
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /health:
+    get:
+      summary: Health and kill-switch status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /ready:
+    get:
+      summary: Readiness probe
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses:
+        '200':
+          description: Prometheus exposition format
+          content:
+            text/plain:
+              schema:
+                type: string
+  /state/risk:
+    get:
+      summary: Current risk state
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskState'
+  /state/books:
+    get:
+      summary: Latest market snapshots
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketSnapshot'
+  /state/markets:
+    get:
+      summary: Market summary rows for UI selector
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketView'
+  /state/history:
+    get:
+      summary: Rolling history points for a selected market
+      parameters:
+        - in: query
+          name: market_id
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 1200
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketHistoryResponse'
+  /state/executions:
+    get:
+      summary: Recent execution reports
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExecutionReport'
+  /state/bias:
+    get:
+      summary: Current fused asset bias
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BiasView'
+  /state/inventory:
+    get:
+      summary: Inventory notional
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryView'
+  /ops/halt:
+    post:
+      summary: Set manual halt
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /ops/resume:
+    post:
+      summary: Resume running mode
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /ops/flatten:
+    post:
+      summary: Enter safe mode / flatten behavior
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, kill_switch]
+      properties:
+        status:
+          type: string
+        kill_switch:
+          type: string
+    RiskState:
+      type: object
+      required: [killswitch, daily_pnl, max_daily_loss, open_notional, unhedged_delta, open_markets, stale_books, last_update_ms]
+      properties:
+        killswitch: { type: string }
+        daily_pnl: { type: number }
+        max_daily_loss: { type: number }
+        open_notional: { type: number }
+        unhedged_delta: { type: number }
+        open_markets: { type: integer }
+        stale_books: { type: integer }
+        last_update_ms: { type: integer }
+    MarketSnapshot:
+      type: object
+      required: [market_id, token_id, bid, ask, spread, liquidity, ts]
+      properties:
+        market_id: { type: string }
+        token_id: { type: string }
+        bid: { type: number }
+        ask: { type: number }
+        spread: { type: number }
+        liquidity: { type: number }
+        ts:
+          type: string
+          format: date-time
+    MarketView:
+      type: object
+      required: [market_id, token_id, bid, ask, spread, mid, ts]
+      properties:
+        market_id: { type: string }
+        token_id: { type: string }
+        bid: { type: number }
+        ask: { type: number }
+        spread: { type: number }
+        mid: { type: number }
+        ts:
+          type: string
+          format: date-time
+    MarketHistoryPoint:
+      type: object
+      required: [market_id, mid, spread, bid, ask, ts]
+      properties:
+        market_id: { type: string }
+        mid: { type: number }
+        spread: { type: number }
+        bid: { type: number }
+        ask: { type: number }
+        ts:
+          type: string
+          format: date-time
+    MarketHistoryResponse:
+      type: object
+      required: [points]
+      properties:
+        market_id:
+          type: string
+          nullable: true
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketHistoryPoint'
+    ExecutionReport:
+      type: object
+      required: [venue, order_id, status, side, filled_qty, avg_px, ts]
+      properties:
+        venue: { type: string }
+        order_id: { type: string }
+        market_id:
+          type: string
+          nullable: true
+        status: { type: string }
+        side: { type: string }
+        filled_qty: { type: number }
+        avg_px: { type: number }
+        ts:
+          type: string
+          format: date-time
+        details:
+          type: string
+          nullable: true
+    BiasView:
+      type: object
+      required: [asset, bias]
+      properties:
+        asset: { type: string }
+        bias: { type: number }
+    InventoryView:
+      type: object
+      required: [inventory_usd]
+      properties:
+        inventory_usd: { type: number }

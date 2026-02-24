@@ -125,6 +125,204 @@ impl AppConfig {
         let path = path.as_ref();
         let raw = fs::read_to_string(path).map_err(|e| PtError::Io(e.to_string()))?;
         let cfg = toml::from_str::<AppConfig>(&raw).map_err(|e| PtError::Config(e.to_string()))?;
+        cfg.validate()?;
         Ok(cfg)
+    }
+
+    pub fn validate(&self) -> PtResult<()> {
+        if self.engine.loop_ms < 50 {
+            return Err(PtError::Config(
+                "engine.loop_ms must be >= 50ms".to_string(),
+            ));
+        }
+
+        if self.venues.polymarket.chain_id == 0 {
+            return Err(PtError::Config(
+                "venues.polymarket.chain_id must be > 0".to_string(),
+            ));
+        }
+
+        if !is_http_url(&self.venues.polymarket.gamma_api) {
+            return Err(PtError::Config(
+                "venues.polymarket.gamma_api must be an http(s) URL".to_string(),
+            ));
+        }
+        if !is_http_url(&self.venues.polymarket.data_api) {
+            return Err(PtError::Config(
+                "venues.polymarket.data_api must be an http(s) URL".to_string(),
+            ));
+        }
+        if !is_http_url(&self.venues.polymarket.clob_api) {
+            return Err(PtError::Config(
+                "venues.polymarket.clob_api must be an http(s) URL".to_string(),
+            ));
+        }
+        if !is_websocket_url(&self.venues.polymarket.clob_ws) {
+            return Err(PtError::Config(
+                "venues.polymarket.clob_ws must be a ws(s) URL".to_string(),
+            ));
+        }
+        if !is_http_url(&self.venues.coinbase.api_base) {
+            return Err(PtError::Config(
+                "venues.coinbase.api_base must be an http(s) URL".to_string(),
+            ));
+        }
+
+        if self.venues.polymarket.filters.max_spread <= 0.0
+            || self.venues.polymarket.filters.max_spread > 1.0
+        {
+            return Err(PtError::Config(
+                "venues.polymarket.filters.max_spread must be in (0,1]".to_string(),
+            ));
+        }
+
+        if self.venues.polymarket.filters.min_liquidity < 0.0 {
+            return Err(PtError::Config(
+                "venues.polymarket.filters.min_liquidity must be >= 0".to_string(),
+            ));
+        }
+        if self.venues.polymarket.filters.min_volume24h < 0.0 {
+            return Err(PtError::Config(
+                "venues.polymarket.filters.min_volume24h must be >= 0".to_string(),
+            ));
+        }
+        if self.venues.polymarket.filters.allowed_slugs.is_empty() {
+            return Err(PtError::Config(
+                "venues.polymarket.filters.allowed_slugs must not be empty".to_string(),
+            ));
+        }
+        if self.venues.polymarket.filters.assets.is_empty() {
+            return Err(PtError::Config(
+                "venues.polymarket.filters.assets must not be empty".to_string(),
+            ));
+        }
+
+        if self.risk.daily_loss_limit_pct <= 0.0 {
+            return Err(PtError::Config(
+                "risk.daily_loss_limit_pct must be > 0".to_string(),
+            ));
+        }
+        if self.risk.max_notional_per_market <= 0.0 {
+            return Err(PtError::Config(
+                "risk.max_notional_per_market must be > 0".to_string(),
+            ));
+        }
+        if self.risk.max_total_open_notional <= 0.0 {
+            return Err(PtError::Config(
+                "risk.max_total_open_notional must be > 0".to_string(),
+            ));
+        }
+        if self.risk.max_markets_quoted_simultaneously == 0 {
+            return Err(PtError::Config(
+                "risk.max_markets_quoted_simultaneously must be > 0".to_string(),
+            ));
+        }
+        if self.risk.max_unhedged_delta <= 0.0 {
+            return Err(PtError::Config(
+                "risk.max_unhedged_delta must be > 0".to_string(),
+            ));
+        }
+        if self.risk.max_order_age_secs == 0 {
+            return Err(PtError::Config(
+                "risk.max_order_age_secs must be > 0".to_string(),
+            ));
+        }
+        if self.risk.stale_book_threshold_ms == 0 {
+            return Err(PtError::Config(
+                "risk.stale_book_threshold_ms must be > 0".to_string(),
+            ));
+        }
+        if self.risk.min_expected_net < 0.0 {
+            return Err(PtError::Config(
+                "risk.min_expected_net must be >= 0".to_string(),
+            ));
+        }
+
+        if self.signals.tradingview.k_wallet.is_nan() || self.signals.tradingview.k_tv.is_nan() {
+            return Err(PtError::Config(
+                "signals.tradingview weights must be finite".to_string(),
+            ));
+        }
+        if self.signals.tradingview.k_wallet.abs() + self.signals.tradingview.k_tv.abs() <= 0.0 {
+            return Err(PtError::Config(
+                "signals.tradingview weights must not both be zero".to_string(),
+            ));
+        }
+
+        if self.ops.dashboard_bind.trim().is_empty() {
+            return Err(PtError::Config(
+                "ops.dashboard_bind must not be empty".to_string(),
+            ));
+        }
+        if self.ops.market_refresh_secs == 0 {
+            return Err(PtError::Config(
+                "ops.market_refresh_secs must be > 0".to_string(),
+            ));
+        }
+        if self.ops.wallet_refresh_secs == 0 {
+            return Err(PtError::Config(
+                "ops.wallet_refresh_secs must be > 0".to_string(),
+            ));
+        }
+        if self.ops.risk_watchdog_ms == 0 {
+            return Err(PtError::Config(
+                "ops.risk_watchdog_ms must be > 0".to_string(),
+            ));
+        }
+
+        if matches!(self.engine.mode, EngineMode::Live) {
+            if is_empty_opt(self.venues.polymarket.private_key.as_deref()) {
+                return Err(PtError::Config(
+                    "engine.mode=live requires venues.polymarket.private_key".to_string(),
+                ));
+            }
+            if is_empty_opt(self.venues.coinbase.api_key.as_deref()) {
+                return Err(PtError::Config(
+                    "engine.mode=live requires venues.coinbase.api_key".to_string(),
+                ));
+            }
+            if is_empty_opt(self.venues.coinbase.api_secret.as_deref()) {
+                return Err(PtError::Config(
+                    "engine.mode=live requires venues.coinbase.api_secret".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn is_http_url(v: &str) -> bool {
+    v.starts_with("http://") || v.starts_with("https://")
+}
+
+fn is_websocket_url(v: &str) -> bool {
+    v.starts_with("ws://") || v.starts_with("wss://")
+}
+
+fn is_empty_opt(v: Option<&str>) -> bool {
+    v.map(|s| s.trim().is_empty()).unwrap_or(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_example_is_valid() {
+        let raw = include_str!("../../../config/config.example.toml");
+        let cfg = toml::from_str::<AppConfig>(raw).expect("parse config example");
+        cfg.validate().expect("validate config example");
+    }
+
+    #[test]
+    fn live_mode_requires_credentials() {
+        let raw = include_str!("../../../config/config.example.toml");
+        let mut cfg = toml::from_str::<AppConfig>(raw).expect("parse config example");
+        cfg.engine.mode = EngineMode::Live;
+        cfg.venues.polymarket.private_key = Some(String::new());
+        cfg.venues.coinbase.api_key = Some(String::new());
+        cfg.venues.coinbase.api_secret = Some(String::new());
+        assert!(cfg.validate().is_err());
     }
 }

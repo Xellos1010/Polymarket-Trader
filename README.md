@@ -30,10 +30,26 @@ Open dashboard:
 http://127.0.0.1:8080/
 ```
 
+## Environment variables
+
+Use `.env.example` as the baseline for local/dev shells.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `RUST_LOG` | No | Log level/filter for runtime diagnostics |
+| `PT_CONFIG_PATH` | No | Optional override path to config TOML |
+| `POLYMARKET_PRIVATE_KEY` | Live only | Wallet key material (inject securely) |
+| `COINBASE_API_KEY` | Live only | Coinbase API key |
+| `COINBASE_API_SECRET` | Live only | Coinbase API secret |
+| `COINBASE_PASSPHRASE` | Optional | Coinbase passphrase for key types that require it |
+| `TRADINGVIEW_ENDPOINT_SECRET` | Optional | Secret for TradingView webhook auth |
+
 ## Operator endpoints
 
 - `GET /` dashboard UI
 - `GET /health`
+- `GET /healthz`
+- `GET /ready`
 - `GET /metrics`
 - `GET /state/risk`
 - `GET /state/books`
@@ -58,6 +74,21 @@ http://127.0.0.1:8080/
   - `cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 200 --top-k 20 --evaluate-cmd "python3 tools/evaluate_candidate.py"`
 - Save session context:
   - `cargo run -p pt-cli -- save-context --out docs/SESSION_CONTEXT.md --note "checkpoint note"`
+
+## Schemas and contracts
+
+- OpenAPI spec: `docs/api/dashboard-openapi.yaml`
+- Config schema: `schemas/config.schema.json`
+- TradingView webhook schema: `schemas/tradingview-webhook.schema.json`
+- Runtime data model summary: `docs/data/SCHEMA.md`
+
+## SDLC and architecture docs
+
+- SDLC checklist/status: `docs/SDLC_CHECKLIST.md`
+- Architecture overview: `docs/architecture/system-overview.md`
+- ADR index: `docs/adr/001-rust-first-polymarket-engine.md`
+- Operations runbook: `docs/RUNBOOK.md`
+- Contribution guide: `CONTRIBUTING.md`
 
 ## Notes
 
