@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+config/config.toml
+data/output/
+.env
+.DS_Store

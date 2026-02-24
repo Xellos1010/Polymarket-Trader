@@ -1,0 +1,72 @@
+[engine]
+mode = "paper"
+loop_ms = 500
+replay_path = "data/replay/sample.ndjson"
+
+[venues.polymarket]
+gamma_api = "https://gamma-api.polymarket.com"
+data_api = "https://data-api.polymarket.com"
+clob_api = "https://clob.polymarket.com"
+clob_ws = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+# EVM private key used to authenticate and sign CLOB orders.
+private_key = ""
+use_server_time = true
+chain_id = 137
+
+[venues.polymarket.filters]
+tag_id = 21
+max_spread = 0.02
+min_liquidity = 8000.0
+min_volume24h = 10.0
+require_fee_enabled = true
+require_orderbook = true
+allowed_slugs = ["updown-5m", "updown-15m"]
+assets = ["BTC", "ETH", "SOL", "XRP"]
+
+[venues.coinbase]
+api_base = "https://api.coinbase.com/api/v3/brokerage"
+# CDP API key name (kid/sub in JWT).
+api_key = ""
+# CDP EC private key PEM. If stored in one line, use escaped newlines (\\n).
+api_secret = ""
+# Optional. Only needed for key types that require passphrase.
+passphrase = ""
+products = ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD"]
+hedge_threshold_usd = 5.0
+hedge_max_slippage_bps = 10.0
+
+[signals.wallet]
+refresh_secs = 30
+top_n = 100
+allowlist_path = "config/wallet_allowlist.txt"
+enforce_allowlist = false
+
+[signals.tradingview]
+enabled = true
+bind_addr = "127.0.0.1:8090"
+endpoint_secret = "replace-me"
+k_wallet = 0.7
+k_tv = 0.3
+
+[risk]
+daily_loss_limit_pct = 0.02
+max_notional_per_market = 5.0
+max_total_open_notional = 20.0
+max_markets_quoted_simultaneously = 2
+max_unhedged_delta = 10.0
+max_order_age_secs = 20
+stale_book_threshold_ms = 400
+min_expected_net = 0.002
+
+[storage]
+sqlite_path = "data/output/engine.sqlite"
+parquet_dir = "data/output/parquet"
+snapshot_roll_secs = 60
+
+[ops]
+log_level = "info"
+dashboard_bind = "127.0.0.1:8080"
+metrics_flush_secs = 5
+market_refresh_secs = 60
+wallet_refresh_secs = 30
+risk_watchdog_ms = 100

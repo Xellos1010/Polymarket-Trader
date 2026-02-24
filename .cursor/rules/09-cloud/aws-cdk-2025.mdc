@@ -1,0 +1,37 @@
+---
+alwaysApply: false
+---
+# AWS CDK — 2025 Elevated Standards
+
+## Language & Tooling
+- **TypeScript strict** only; disallow implicit any; emit declarations for constructs. Enforce via `tsconfig` and lint rules. :contentReference[oaicite:1]{index=8}
+- Node engines pinned (>=20.x) across apps; keep uniform with root engines. :contentReference[oaicite:1]{index=14}
+
+## Project Layout
+- Keep **app entry** in `bin/` and constructs in `lib/`. Provide **scripts** for `synth`, `diff`, `deploy`, `destroy`. :contentReference[oaicite:1]{index=8}
+- Turn on **feature flags/context** in `cdk.json` to get modern behavior and validations. (You already carry many safety flags.) :contentReference[oaicite:1]{index=15}
+
+## Bootstrap & Environments
+- Separate **accounts**: `dev`, `stage`, `prod`. Bootstrap each with a unique **qualifier** and permission boundaries.
+- Name stacks and assets with `{app}-{env}`; never share stateful resources across envs.
+- All stacks must tag: `app`, `env`, `owner`, `data-class`, `cost-center`.
+
+## UserData & Instance Initialization
+- **Avoid UserData.forLinux().addCommands()** for complex scripts; CDK synthesis can silently drop commands due to template literal conflicts and parsing issues.
+- **Use CfnInstance with direct cdk.Fn.base64()** for complex user data scripts to ensure reliable synthesis:
+  ```ts
+  const userDataScript = ['#!/bin/bash', 'set -eux', '# ... commands'].join('\n');
+  const instance = new ec2.CfnInstance(this, 'Instance', {
+    userData: cdk.Fn.base64(userDataScript),
+    // ... other props
+  });
+  ```
+- **Test synthesis output** before deployment; verify UserData contains full script, not just shebang.
+- **Avoid template literals in embedded code** - use string concatenation to prevent conflicts with TypeScript template literals.
+
+## Security Baseline (fail builds on violations)
+- Add **cdk-nag** (AwsSolutions pack) at the **App** level:
+  ```ts
+  import { Aspects } from 'aws-cdk-lib';
+  import { AwsSolutionsChecks } from 'cdk-nag';
+  Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));

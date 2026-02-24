@@ -1,0 +1,5 @@
+# Optional wallet allowlist (lowercase addresses)
+# If signals.wallet.enforce_allowlist=true, only these wallets are used.
+0x1979ae6b7e6534de9c4539d0c205e582ca637c9d
+0x0fe40e887acbd0022f89d996acce26ab428501b7
+0x3526087ea139532d71198813c2dd55defaefaaba

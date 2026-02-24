@@ -1,0 +1,18 @@
+[package]
+name = "pt-coinbase"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+jsonwebtoken.workspace = true
+parking_lot.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+uuid.workspace = true
+pt-core = { path = "../pt-core" }

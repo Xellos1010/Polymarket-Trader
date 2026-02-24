@@ -1,0 +1,32 @@
+[package]
+name = "pt-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+arrow-array.workspace = true
+arrow-schema.workspace = true
+axum.workspace = true
+chrono.workspace = true
+parking_lot.workspace = true
+parquet.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+pt-core = { path = "../pt-core" }
+pt-market-discovery = { path = "../pt-market-discovery" }
+pt-polymarket = { path = "../pt-polymarket" }
+pt-wallet-intel = { path = "../pt-wallet-intel" }
+pt-signal = { path = "../pt-signal" }
+pt-quote = { path = "../pt-quote" }
+pt-risk = { path = "../pt-risk" }
+pt-replay = { path = "../pt-replay" }
+pt-coinbase = { path = "../pt-coinbase" }
+pt-dashboard = { path = "../pt-dashboard" }
