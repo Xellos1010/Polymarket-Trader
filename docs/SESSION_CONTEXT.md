@@ -1,9 +1,9 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1771892085`
+Generated at UNIX epoch seconds: `1771907558`
 
 ## Note
-Added SDLC compliance artifacts, schemas/OpenAPI docs, runtime config validation, CI/CODEOWNERS/CONTRIBUTING, and healthz/ready endpoints.
+Implemented backlog items #2-#10: OpenAPI contract tests, git hooks, CI audit+SBOM, env secret overrides, deployment automation, soak tooling, OHLCV fetch + evaluator cost model, candidate promotion flow, and tiny live pilot guard.
 
 ## Runtime
 `rustc`: `rustc 1.93.1 (01f6ddf75 2026-02-11)`
@@ -19,8 +19,13 @@ Added SDLC compliance artifacts, schemas/OpenAPI docs, runtime config validation
 - Extract pine params: `cargo run -p pt-cli -- pine-params --path pine-scripts/<script> --out data/tuning/pine_params.json`
 - Tune pine params: `cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 100 --evaluate-cmd "python3 tools/evaluate_candidate.py"`
 
+- Promote tuning candidate: `./scripts/promote_candidate.sh data/tuning/pine_tuning_results.json data/tuning/promoted_candidate.json BTC 15m`
+- Paper soak: `./scripts/paper_soak.sh 3600 30 config/config.toml`
+- Tiny live pilot checks: `./scripts/tiny_live_pilot.sh config/config.toml 3000`
+- Install git hooks: `./scripts/install_git_hooks.sh`
+
 ## Live Prerequisites
 - Set `engine.mode = "live"` in config.
-- Set `venues.polymarket.private_key`.
-- Set `venues.coinbase.api_key` and `venues.coinbase.api_secret`.
+- Set `venues.polymarket.private_key` or `POLYMARKET_PRIVATE_KEY`.
+- Set `venues.coinbase.api_key`/`api_secret` or `COINBASE_API_KEY`/`COINBASE_API_SECRET`.
 - Keep hard risk caps enabled for tiny-live rollout.

@@ -30,3 +30,31 @@ jobs:
 
       - name: Build
         run: cargo build --workspace
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install security tooling
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-cyclonedx --locked
+
+      - name: Dependency vulnerability scan
+        run: cargo audit
+
+      - name: Generate SBOM
+        run: ./scripts/generate_sbom.sh artifacts
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: artifacts/*

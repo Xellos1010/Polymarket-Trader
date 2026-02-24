@@ -30,6 +30,14 @@ Open dashboard:
 http://127.0.0.1:8080/
 ```
 
+## Developer setup
+
+Install local git hooks:
+
+```bash
+./scripts/install_git_hooks.sh
+```
+
 ## Environment variables
 
 Use `.env.example` as the baseline for local/dev shells.
@@ -71,7 +79,14 @@ Use `.env.example` as the baseline for local/dev shells.
 - Generate/tune Pine candidates:
   - `cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 100 --top-k 10`
 - Tune with bundled evaluator:
-  - `cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 200 --top-k 20 --evaluate-cmd "python3 tools/evaluate_candidate.py"`
+  - `PT_EVAL_OHLCV=data/ohlcv/btc_1m.csv cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 200 --top-k 20 --evaluate-cmd "python3 tools/evaluate_candidate.py --fee-bps 2.0 --slippage-bps 1.0 --fixed-trade-cost 0.00005 --price-col close --timestamp-col ts"`
+- Fetch OHLCV CSV for tuning input:
+  - `python3 tools/fetch_ohlcv.py --provider coinbase --symbol BTCUSD --interval 1m --limit 300 --out data/ohlcv/btcusd_1m.csv`
+  - fallback: `python3 tools/fetch_ohlcv.py --provider kraken --symbol BTCUSD --interval 1m --limit 300 --out data/ohlcv/btcusd_1m.csv`
+- Promote best tuning candidate:
+  - `./scripts/promote_candidate.sh data/tuning/pine_tuning_results.json data/tuning/promoted_candidate.json BTC 15m`
+- Paper soak (24h default):
+  - `./scripts/paper_soak.sh 86400 30 config/config.toml`
 - Save session context:
   - `cargo run -p pt-cli -- save-context --out docs/SESSION_CONTEXT.md --note "checkpoint note"`
 
@@ -88,7 +103,13 @@ Use `.env.example` as the baseline for local/dev shells.
 - Architecture overview: `docs/architecture/system-overview.md`
 - ADR index: `docs/adr/001-rust-first-polymarket-engine.md`
 - Operations runbook: `docs/RUNBOOK.md`
+- Tiny live pilot guide: `docs/TINY_LIVE_PILOT.md`
 - Contribution guide: `CONTRIBUTING.md`
+
+## CI security gates
+
+- Vulnerability scan: `cargo audit`
+- SBOM generation: `./scripts/generate_sbom.sh artifacts` (CycloneDX when `cargo-cyclonedx` is installed)
 
 ## Notes
 

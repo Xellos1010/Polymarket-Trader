@@ -10,6 +10,11 @@ cargo run -p pt-cli -- run --config config/config.toml
 cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000
 ```
 
+Tiny live pilot guard:
+```bash
+./scripts/tiny_live_pilot.sh config/config.toml 3000
+```
+
 ## Health Checks
 - `GET /health`
 - `GET /healthz`

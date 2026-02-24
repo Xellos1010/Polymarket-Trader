@@ -11,3 +11,9 @@ parking_lot.workspace = true
 serde.workspace = true
 tokio.workspace = true
 pt-core = { path = "../pt-core" }
+
+[dev-dependencies]
+chrono.workspace = true
+serde_json.workspace = true
+serde_yaml = "0.9"
+tower = "0.5"

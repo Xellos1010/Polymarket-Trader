@@ -11,6 +11,18 @@ cargo run -p pt-cli -- pine-params \
   --out data/tuning/pine_params.json
 ```
 
+Optional: fetch real OHLCV for scoring:
+
+```bash
+python3 tools/fetch_ohlcv.py --provider coinbase --symbol BTCUSD --interval 1m --limit 300 --out data/ohlcv/btcusd_1m.csv
+```
+
+If your region blocks a provider, try:
+
+```bash
+python3 tools/fetch_ohlcv.py --provider kraken --symbol BTCUSD --interval 1m --limit 300 --out data/ohlcv/btcusd_1m.csv
+```
+
 ## 2) Generate Candidate Parameter Sets
 
 Without scoring:
@@ -50,10 +62,11 @@ cargo run -p pt-cli -- tune-pine \
   --path pine-scripts/V1-RSI-Fibonacci-BB-Ichimoku-Pyramid-Date-Range-Enabled-v6 \
   --iterations 200 \
   --top-k 20 \
-  --evaluate-cmd "python3 tools/evaluate_candidate.py --fee-bps 2.0 --price-col close --timestamp-col ts"
+  --evaluate-cmd "python3 tools/evaluate_candidate.py --fee-bps 2.0 --slippage-bps 1.0 --fixed-trade-cost 0.00005 --price-col close --timestamp-col ts"
 ```
 
 If no OHLCV path is provided, `tools/evaluate_candidate.py` runs a deterministic synthetic-data evaluation so tuning still works end-to-end.
+For realistic ranking, provide OHLCV and cost terms (`fee-bps`, `slippage-bps`, `fixed-trade-cost`) so candidates are penalized for over-trading and friction.
 
 ## 4) AI Fine-Tuning Loop
 
@@ -66,7 +79,20 @@ Use an LLM agent or script to:
 Recommended objective shape:
 - `score = net_pnl - 0.5*max_drawdown - cost_penalty - overtrade_penalty`
 
-## 5) Wire Signal Indications Into Engine
+## 5) Promote Candidate to Verification Queue
+
+```bash
+./scripts/promote_candidate.sh \
+  data/tuning/pine_tuning_results.json \
+  data/tuning/promoted_candidate.json \
+  BTC 15m
+```
+
+Promotion output contains:
+- selected candidate params and score
+- verification command (`paper_soak.sh`) that must pass before live consideration
+
+## 6) Wire Signal Indications Into Engine
 
 TradingView webhook listener:
 - `POST /tradingview` (configured in `signals.tradingview.bind_addr`)

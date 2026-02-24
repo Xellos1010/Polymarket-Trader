@@ -124,9 +124,29 @@ impl AppConfig {
     pub fn from_file(path: impl AsRef<Path>) -> PtResult<Self> {
         let path = path.as_ref();
         let raw = fs::read_to_string(path).map_err(|e| PtError::Io(e.to_string()))?;
-        let cfg = toml::from_str::<AppConfig>(&raw).map_err(|e| PtError::Config(e.to_string()))?;
+        let mut cfg =
+            toml::from_str::<AppConfig>(&raw).map_err(|e| PtError::Config(e.to_string()))?;
+        cfg.apply_env_overrides();
         cfg.validate()?;
         Ok(cfg)
+    }
+
+    fn apply_env_overrides(&mut self) {
+        if let Some(v) = env_nonempty("POLYMARKET_PRIVATE_KEY") {
+            self.venues.polymarket.private_key = Some(v);
+        }
+        if let Some(v) = env_nonempty("COINBASE_API_KEY") {
+            self.venues.coinbase.api_key = Some(v);
+        }
+        if let Some(v) = env_nonempty("COINBASE_API_SECRET") {
+            self.venues.coinbase.api_secret = Some(v);
+        }
+        if let Some(v) = env_nonempty("COINBASE_PASSPHRASE") {
+            self.venues.coinbase.passphrase = Some(v);
+        }
+        if let Some(v) = env_nonempty("TRADINGVIEW_ENDPOINT_SECRET") {
+            self.signals.tradingview.endpoint_secret = Some(v);
+        }
     }
 
     pub fn validate(&self) -> PtResult<()> {
@@ -304,6 +324,12 @@ fn is_empty_opt(v: Option<&str>) -> bool {
     v.map(|s| s.trim().is_empty()).unwrap_or(true)
 }
 
+fn env_nonempty(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| if v.trim().is_empty() { None } else { Some(v) })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,5 +350,37 @@ mod tests {
         cfg.venues.coinbase.api_key = Some(String::new());
         cfg.venues.coinbase.api_secret = Some(String::new());
         assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn env_overrides_apply_for_secrets() {
+        let raw = include_str!("../../../config/config.example.toml");
+        let mut cfg = toml::from_str::<AppConfig>(raw).expect("parse config example");
+
+        std::env::set_var("POLYMARKET_PRIVATE_KEY", "poly_key");
+        std::env::set_var("COINBASE_API_KEY", "cb_key");
+        std::env::set_var("COINBASE_API_SECRET", "cb_secret");
+        std::env::set_var("COINBASE_PASSPHRASE", "cb_pass");
+        std::env::set_var("TRADINGVIEW_ENDPOINT_SECRET", "tv_secret");
+
+        cfg.apply_env_overrides();
+
+        assert_eq!(
+            cfg.venues.polymarket.private_key.as_deref(),
+            Some("poly_key")
+        );
+        assert_eq!(cfg.venues.coinbase.api_key.as_deref(), Some("cb_key"));
+        assert_eq!(cfg.venues.coinbase.api_secret.as_deref(), Some("cb_secret"));
+        assert_eq!(cfg.venues.coinbase.passphrase.as_deref(), Some("cb_pass"));
+        assert_eq!(
+            cfg.signals.tradingview.endpoint_secret.as_deref(),
+            Some("tv_secret")
+        );
+
+        std::env::remove_var("POLYMARKET_PRIVATE_KEY");
+        std::env::remove_var("COINBASE_API_KEY");
+        std::env::remove_var("COINBASE_API_SECRET");
+        std::env::remove_var("COINBASE_PASSPHRASE");
+        std::env::remove_var("TRADINGVIEW_ENDPOINT_SECRET");
     }
 }

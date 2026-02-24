@@ -5,6 +5,12 @@
 - Use Conventional Commits (`feat`, `fix`, `docs`, `test`, `chore`, `ci`, `perf`, `refactor`).
 - Keep PRs focused and small enough for effective review.
 
+Install local hooks once per clone:
+
+```bash
+./scripts/install_git_hooks.sh
+```
+
 ## Local Quality Gates
 Run before pushing:
 

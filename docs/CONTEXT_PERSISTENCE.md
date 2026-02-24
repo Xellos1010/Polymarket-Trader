@@ -41,6 +41,13 @@ cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3
 - `venues.coinbase.api_key`
 - `venues.coinbase.api_secret`
 
+Or inject secrets via environment variables (preferred):
+- `POLYMARKET_PRIVATE_KEY`
+- `COINBASE_API_KEY`
+- `COINBASE_API_SECRET`
+- `COINBASE_PASSPHRASE` (optional)
+- `TRADINGVIEW_ENDPOINT_SECRET` (optional)
+
 ## Useful Endpoints
 
 - `GET /` dashboard UI

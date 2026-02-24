@@ -114,7 +114,7 @@ async fn main() {
     init_tracing();
 
     let cli = Cli::parse();
-    let config_path = cli.config.clone();
+    let config_path = resolve_config_path(&cli.config);
 
     match cli.command {
         Commands::Run => {
@@ -168,6 +168,18 @@ async fn main() {
             }
         }
     }
+}
+
+fn resolve_config_path(cli_path: &str) -> String {
+    // If user did not explicitly pass --config, allow environment override.
+    if cli_path == "config/config.toml" {
+        if let Ok(env_path) = std::env::var("PT_CONFIG_PATH") {
+            if !env_path.trim().is_empty() {
+                return env_path;
+            }
+        }
+    }
+    cli_path.to_string()
 }
 
 fn init_tracing() {
@@ -498,10 +510,18 @@ fn save_context(out: &str, note: Option<&str>, config_path: &str) -> Result<(), 
     );
     text.push_str("- Extract pine params: `cargo run -p pt-cli -- pine-params --path pine-scripts/<script> --out data/tuning/pine_params.json`\n");
     text.push_str("- Tune pine params: `cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 100 --evaluate-cmd \"python3 tools/evaluate_candidate.py\"`\n\n");
+    text.push_str("- Promote tuning candidate: `./scripts/promote_candidate.sh data/tuning/pine_tuning_results.json data/tuning/promoted_candidate.json BTC 15m`\n");
+    text.push_str("- Paper soak: `./scripts/paper_soak.sh 3600 30 config/config.toml`\n");
+    text.push_str(
+        "- Tiny live pilot checks: `./scripts/tiny_live_pilot.sh config/config.toml 3000`\n",
+    );
+    text.push_str("- Install git hooks: `./scripts/install_git_hooks.sh`\n\n");
     text.push_str("## Live Prerequisites\n");
     text.push_str("- Set `engine.mode = \"live\"` in config.\n");
-    text.push_str("- Set `venues.polymarket.private_key`.\n");
-    text.push_str("- Set `venues.coinbase.api_key` and `venues.coinbase.api_secret`.\n");
+    text.push_str("- Set `venues.polymarket.private_key` or `POLYMARKET_PRIVATE_KEY`.\n");
+    text.push_str(
+        "- Set `venues.coinbase.api_key`/`api_secret` or `COINBASE_API_KEY`/`COINBASE_API_SECRET`.\n",
+    );
     text.push_str("- Keep hard risk caps enabled for tiny-live rollout.\n");
 
     let out_path = PathBuf::from(out);
@@ -842,4 +862,25 @@ fn now_unix() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_config_path;
+
+    #[test]
+    fn resolve_config_uses_env_when_default_is_passed() {
+        std::env::set_var("PT_CONFIG_PATH", "config/alt.toml");
+        let path = resolve_config_path("config/config.toml");
+        assert_eq!(path, "config/alt.toml");
+        std::env::remove_var("PT_CONFIG_PATH");
+    }
+
+    #[test]
+    fn resolve_config_keeps_explicit_cli_path() {
+        std::env::set_var("PT_CONFIG_PATH", "config/alt.toml");
+        let path = resolve_config_path("config/custom.toml");
+        assert_eq!(path, "config/custom.toml");
+        std::env::remove_var("PT_CONFIG_PATH");
+    }
 }

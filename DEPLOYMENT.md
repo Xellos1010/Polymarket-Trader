@@ -7,7 +7,7 @@
   - Dashboard: `8080` only from your IP/VPN.
   - TradingView listener (optional): `8090` only from trusted sources.
 
-## 2. Install + bootstrap
+## 2. Install + bootstrap (first-time host prep)
 
 ```bash
 chmod +x scripts/bootstrap_ubuntu.sh
@@ -15,12 +15,29 @@ chmod +x scripts/bootstrap_ubuntu.sh
 ```
 
 ## 3. Configure secrets
-Edit `config/config.toml`:
+Prefer environment injection for secrets (`.env.example` variables), then keep
+`config/config.toml` free of private key material where possible.
+
+If needed, edit `config/config.toml`:
 - `venues.coinbase.*`
 - `venues.polymarket.private_key` (for future live signing integration)
 - `signals.tradingview.endpoint_secret`
 
-## 4. Start service
+## 4. Build + deploy release bundle (recommended)
+
+```bash
+# Build local release bundle into ./dist
+./scripts/build_release_bundle.sh
+
+# Deploy to EC2 host and restart service
+./scripts/deploy_ec2.sh <ec2-host-or-ip> [ubuntu] [~/.ssh/key.pem] [/opt/Polymarket-Trader]
+```
+
+The deploy script performs post-restart health checks:
+- `GET /healthz`
+- `GET /ready`
+
+## 5. Start service (manual path)
 
 ```bash
 sudo systemctl daemon-reload
@@ -29,15 +46,17 @@ sudo systemctl restart pt-engine
 sudo journalctl -u pt-engine -f
 ```
 
-## 5. Verify
+## 6. Verify
 
 ```bash
 curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:8080/ready
 curl http://127.0.0.1:8080/state/risk
 curl http://127.0.0.1:8080/metrics
 ```
 
-## 6. Operator controls
+## 7. Operator controls
 
 ```bash
 curl -X POST http://127.0.0.1:8080/ops/halt
@@ -45,6 +64,7 @@ curl -X POST http://127.0.0.1:8080/ops/resume
 curl -X POST http://127.0.0.1:8080/ops/flatten
 ```
 
-## 7. Rollback
-- Keep prior binary at `/opt/Polymarket-Trader/target/release/pt-cli.prev`.
-- Swap symlink or restore binary and restart service.
+## 8. Rollback
+- Keep previous deploy archives in `dist/` and on host staging paths.
+- Restore prior bundle files under `/opt/Polymarket-Trader/` and restart `pt-engine`.
+- Runtime emergency action: `POST /ops/halt` before rollback.

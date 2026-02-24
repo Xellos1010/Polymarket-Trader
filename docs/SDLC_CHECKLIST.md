@@ -19,18 +19,19 @@ This checklist tracks practical compliance against:
 - [x] Rust formatting/lint/testing commands documented
 - [x] CI quality gates added (`.github/workflows/ci.yml`)
 - [x] Strict typed config structures in `pt-core`
-- [ ] Pre-commit hooks (optional follow-up)
+- [x] Pre-commit hooks added (`.githooks`, `scripts/install_git_hooks.sh`)
 
 ## Phase 3: Infrastructure & Configuration
 - [x] `.env.example` added
 - [x] Secrets excluded via `.gitignore`
 - [x] Runtime config validation fails fast at boot (`AppConfig::validate`)
 - [x] Config schema documented (`schemas/config.schema.json`)
+- [x] Security/dependency CI gates (`cargo-audit` + SBOM artifact in CI)
 
 ## Phase 4: Testing Strategy
 - [x] Unit tests present across core crates
 - [x] Config validation tests added
-- [ ] Contract tests for OpenAPI schema conformance (follow-up)
+- [x] Contract tests validate dashboard state endpoints against OpenAPI (`crates/pt-dashboard/tests/api_contract.rs`)
 - [ ] Mutation testing (deferred)
 
 ## Phase 5: Release
@@ -40,6 +41,7 @@ This checklist tracks practical compliance against:
 
 ## Phase 6: Observability & Operations
 - [x] Health endpoint + metrics endpoint
+- [x] Liveness/readiness probes (`/healthz`, `/ready`)
 - [x] Dashboard with risk/ops controls
 - [x] Runbook/context persistence docs
 - [ ] External error tracking integration (Sentry/OTel exporter) (follow-up)
@@ -52,6 +54,7 @@ This checklist tracks practical compliance against:
 
 ## Current Gaps / Next Hardening Items
 1. Add hosted branch protections and required status checks.
-2. Add contract tests that validate `/state/*` responses against OpenAPI schemas.
-3. Add pre-commit automation for fmt/clippy/test.
-4. Add dependency scanning + SBOM generation in CI.
+2. Add branch-specific deployment approvals for staging/prod.
+3. Add external secrets manager wiring (AWS SSM/Secrets Manager fetch path) instead of env injection only.
+4. Add structured incident alerting destinations (PagerDuty/Slack) and on-call docs.
+5. Add mutation tests for risk and quote-critical logic.

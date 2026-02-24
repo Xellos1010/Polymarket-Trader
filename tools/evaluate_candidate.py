@@ -102,6 +102,8 @@ class EvalConfig:
     bb_mult: float
     threshold: float
     fee_bps: float
+    slippage_bps: float
+    fixed_trade_cost: float
     enable_rsi: bool
     enable_ma: bool
     enable_bb: bool
@@ -117,7 +119,9 @@ class EvalStats:
     bars: int
 
 
-def config_from_params(params: Dict[str, Any], fee_bps: float) -> EvalConfig:
+def config_from_params(
+    params: Dict[str, Any], fee_bps: float, slippage_bps: float, fixed_trade_cost: float
+) -> EvalConfig:
     rsi_len = int(
         round(
             find_numeric(
@@ -199,6 +203,8 @@ def config_from_params(params: Dict[str, Any], fee_bps: float) -> EvalConfig:
         bb_mult=bb_mult,
         threshold=threshold,
         fee_bps=max(0.0, fee_bps),
+        slippage_bps=max(0.0, slippage_bps),
+        fixed_trade_cost=max(0.0, fixed_trade_cost),
         enable_rsi=enable_rsi,
         enable_ma=enable_ma,
         enable_bb=enable_bb,
@@ -340,6 +346,7 @@ def strategy_score(prices: Sequence[float], cfg: EvalConfig, params: Dict[str, A
     bb_std = rolling_std(prices, cfg.bb_len) if cfg.enable_bb else [None] * len(prices)
 
     fee = cfg.fee_bps / 10_000.0
+    slippage = cfg.slippage_bps / 10_000.0
     position = 0.0
     equity = 1.0
     peak_equity = equity
@@ -379,7 +386,11 @@ def strategy_score(prices: Sequence[float], cfg: EvalConfig, params: Dict[str, A
         position = target
 
         ret = prices[i] / prices[i - 1] - 1.0
-        pnl = position * ret - fee * trade_size
+        traded = trade_size > 1e-12
+        trade_cost = (fee + slippage) * trade_size
+        if traded:
+            trade_cost += cfg.fixed_trade_cost
+        pnl = position * ret - trade_cost
         pnl_series.append(pnl)
 
         equity *= 1.0 + pnl
@@ -431,7 +442,24 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     p.add_argument("--ohlcv", default=os.getenv("PT_EVAL_OHLCV", ""), help="CSV with OHLCV data")
     p.add_argument("--price-col", default="close", help="price column name")
     p.add_argument("--timestamp-col", default="", help="optional timestamp column for sorting")
-    p.add_argument("--fee-bps", type=float, default=2.0, help="round-trip fee in bps per position change")
+    p.add_argument(
+        "--fee-bps",
+        type=float,
+        default=2.0,
+        help="round-trip fee in bps per position change",
+    )
+    p.add_argument(
+        "--slippage-bps",
+        type=float,
+        default=1.0,
+        help="slippage estimate in bps per position change",
+    )
+    p.add_argument(
+        "--fixed-trade-cost",
+        type=float,
+        default=0.0,
+        help="fixed cost per trade in return units (e.g. 0.00005)",
+    )
     p.add_argument("--verbose", action="store_true", help="emit evaluator internals to stderr")
     return p.parse_args(argv)
 
@@ -440,7 +468,12 @@ def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
     params = load_candidate()
 
-    cfg = config_from_params(params, fee_bps=args.fee_bps)
+    cfg = config_from_params(
+        params,
+        fee_bps=args.fee_bps,
+        slippage_bps=args.slippage_bps,
+        fixed_trade_cost=args.fixed_trade_cost,
+    )
 
     if args.ohlcv:
         prices = load_prices_from_csv(
