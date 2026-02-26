@@ -1,13 +1,16 @@
 # Coinbase Strategy Lab
 
-Local-first visualization + backtest tooling for Coinbase markets.
+Local-first visualization, strategy modification, and backtesting for Coinbase markets.
 
 ## Files
 
 - Tool: `tools/coinbase_strategy_lab.py`
+- Promotion tool: `tools/promote_strategy_lab.py`
+- Wrapper: `scripts/promote_strategy_lab.sh`
 - Config example: `config/coinbase_strategy_lab.example.json`
 - Config schema: `schemas/coinbase_strategy_lab.schema.json`
 - Output folder: `data/strategy_lab/`
+- Journal DB (default): `data/strategy_lab/trade_journal.sqlite`
 
 ## Setup
 
@@ -23,7 +26,7 @@ cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json
 python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json
 ```
 
-### 2) Listing-theory overlap (candle aligned)
+### 2) Listing overlap (candle aligned)
 
 ```bash
 python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json
@@ -31,13 +34,13 @@ python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy
 
 The overlap chart aligns each asset series at its anchor candle (`anchor_time`) and compares forward candle movement (`+1`, `+3`, `+10`) independent of wall-clock timestamps.
 
-### 3) Parameter optimization
+### 3) Optimization
 
 ```bash
 python3 tools/coinbase_strategy_lab.py optimize --config config/coinbase_strategy_lab.json
 ```
 
-This runs SMA parameter grid search and ranks parameter pairs by:
+Objective:
 
 `score = avg_return - drawdown_penalty*avg_drawdown - turnover_penalty*trade_rate`
 
@@ -47,20 +50,51 @@ This runs SMA parameter grid search and ranks parameter pairs by:
 python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json
 ```
 
-Outputs a single HTML with:
-- current market prices (from latest candle)
-- strategy price/SMA/equity view
-- listing overlap chart
-- optimization leaderboard
-- fetch errors
-
 Serve locally:
 
 ```bash
 python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090
 ```
 
-## Fast Strategy Edits (CLI overrides)
+## Strategy Variants and Plugins
+
+Backtest variants support baseline and plugin-driven comparisons side-by-side:
+
+- `external_bias_file` (for Pine/AI generated bias series)
+- `momentum_bias`
+- `rsi_bias`
+
+Each variant defines:
+
+- `name`
+- `bias_gain`
+- `plugins[]`
+
+Use `bias_gain` to control how strongly plugin bias shifts SMA baseline positioning.
+
+## Listing Theory Auto-Discovery
+
+`overlap.auto_discovery` can auto-select recent Coinbase listings by scanning products and identifying assets whose first candle inside a rolling discovery window appears after the window start threshold.
+
+Useful fields:
+
+- `lookback_days`
+- `discovery_granularity_sec`
+- `max_products_scan`
+- `max_results`
+- `quote_currencies`
+
+## Persistent Journal and Attribution
+
+The lab writes run and trade results into SQLite when `journal.enabled=true`:
+
+- `lab_runs`
+- `market_results`
+- `trade_fills`
+
+Dashboard/backtest pages include aggregated per-market/per-variant attribution from this journal.
+
+## Fast Overrides
 
 ```bash
 python3 tools/coinbase_strategy_lab.py backtest \
@@ -73,13 +107,38 @@ python3 tools/coinbase_strategy_lab.py backtest \
   --limit 500
 ```
 
-## Pine + AI fine-tuning integration
+Disable journal writes for quick dry-runs:
 
-Use this lab for quick market-level validation and use the Pine pipeline for strategy-parameter iteration:
+```bash
+python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json --disable-journal
+```
 
-1. Extract Pine parameters: `pt-cli pine-params`
-2. Generate/tune candidates: `pt-cli tune-pine`
-3. Score with evaluator: `tools/evaluate_candidate.py`
-4. Promote candidate: `scripts/promote_candidate.sh`
+## Promote To Rust Replay
+
+Generate replay artifact from a strategy-lab report:
+
+```bash
+./scripts/promote_strategy_lab.sh data/strategy_lab/<dashboard-or-backtest>.json BTC-USD sma_baseline
+```
+
+Outputs:
+
+- `data/replay/strategy_lab_promoted.ndjson`
+- `data/tuning/strategy_lab_promoted.json`
+
+Then set in `config/config.toml`:
+
+- `engine.mode = "replay"`
+- `engine.replay_path = "data/replay/strategy_lab_promoted.ndjson"`
+
+## Pine + AI Fine-Tuning Loop
+
+Use strategy-lab for market-level verification and the Pine pipeline for parameter search:
+
+1. Extract Pine params: `pt-cli pine-params`
+2. Run tuning: `pt-cli tune-pine`
+3. Score candidates: `tools/evaluate_candidate.py`
+4. Feed bias series into `external_bias_file` plugin
+5. Compare variant performance in dashboard/backtest
 
 Reference: `docs/PINE_TUNING.md`

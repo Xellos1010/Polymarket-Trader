@@ -87,6 +87,10 @@ Use `.env.example` as the baseline for local/dev shells.
   - `cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json`
   - `python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json`
   - with local server: `python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090`
+  - with listing auto-discovery: `python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery`
+  - disable journal writes: `python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json --disable-journal`
+- Promote strategy-lab result to replay input:
+  - `./scripts/promote_strategy_lab.sh data/strategy_lab/<report>.json BTC-USD sma_baseline`
 - Promote best tuning candidate:
   - `./scripts/promote_candidate.sh data/tuning/pine_tuning_results.json data/tuning/promoted_candidate.json BTC 15m`
 - Paper soak (24h default):
@@ -116,6 +120,8 @@ Use `.env.example` as the baseline for local/dev shells.
 - Contribution guide: `CONTRIBUTING.md`
 - Strategy lab guide: `docs/STRATEGY_LAB.md`
 - Prompt bundle guide: `docs/PROMPT_BUNDLE.md`
+- Progress tracker: `docs/PROGRESS.md`
+- Local instructions: `docs/INSTRUCTIONS.md`
 
 ## CI security gates
 

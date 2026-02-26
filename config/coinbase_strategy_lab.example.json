@@ -11,13 +11,53 @@
       "trade_fee_bps": 8.0,
       "slippage_bps": 2.0,
       "starting_equity": 1000.0
-    }
+    },
+    "variants": [
+      {
+        "name": "sma_baseline",
+        "bias_gain": 0.0,
+        "plugins": []
+      },
+      {
+        "name": "sma_plus_pine_bias",
+        "bias_gain": 0.35,
+        "plugins": [
+          {
+            "name": "external_bias_file",
+            "enabled": false,
+            "path": "data/tuning/pine_bias_series.json",
+            "weight": 1.0
+          }
+        ]
+      },
+      {
+        "name": "sma_plus_momentum",
+        "bias_gain": 0.2,
+        "plugins": [
+          {
+            "name": "momentum_bias",
+            "enabled": true,
+            "lookback": 6,
+            "scale": 12.0,
+            "weight": 0.7
+          },
+          {
+            "name": "rsi_bias",
+            "enabled": true,
+            "window": 14,
+            "oversold": 30,
+            "overbought": 70,
+            "weight": 0.3
+          }
+        ]
+      }
+    ]
   },
   "optimize": {
     "short_windows": [5, 7, 9, 12, 15],
     "long_windows": [21, 34, 55, 89],
     "min_gap": 2,
-    "top_n": 15,
+    "top_n": 20,
     "drawdown_penalty": 0.8,
     "turnover_penalty": 0.2
   },
@@ -28,18 +68,29 @@
       {
         "product_id": "ARB-USD",
         "label": "ARB",
-        "anchor_time": "2023-03-23T17:00:00Z"
-      },
-      {
-        "product_id": "OP-USD",
-        "label": "OP",
-        "anchor_time": "2022-06-01T16:00:00Z"
+        "anchor_time": "2023-03-23T17:00:00Z",
+        "source": "manual"
       },
       {
         "product_id": "PYTH-USD",
         "label": "PYTH",
-        "anchor_time": "2024-02-02T17:00:00Z"
+        "anchor_time": "2024-02-02T17:00:00Z",
+        "source": "manual"
       }
-    ]
+    ],
+    "auto_discovery": {
+      "enabled": true,
+      "quote_currencies": ["USD"],
+      "lookback_days": 120,
+      "discovery_granularity_sec": 86400,
+      "max_products_scan": 120,
+      "max_results": 8,
+      "min_candles": 20,
+      "min_gap_from_window_start_candles": 2
+    }
+  },
+  "journal": {
+    "enabled": true,
+    "sqlite_path": "data/strategy_lab/trade_journal.sqlite"
   }
 }

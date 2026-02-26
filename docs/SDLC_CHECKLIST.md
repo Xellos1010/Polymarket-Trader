@@ -53,6 +53,7 @@ This checklist tracks practical compliance against:
 - [x] Pine tuning/evaluator workflow documented
 - [x] Coinbase strategy lab + listing-overlap workflow documented (`docs/STRATEGY_LAB.md`)
 - [x] Prompt bundle export workflow + schema documented (`docs/PROMPT_BUNDLE.md`, `schemas/prompt_bundle.schema.json`)
+- [x] Progress and operator instruction docs added (`docs/PROGRESS.md`, `docs/INSTRUCTIONS.md`)
 
 ## Current Gaps / Next Hardening Items
 1. Add hosted branch protections and required status checks.

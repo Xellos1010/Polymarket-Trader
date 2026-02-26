@@ -26,6 +26,43 @@
 - `ts_ms` INTEGER NOT NULL
 - `payload` TEXT NOT NULL (`RiskState` JSON)
 
+## Strategy Lab Journal (SQLite)
+
+Default file: `data/strategy_lab/trade_journal.sqlite`
+
+### `lab_runs`
+- `run_id` TEXT PRIMARY KEY
+- `created_ts_ms` INTEGER NOT NULL
+- `mode` TEXT NOT NULL
+- `provider` TEXT NOT NULL
+- `granularity_sec` INTEGER NOT NULL
+- `config_json` TEXT NOT NULL
+
+### `market_results`
+- `run_id` TEXT NOT NULL
+- `market` TEXT NOT NULL
+- `variant` TEXT NOT NULL
+- `total_return` REAL NOT NULL
+- `max_drawdown` REAL NOT NULL
+- `sharpe_like` REAL NOT NULL
+- `trades` INTEGER NOT NULL
+- `bars` INTEGER NOT NULL
+- `pnl_abs` REAL NOT NULL
+- `final_equity` REAL NOT NULL
+- `created_ts_ms` INTEGER NOT NULL
+
+### `trade_fills`
+- `run_id` TEXT NOT NULL
+- `market` TEXT NOT NULL
+- `variant` TEXT NOT NULL
+- `bar_idx` INTEGER NOT NULL
+- `ts_ms` INTEGER NOT NULL
+- `side` TEXT NOT NULL
+- `price` REAL NOT NULL
+- `delta` REAL NOT NULL
+- `target_position` REAL NOT NULL
+- `bias` REAL NOT NULL
+
 ## API Contract Source
 - OpenAPI: `docs/api/dashboard-openapi.yaml`
 - Config JSON schema: `schemas/config.schema.json`

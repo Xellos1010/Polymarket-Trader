@@ -10,6 +10,11 @@ Strategy lab dashboard (Coinbase local workflow):
 python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090
 ```
 
+Promote strategy-lab result to replay artifact:
+```bash
+./scripts/promote_strategy_lab.sh data/strategy_lab/<report>.json BTC-USD sma_baseline
+```
+
 ## Live Readiness Gate
 ```bash
 cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000

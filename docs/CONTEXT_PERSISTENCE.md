@@ -56,6 +56,11 @@ cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json
 python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090
 ```
 
+5a. Promote a lab run into replay-mode input:
+```bash
+./scripts/promote_strategy_lab.sh data/strategy_lab/<report>.json BTC-USD sma_baseline
+```
+
 6. If switching to live, set in `config/config.toml`:
 - `engine.mode = "live"`
 - `venues.polymarket.private_key`
@@ -92,3 +97,10 @@ Or inject secrets via environment variables (preferred):
 - `docs/api/dashboard-openapi.yaml`
 - `schemas/config.schema.json`
 - `schemas/tradingview-webhook.schema.json`
+- `schemas/coinbase_strategy_lab.schema.json`
+- `schemas/prompt_bundle.schema.json`
+
+## Operating Notes
+
+- Current progress tracker: `docs/PROGRESS.md`
+- Active local instructions: `docs/INSTRUCTIONS.md`
