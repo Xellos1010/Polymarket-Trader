@@ -83,18 +83,27 @@ Use `.env.example` as the baseline for local/dev shells.
 - Fetch OHLCV CSV for tuning input:
   - `python3 tools/fetch_ohlcv.py --provider coinbase --symbol BTCUSD --interval 1m --limit 300 --out data/ohlcv/btcusd_1m.csv`
   - fallback: `python3 tools/fetch_ohlcv.py --provider kraken --symbol BTCUSD --interval 1m --limit 300 --out data/ohlcv/btcusd_1m.csv`
+- Coinbase strategy lab (backtest/overlap/optimize/dashboard):
+  - `cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json`
+  - `python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json`
+  - with local server: `python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090`
 - Promote best tuning candidate:
   - `./scripts/promote_candidate.sh data/tuning/pine_tuning_results.json data/tuning/promoted_candidate.json BTC 15m`
 - Paper soak (24h default):
   - `./scripts/paper_soak.sh 86400 30 config/config.toml`
 - Save session context:
   - `cargo run -p pt-cli -- save-context --out docs/SESSION_CONTEXT.md --note "checkpoint note"`
+- Export prompt bundle for external AI iteration:
+  - `cp config/prompt_bundle.example.json config/prompt_bundle.json`
+  - `./scripts/export_prompt_bundle.sh`
 
 ## Schemas and contracts
 
 - OpenAPI spec: `docs/api/dashboard-openapi.yaml`
 - Config schema: `schemas/config.schema.json`
 - TradingView webhook schema: `schemas/tradingview-webhook.schema.json`
+- Coinbase strategy lab config schema: `schemas/coinbase_strategy_lab.schema.json`
+- Prompt bundle config schema: `schemas/prompt_bundle.schema.json`
 - Runtime data model summary: `docs/data/SCHEMA.md`
 
 ## SDLC and architecture docs
@@ -105,6 +114,8 @@ Use `.env.example` as the baseline for local/dev shells.
 - Operations runbook: `docs/RUNBOOK.md`
 - Tiny live pilot guide: `docs/TINY_LIVE_PILOT.md`
 - Contribution guide: `CONTRIBUTING.md`
+- Strategy lab guide: `docs/STRATEGY_LAB.md`
+- Prompt bundle guide: `docs/PROMPT_BUNDLE.md`
 
 ## CI security gates
 

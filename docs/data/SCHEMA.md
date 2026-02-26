@@ -30,3 +30,5 @@
 - OpenAPI: `docs/api/dashboard-openapi.yaml`
 - Config JSON schema: `schemas/config.schema.json`
 - TradingView webhook schema: `schemas/tradingview-webhook.schema.json`
+- Coinbase strategy lab schema: `schemas/coinbase_strategy_lab.schema.json`
+- Prompt bundle export config schema: `schemas/prompt_bundle.schema.json`

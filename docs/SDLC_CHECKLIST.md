@@ -51,6 +51,8 @@ This checklist tracks practical compliance against:
 - [x] Data/API schemas documented (`docs/data/SCHEMA.md`, `docs/api/dashboard-openapi.yaml`)
 - [x] ADR created (`docs/adr/001-rust-first-polymarket-engine.md`)
 - [x] Pine tuning/evaluator workflow documented
+- [x] Coinbase strategy lab + listing-overlap workflow documented (`docs/STRATEGY_LAB.md`)
+- [x] Prompt bundle export workflow + schema documented (`docs/PROMPT_BUNDLE.md`, `schemas/prompt_bundle.schema.json`)
 
 ## Current Gaps / Next Hardening Items
 1. Add hosted branch protections and required status checks.

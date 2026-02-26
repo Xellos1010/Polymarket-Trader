@@ -1,6 +1,9 @@
 /target
 **/*.rs.bk
 config/config.toml
+config/coinbase_strategy_lab.json
+config/prompt_bundle.json
 data/output/
+data/strategy_lab/
 .env
 .DS_Store

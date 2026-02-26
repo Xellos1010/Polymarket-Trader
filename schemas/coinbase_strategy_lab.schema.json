@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polymarket-trader.local/schemas/coinbase_strategy_lab.schema.json",
+  "title": "Coinbase Strategy Lab Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["provider", "granularity_sec", "backtest", "overlap"],
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": ["coinbase", "kraken"]
+    },
+    "granularity_sec": {
+      "type": "integer",
+      "minimum": 60
+    },
+    "backtest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["markets", "limit", "strategy"],
+      "properties": {
+        "markets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]+-[A-Z0-9]+$"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 5000
+        },
+        "strategy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "short_window", "long_window", "trade_fee_bps", "slippage_bps", "starting_equity"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["sma_crossover"]
+            },
+            "short_window": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 400
+            },
+            "long_window": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 800
+            },
+            "trade_fee_bps": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 200.0
+            },
+            "slippage_bps": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 200.0
+            },
+            "starting_equity": {
+              "type": "number",
+              "exclusiveMinimum": 0.0
+            }
+          }
+        }
+      }
+    },
+    "optimize": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "short_windows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 400
+          }
+        },
+        "long_windows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 800
+          }
+        },
+        "min_gap": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "top_n": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "drawdown_penalty": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 5.0
+        },
+        "turnover_penalty": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 5.0
+        }
+      }
+    },
+    "overlap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candles_before", "candles_after", "markets"],
+      "properties": {
+        "candles_before": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "candles_after": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "markets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["product_id"],
+            "properties": {
+              "product_id": {
+                "type": "string",
+                "pattern": "^[A-Z0-9]+-[A-Z0-9]+$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "anchor_time": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

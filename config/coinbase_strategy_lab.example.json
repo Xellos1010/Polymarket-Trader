@@ -1,0 +1,45 @@
+{
+  "provider": "coinbase",
+  "granularity_sec": 300,
+  "backtest": {
+    "markets": ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD"],
+    "limit": 300,
+    "strategy": {
+      "kind": "sma_crossover",
+      "short_window": 9,
+      "long_window": 21,
+      "trade_fee_bps": 8.0,
+      "slippage_bps": 2.0,
+      "starting_equity": 1000.0
+    }
+  },
+  "optimize": {
+    "short_windows": [5, 7, 9, 12, 15],
+    "long_windows": [21, 34, 55, 89],
+    "min_gap": 2,
+    "top_n": 15,
+    "drawdown_penalty": 0.8,
+    "turnover_penalty": 0.2
+  },
+  "overlap": {
+    "candles_before": 0,
+    "candles_after": 120,
+    "markets": [
+      {
+        "product_id": "ARB-USD",
+        "label": "ARB",
+        "anchor_time": "2023-03-23T17:00:00Z"
+      },
+      {
+        "product_id": "OP-USD",
+        "label": "OP",
+        "anchor_time": "2022-06-01T16:00:00Z"
+      },
+      {
+        "product_id": "PYTH-USD",
+        "label": "PYTH",
+        "anchor_time": "2024-02-02T17:00:00Z"
+      }
+    ]
+  }
+}

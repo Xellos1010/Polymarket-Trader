@@ -2,6 +2,14 @@
 
 Use this to resume quickly after interruptions.
 
+## Local-First Release Rule
+
+Do not run CI/CD or deployment pipeline automation until local verification passes:
+1. `cargo check --workspace`
+2. local `paper` run
+3. strategy-lab/backtest validation
+4. tiny live pilot guard (`scripts/tiny_live_pilot.sh`)
+
 ## Save Current Session
 
 ```bash
@@ -12,6 +20,13 @@ This writes:
 - runtime versions (`rustc`, `cargo`)
 - core run commands
 - live prerequisites
+
+For external AI handoff context, export a prompt bundle:
+
+```bash
+cp config/prompt_bundle.example.json config/prompt_bundle.json
+./scripts/export_prompt_bundle.sh
+```
 
 ## Resume Workflow
 
@@ -35,7 +50,13 @@ http://127.0.0.1:8080/
 cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000
 ```
 
-5. If switching to live, set in `config/config.toml`:
+5. Strategy visualization/backtest loop (Coinbase first):
+```bash
+cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json
+python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090
+```
+
+6. If switching to live, set in `config/config.toml`:
 - `engine.mode = "live"`
 - `venues.polymarket.private_key`
 - `venues.coinbase.api_key`
