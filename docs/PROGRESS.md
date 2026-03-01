@@ -2,8 +2,221 @@
 
 ## Completed (Latest)
 
+- Master Optimization v4 baseline scaffolding pass completed:
+  - Added multi-venue config contracts for `venues.kraken` and `venues.gemini` (schema + runtime config parsing/validation).
+  - Added runtime/hardware-aware config contracts:
+    - `runtime.affinity.*`
+    - `runtime.jitter_controls.*`
+    - `wallet_intel.*`
+    - `benchmark.hotpath.*`
+  - Added Linux ultra-tight profile template:
+    - `config/profiles/live_linux_ultra_tight.toml`
+  - Added host operation scripts:
+    - `scripts/linux_tune_baseline.sh` (Linux kernel/network baseline tuning)
+    - `scripts/install_homebase_service.sh` (macOS homebase daemon install via launchd)
+  - Added dashboard/API surfaces for v4 observability and exports:
+    - `GET /state/feed/diagnostics`
+    - `GET /state/venues/latency`
+    - `GET /state/venues/fill-quality`
+    - `GET /state/venues/rejects`
+    - `POST /state/routes/export-csv`
+    - `GET /state/wallet-intel/coinbase`
+    - `GET /state/wallet-intel/polymarket`
+    - `GET /state/wallet-intel/leaderboard`
+    - `POST /state/wallet-intel/export-csv`
+  - Added `pt-core` v4 cross-venue and benchmark data types:
+    - `VenueCapability`, `VenueLatencyStats`, `VenueFillQualityStats`
+    - `CrossVenueRouteOpportunity`, `WalletIntelSnapshot`, `HotPathBenchmarkReport`
+  - Added workspace adapter scaffolds:
+    - `crates/pt-kraken`
+    - `crates/pt-gemini`
+
+- Dashboard listing-pattern + feed-integrity visibility pass completed:
+  - Added `LISTING PATTERN` tab with Coinbase auto-discovered listing cohorts and overlay visualization.
+  - Added listing controls for window (`30D/90D/180D`), granularity (`1H/4H/1D`), alignment (`Time Entered/Start All/Calendar`), and scale (`Indexed/Returns`).
+  - Added listing overlay CSV export from dashboard (`EXPORT CSV` button) for external analysis.
+  - Added listing backend endpoints:
+    - `GET /state/listings/candidates`
+    - `POST /state/listings/overlay`
+    - `GET /state/listings/l2-archive`
+  - Added feed/parity visibility endpoints to dashboard runtime loop:
+    - `GET /state/feed/health`
+    - `GET /state/parity/monitor`
+  - Added UI cards:
+    - `Feed Health`
+    - `Parity Monitor`
+  - Parity monitor table now shows gross edge, net edge, implied cost (`gross-net`), minimum required bps, and expected USD for clearer go/no-go math.
+  - Added deterministic unit tests for listing helper normalization:
+    - `parse_window_preset`
+    - `normalize_granularity`
+    - `normalize_alignment_mode`
+    - `normalize_series_mode`
+  - Added deterministic overlay math tests (`overlay_values`, `sample_return`, `summary_returns`) to keep listing-overlay behavior stable without network reliance.
+  - Added `EXPORT PARITY CSV` for parity monitor rows.
+  - Added server-side parity CSV export endpoint:
+    - `POST /state/parity/export-csv`
+    - supports `limit` + `include_failures`, writes artifacts to `PT_OUTPUT_DIR` or `data/output`.
+  - Hardened Coinbase WS event loop:
+    - timeout streak + keepalive ping before reconnect
+    - heartbeat-aware reconnect gating to reduce timeout churn
+    - feed stale fallback now uses latest of heartbeat or L2 timestamp.
+  - Feed health now exposes WS reliability counters:
+    - timeout streak
+    - read timeouts
+    - ping failures
+    - heartbeat timeouts
+    - remote closes
+    - read/connect failures
+  - Contract/test/docs sync:
+    - `docs/api/dashboard-openapi.yaml` updated with listing/feed/parity schemas.
+    - `crates/pt-dashboard/tests/api_contract.rs` updated and passing.
+  - Validation status:
+    - `cargo check --workspace` passes
+    - `cargo test --workspace` passes
+    - runtime smoke: `/health`, `/state/feed/health`, `/state/parity/monitor`, `/state/listings/candidates`, `/state/listings/overlay` all return successful responses locally.
+
+- Dashboard trading-ops UX expansion completed:
+  - Market selector now renders human-readable pair/bucket labels (not raw ids).
+  - Added chart/backtester tab controls with embedded strategy-lab iframe (`127.0.0.1:9090`).
+  - Added selected-market granularity aggregation with delta bar chart.
+  - Added selected-pair Coinbase orderbook depth panel (bids/asks ladder).
+  - Added wallet conversion controls (`preview`, `paper execute`, guarded `live execute`) backed by:
+    - `POST /ops/coinbase/convert/preview`
+    - `POST /ops/coinbase/convert/execute`
+  - Added maker speed-test controls (`paper` + guarded `live`) backed by:
+    - `POST /ops/coinbase/maker-test`
+  - Validation status:
+    - `cargo check --workspace` passes
+    - `cargo test --workspace` passes
+    - dashboard root serves as HTML (`content-type: text/html`)
+    - paper API smoke for convert + maker-test passes locally
+
+- Coinbase runtime blocker patch and verification complete:
+  - rustls crypto provider bootstrap added and enforced before live HTTP/WS initialization.
+  - Coinbase EC key handling hardened for CDP PEM inputs with SEC1 normalization and SEC1->PKCS8 fallback.
+  - Live preflight now validates Coinbase JWT generation and authenticated account probe.
+  - `coinbase-smoke` command added and verified passing in read-only mode (REST + WS + fee summary).
+  - WS smoke criteria fixed to accept valid subscription/heartbeat/L2 state even with no user-fill activity.
+  - Rebalance/order-manager path now uses lifecycle decisions (`submit`, `edit`, `cancel_replace`) with open-order restoration and reconciliation hooks (`get_order`, `list_fills`).
+
+- Rust strategy lab foundation implemented (`crates/pt-strategy-lab`):
+  - Coinbase candle ingestion, modular indicator engine, weighted confidence fusion, bull/bear/neutral regime gating.
+  - Next-bar fill backtest model with fee/slippage cost accounting.
+  - Random-search + walk-forward optimization loop.
+  - SQLite persistence for profiles/runs/signals/regimes/paper reports.
+  - Axum dashboard/API with endpoints:
+    - `GET /lab/state/profile`
+    - `POST /lab/profile/save`
+    - `POST /lab/profile/load`
+    - `POST /lab/backtest/run`
+    - `POST /lab/optimize/run`
+    - `GET /lab/state/indicators`
+    - `GET /lab/state/signals`
+    - `GET /lab/state/regime`
+    - `GET /lab/state/runs`
+  - New CLI commands:
+    - `strategy-lab-serve`
+    - `strategy-backtest`
+    - `strategy-optimize`
+    - `strategy-profile-save`
+    - `strategy-profile-load`
+
+- Coinbase multi-portfolio auth registry + rotation implementation pass:
+  - Profile-based Coinbase auth config added (`venues.coinbase.auth.*`) with env overrides:
+    - `COINBASE_AUTH_PROFILE`
+    - `COINBASE_CDP_KEY_FILE`
+    - `COINBASE_CDP_SECRET_ID`
+    - `COINBASE_EXPECTED_KEY_ID`
+  - CDP JSON resolver added for `{name, privateKey}` with key-id extraction + live key-id pin checks.
+  - AWS Secrets Manager runtime fetch support added for `cdp_secret_id`.
+  - Shared auth manager wired into Coinbase REST + WS clients with runtime generation-based WS reconnect on auth swap.
+  - Dashboard/operator auth endpoints added:
+    - `GET /state/coinbase/auth`
+    - `POST /ops/coinbase/auth/reload`
+    - `POST /ops/coinbase/auth/switch-profile`
+  - CLI auth commands added:
+    - `coinbase-auth-status`
+    - `coinbase-auth-reload`
+    - `coinbase-auth-switch --profile <id>`
+  - Portfolio isolation support added:
+    - `engine.portfolio_id`
+    - sqlite/parquet portfolio-scoped path derivation
+    - `portfolio_id` persisted in key runtime tables
+  - Auth audit persistence added:
+    - `auth_key_events` table with reload/switch/startup events
+  - Security hardening:
+    - `config/cdp_api_key.json` added to `.gitignore`
+
+- Roadmap v3 core implementation pass completed for Coinbase-first maker stack:
+  - Coinbase REST adapter now includes `preview`, `edit`, `batch_cancel`, `get_order`, `list_fills`, `get_product`, `get_product_book`, `get_best_bid_ask`, `get_transaction_summary`.
+  - Coinbase WebSocket loop added with `level2`, `user`, `heartbeats`, reconnect handling, timeout detection, and sequence-gap events.
+  - In-memory Coinbase orderbook state is now maintained and exposed to dashboard/API.
+  - Route engine (`pt-route`) is now wired into runtime with opportunity scoring using dynamic edge profiles.
+  - Order manager (`pt-order-manager`) is now wired into rebalance execution with preview-first gating and transition persistence.
+  - New SQLite runtime tables are live:
+    - `coinbase_l2_events`, `coinbase_user_events`
+    - `order_manager_transitions`
+    - `route_opportunities`, `route_executions`
+    - `fee_tier_snapshots`
+  - New dashboard/operator endpoints are live:
+    - `GET /state/coinbase/orderbook`
+    - `GET /state/routes/opportunities`
+    - `GET /state/routes/executions`
+    - `GET /state/fees/summary`
+    - `POST /ops/profile/pilot-ultra-tight`
+    - `POST /ops/unwind/now` (alias)
+  - Dashboard UI now visualizes:
+    - Coinbase L2 top-of-book
+    - Route opportunities and route execution plans
+    - Maker/taker fee summary KPI
+  - CLI added:
+    - `coinbase-ws-status`, `order-manager-status`, `routes-status`
+    - `set-edge-profile`
+    - `pilot-start --capital ... --profile ultra-tight`
+  - Schema and contracts updated:
+    - `schemas/config.schema.json` now covers Coinbase WS, pilot risk profile, execution edge profiles, and order-manager config.
+    - `docs/api/dashboard-openapi.yaml` updated for new endpoints/types.
+    - `docs/data/SCHEMA.md` updated for expanded runtime tables.
+  - Validation status:
+    - `cargo check --workspace` passes
+    - `cargo test --workspace` passes
+
 - Rust workspace baseline for Polymarket + Coinbase hedge engine is in place.
 - Local-first safeguards and runbooks are in place (no CI/CD required before local validation).
+- Master Plan v2 execution/wallet contracts are now implemented end-to-end:
+  - `execution` config block (maker-first policy, vector bands, fee schedules)
+  - `wallet` config block (assist/auto modes, target allocations, rebalance controls, approval TTL)
+  - `acceptance.replay` config thresholds
+- Coinbase wallet-first flow is active in engine runtime:
+  - wallet balances + open-order sync loop
+  - allocation drift computation
+  - rebalance plan generation
+  - approval-token-gated execution path
+- Real-time execution policy wiring is active:
+  - vector-gated quote acceptance
+  - maker-first post-only intent handling
+  - cancel/replace cooldown + min-rest guards
+  - emergency unwind pathway guardrails
+- New persistence tables are live in SQLite:
+  - `coinbase_balances`, `coinbase_orders`
+  - `rebalance_plans`, `rebalance_actions`
+  - `execution_events`, `execution_costs`
+  - `replay_acceptance_reports`
+- Dashboard/ops surface now includes execution + wallet control plane:
+  - `/state/execution/orders`, `/state/execution/costs`, `/state/execution/vectors`
+  - `/state/coinbase/wallet`, `/state/coinbase/allocations`, `/state/coinbase/rebalance-plan`, `/state/coinbase/orders`
+  - `/ops/coinbase/rebalance/approve`, `/ops/coinbase/rebalance/reject`, `/ops/execution/unwind`
+- Dashboard UI now renders:
+  - execution vectors + emergency unwind control
+  - execution cost attribution table
+  - coinbase wallet/drift table
+  - coinbase open orders table
+  - rebalance plan summary + approve/reject controls
+- CLI now includes:
+  - `wallet-status`, `wallet-plan`, `wallet-approve`
+  - `execution-status`
+  - `verify-promoted`
+  - `report-variants`
 - Coinbase strategy lab now supports:
   - backtest
   - overlap (candle-aligned listing analysis)
@@ -16,15 +229,25 @@
   - `rsi_bias`
 - Persistent SQLite trade journal now records runs/trades and exposes per-market attribution summaries.
 - Strategy-lab promotion tooling now converts selected market/variant into replay NDJSON for Rust replay mode.
+- Contract and schema sync completed:
+  - `schemas/config.schema.json`
+  - `docs/api/dashboard-openapi.yaml`
+  - `crates/pt-dashboard/tests/api_contract.rs`
+  - `docs/data/SCHEMA.md`
+- Validation status:
+  - `cargo check --workspace` passes
+  - `cargo test --workspace` passes
 
 ## In Progress
 
-- Validate promotion flow end-to-end against `pt-cli` replay mode with a selected promoted artifact.
-- Expand docs/examples for external bias file formats and tuning loop ergonomics.
+- Live Coinbase wallet integration validation on real keys (assist mode, tiny notional, approval workflow).
+- WebSocket auth/ops hardening against live subscription constraints per API key scope.
+- Route execution promotion from candidate plans to guarded live multi-leg sequencing.
 
 ## Next Queue
 
-1. Add optional ranked listing cohorts by post-anchor impulse and volatility buckets.
-2. Add plugin presets for direct TradingView webhook replay snapshots.
-3. Add a replay acceptance script that checks risk/latency counters after promoted runs.
-4. Add comparative report export (CSV/Markdown) across variants and markets.
+1. Run Coinbase WS in paper/live with real keys and verify stable `level2` + `user` stream for 24h (no desync).
+2. Execute a strict `$20` pilot in live assist mode using `pilot-start` and confirm hard-cap enforcement.
+3. Add guarded operator approval workflow for route execution promotion beyond candidate plans.
+4. Run `pt-cli verify-promoted` on current promoted artifact and persist replay acceptance evidence.
+5. Run `pt-cli report-variants` and publish comparative variant report artifacts.
