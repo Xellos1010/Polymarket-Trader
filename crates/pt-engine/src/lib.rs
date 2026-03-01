@@ -1699,6 +1699,7 @@ impl TradingEngine {
         let drifts_state = self.state.wallet_drifts.clone();
         let plan_state = self.state.rebalance_plan.clone();
         let approval_state = self.state.rebalance_approval.clone();
+        let capabilities_state = self.state.venue_capabilities.clone();
         let recent_executions = self.state.recent_executions.clone();
         let event_state = self.state.execution_events.clone();
         let cost_state = self.state.execution_costs.clone();
@@ -1767,6 +1768,13 @@ impl TradingEngine {
                             error!(%e, "persist approved rebalance plan failed");
                         }
 
+                        let coinbase_supports_amend = capabilities_state
+                            .read()
+                            .iter()
+                            .find(|c| matches!(c.venue, Venue::Coinbase))
+                            .map(|c| c.supports_amend)
+                            .unwrap_or(true);
+
                         let open_orders_snapshot = open_orders_state.read().clone();
 
                         for intent in &plan.intents {
@@ -1822,7 +1830,7 @@ impl TradingEngine {
                                 intent.side.clone(),
                                 intent.limit_price,
                                 desired_size,
-                                true,
+                                coinbase_supports_amend,
                                 TopOfBook {
                                     best_bid: top.best_bid,
                                     best_ask: top.best_ask,
