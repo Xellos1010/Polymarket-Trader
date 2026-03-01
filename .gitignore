@@ -1,9 +1,11 @@
 /target
 **/*.rs.bk
 config/config.toml
+config/cdp_api_key.json
 config/coinbase_strategy_lab.json
 config/prompt_bundle.json
 data/output/
 data/strategy_lab/
+crates/pt-dashboard/data/
 .env
 .DS_Store

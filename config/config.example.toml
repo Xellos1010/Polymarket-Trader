@@ -1,6 +1,7 @@
 [engine]
 mode = "paper"
 loop_ms = 500
+portfolio_id = "default"
 replay_path = "data/replay/sample.ndjson"
 
 [venues.polymarket]
@@ -35,6 +36,41 @@ products = ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD"]
 hedge_threshold_usd = 5.0
 hedge_max_slippage_bps = 10.0
 
+[venues.coinbase.auth]
+active_profile = "primary"
+allow_hot_reload = true
+strict_live_auth = true
+
+[venues.coinbase.auth.profiles.primary]
+cdp_key_file = "config/cdp_api_key.json"
+cdp_secret_id = ""
+expected_key_id = "a5602f09-8a12-422a-b55d-b6981c5a0776"
+strategy_tags = ["maker_mm_spot", "conversion_cycle"]
+
+[venues.coinbase.ws]
+url = "wss://advanced-trade-ws.coinbase.com"
+channels = ["heartbeats", "level2", "user"]
+heartbeat_timeout_ms = 8000
+resync_on_gap = true
+
+[venues.kraken]
+enabled = false
+api_base = "https://api.kraken.com"
+ws_url = "wss://ws.kraken.com/v2"
+api_key = ""
+api_secret = ""
+passphrase = ""
+products = ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"]
+
+[venues.gemini]
+enabled = false
+api_base = "https://api.gemini.com"
+ws_url = "wss://api.gemini.com/v2/marketdata"
+api_key = ""
+api_secret = ""
+passphrase = ""
+products = ["BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD"]
+
 [signals.wallet]
 refresh_secs = 30
 top_n = 100
@@ -49,14 +85,89 @@ k_wallet = 0.7
 k_tv = 0.3
 
 [risk]
-daily_loss_limit_pct = 0.02
-max_notional_per_market = 5.0
-max_total_open_notional = 20.0
-max_markets_quoted_simultaneously = 2
+daily_loss_limit_pct = 0.01
+max_notional_per_market = 2.5
+max_total_open_notional = 10.0
+max_markets_quoted_simultaneously = 1
 max_unhedged_delta = 10.0
 max_order_age_secs = 20
 stale_book_threshold_ms = 400
 min_expected_net = 0.002
+
+[risk.pilot]
+enforce_ultra_tight_live = true
+ultra_tight_daily_loss_limit_pct = 0.01
+ultra_tight_max_notional_per_market = 2.5
+ultra_tight_max_total_open_notional = 10.0
+ultra_tight_max_markets_quoted = 1
+
+[execution]
+mode = "maker_first"
+allow_taker_on_unwind_only = true
+post_only = true
+cancel_replace_cooldown_ms = 250
+min_rest_ms = 400
+stale_book_ms = 400
+
+[execution.vectors]
+entry_max_slippage_bps = 8.0
+exit_max_slippage_bps = 10.0
+entry_offset_bps = 2.0
+exit_offset_bps = 2.0
+max_cross_bps_unwind = 20.0
+
+[execution.fees.coinbase]
+maker_bps = 6.0
+taker_bps = 12.0
+rebate_bps_est = 0.0
+
+[execution.fees.polymarket]
+maker_bps = 0.0
+taker_bps = 5.0
+rebate_bps_est = 1.0
+
+[execution.edge_profiles]
+maker_mm_spot_min_bps = 8.0
+conversion_cycle_min_bps = 100.0
+position_reentry_min_bps = 40.0
+
+[execution.edge_profiles.per_asset_overrides_bps]
+
+[execution.order_manager]
+preview_required = true
+max_reprice_attempts = 3
+edit_vs_replace_threshold_bps = 5.0
+cancel_replace_cooldown_ms = 250
+min_rest_ms = 400
+
+[wallet]
+enabled = true
+mode = "assist"
+sync_secs = 10
+
+[wallet.targets]
+btc = 0.25
+eth = 0.20
+sol = 0.10
+xrp = 0.05
+usd = 0.40
+
+[wallet.rebalance]
+drift_trigger_pct = 0.03
+min_order_usd = 5.0
+max_order_usd = 25.0
+max_slippage_bps = 10.0
+max_orders_per_cycle = 3
+
+[wallet.approval]
+required = true
+token_ttl_secs = 300
+
+[acceptance.replay]
+max_reject_error_rate = 0.05
+max_effective_fee_bps_avg = 25.0
+max_unhedged_delta = 10.0
+require_killswitch_running = true
 
 [storage]
 sqlite_path = "data/output/engine.sqlite"
@@ -70,3 +181,30 @@ metrics_flush_secs = 5
 market_refresh_secs = 60
 wallet_refresh_secs = 30
 risk_watchdog_ms = 100
+
+[runtime.affinity]
+enabled = false
+feed_cores = [0, 1]
+strategy_cores = [2, 3]
+execution_cores = [4, 5]
+persistence_cores = [6, 7]
+
+[runtime.jitter_controls]
+enabled = false
+nic_polling = true
+disable_cpu_powersave = true
+isolate_cores = true
+rcu_nocbs = true
+nohz_full = true
+
+[wallet_intel]
+enabled = true
+top_wallets = 50
+refresh_secs = 60
+include_coinbase = true
+include_polymarket = true
+
+[benchmark.hotpath]
+enabled = false
+sample_size = 10000
+warmup_iters = 1000

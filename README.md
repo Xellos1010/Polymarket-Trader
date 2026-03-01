@@ -64,16 +64,35 @@ Use `.env.example` as the baseline for local/dev shells.
 - `GET /state/markets`
 - `GET /state/history?market_id=<id>&limit=360`
 - `GET /state/executions`
+- `GET /state/execution/orders`
+- `GET /state/execution/costs`
+- `GET /state/execution/vectors`
 - `GET /state/bias`
 - `GET /state/inventory`
+- `GET /state/coinbase/wallet`
+- `GET /state/coinbase/allocations`
+- `GET /state/coinbase/rebalance-plan`
+- `GET /state/coinbase/orders`
 - `POST /ops/halt`
 - `POST /ops/resume`
 - `POST /ops/flatten`
+- `POST /ops/coinbase/rebalance/approve`
+- `POST /ops/coinbase/rebalance/reject`
+- `POST /ops/execution/unwind`
 
 ## CLI utilities
 
 - Live preflight gate:
   - `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
+- Wallet/execution operator shortcuts:
+  - `cargo run -p pt-cli -- wallet-status`
+  - `cargo run -p pt-cli -- wallet-plan`
+  - `cargo run -p pt-cli -- wallet-approve --token-id <token_id>`
+  - `cargo run -p pt-cli -- execution-status`
+- Replay promotion acceptance:
+  - `cargo run -p pt-cli -- verify-promoted --artifact data/tuning/promoted_candidate.json --out data/output/replay_acceptance_report.json`
+- Journal comparative export:
+  - `cargo run -p pt-cli -- report-variants --journal data/strategy_lab/trade_journal.sqlite --out-csv data/output/variant_report.csv --out-md data/output/variant_report.md`
 - Extract Pine parameters:
   - `cargo run -p pt-cli -- pine-params --path pine-scripts/<script> --out data/tuning/pine_params.json`
 - Generate/tune Pine candidates:
