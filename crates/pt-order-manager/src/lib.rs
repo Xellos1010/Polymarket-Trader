@@ -42,6 +42,7 @@ impl OrderManager {
         desired_side: Side,
         desired_price: f64,
         desired_size: f64,
+        supports_amend: bool,
         book: TopOfBook,
         now_ms: i64,
     ) -> OrderManagerDecision {
@@ -87,7 +88,7 @@ impl OrderManager {
             f64::INFINITY
         };
 
-        if px_diff_bps <= self.cfg.edit_vs_replace_threshold_bps {
+        if supports_amend && px_diff_bps <= self.cfg.edit_vs_replace_threshold_bps {
             return OrderManagerDecision {
                 action: "edit".to_string(),
                 reason: format!(
@@ -209,6 +210,7 @@ mod tests {
             Side::Buy,
             100.0,
             1.0,
+            true,
             TopOfBook {
                 best_bid: 99.9,
                 best_ask: 100.1,

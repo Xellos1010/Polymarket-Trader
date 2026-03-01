@@ -7,8 +7,8 @@ use pt_core::{
     EntryExitVector, ExecutionCostAttribution, ExecutionEvent, ExecutionMode, ExecutionPolicy,
     ExecutionReport, ExecutionStatus, KillSwitchState, MarketHistoryPoint, MarketSnapshot,
     MetricsRegistry, OrderLifecycleState, RebalanceIntent, RebalancePlan, RebalancePlanStatus,
-    RiskState, RouteExecutionPlan, RouteOpportunity, Side, StrategyClass, Venue, VenueFeeSchedule,
-    WalletBalance,
+    RiskState, RouteExecutionPlan, RouteOpportunity, Side, StrategyClass, Venue, VenueCapability,
+    VenueFeeSchedule, WalletBalance,
 };
 use pt_dashboard::{router, DashboardState};
 use serde_json::{json, Value};
@@ -258,6 +258,26 @@ fn fixture_state() -> DashboardState {
         Arc::new(RwLock::new(coinbase_orderbooks)),
         Arc::new(RwLock::new(route_opportunities)),
         Arc::new(RwLock::new(route_executions)),
+        Arc::new(RwLock::new(vec![
+            VenueCapability {
+                venue: Venue::Coinbase,
+                supports_post_only: true,
+                supports_amend: true,
+                supports_fix: false,
+                min_tick: 0.01,
+                min_size: 0.00000001,
+                fee_model: "tiered_maker_taker".to_string(),
+            },
+            VenueCapability {
+                venue: Venue::Polymarket,
+                supports_post_only: true,
+                supports_amend: false,
+                supports_fix: false,
+                min_tick: 0.01,
+                min_size: 1.0,
+                fee_model: "maker_reward_taker_fee".to_string(),
+            },
+        ])),
         Arc::new(RwLock::new(fee_summary)),
         Arc::new(RwLock::new(rebalance_plan)),
         Arc::new(RwLock::new(rebalance_approval)),
@@ -501,6 +521,12 @@ async fn state_endpoints_match_openapi_contract() {
         ),
         (
             "GET",
+            "/state/venues/capabilities",
+            "/state/venues/capabilities",
+            None,
+        ),
+        (
+            "GET",
             "/state/venues/latency",
             "/state/venues/latency",
             None,
@@ -651,6 +677,7 @@ fn openapi_contains_all_runtime_paths() {
         "/state/feed/diagnostics",
         "/state/parity/monitor",
         "/state/parity/export-csv",
+        "/state/venues/capabilities",
         "/state/venues/latency",
         "/state/venues/fill-quality",
         "/state/venues/rejects",

@@ -4171,22 +4171,30 @@ dependencies = [
 name = "pt-gemini"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "chrono",
+ "hex",
+ "hmac",
  "pt-core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
 name = "pt-kraken"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "chrono",
+ "hmac",
  "pt-core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "sha2",
+ "url",
 ]
 
 [[package]]

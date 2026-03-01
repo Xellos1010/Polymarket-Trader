@@ -10,7 +10,7 @@ use pt_core::{
     AllocationDrift, ApprovalToken, Asset, AuthReloadResult, CoinbaseOrderBookState, EngineMode,
     ExecutionCostAttribution, ExecutionEvent, ExecutionPolicy, ExecutionReport, KillSwitchState,
     MarketHistoryPoint, MarketSelection, MarketSnapshot, MetricsRegistry, RebalancePlan,
-    RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side,
+    RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side, VenueCapability,
     VenueFillQualityStats, VenueLatencyStats, WalletBalance, WalletIntelSnapshot,
 };
 use reqwest::Client;
@@ -43,6 +43,7 @@ pub struct DashboardState {
     pub coinbase_orderbooks: Arc<RwLock<HashMap<String, CoinbaseOrderBookState>>>,
     pub route_opportunities: Arc<RwLock<Vec<RouteOpportunity>>>,
     pub route_executions: Arc<RwLock<Vec<RouteExecutionPlan>>>,
+    pub venue_capabilities: Arc<RwLock<Vec<VenueCapability>>>,
     pub coinbase_fee_summary: Arc<RwLock<Option<pt_coinbase::CoinbaseTransactionSummary>>>,
     pub rebalance_plan: Arc<RwLock<Option<RebalancePlan>>>,
     pub rebalance_approval: Arc<RwLock<Option<ApprovalToken>>>,
@@ -73,6 +74,7 @@ impl DashboardState {
         coinbase_orderbooks: Arc<RwLock<HashMap<String, CoinbaseOrderBookState>>>,
         route_opportunities: Arc<RwLock<Vec<RouteOpportunity>>>,
         route_executions: Arc<RwLock<Vec<RouteExecutionPlan>>>,
+        venue_capabilities: Arc<RwLock<Vec<VenueCapability>>>,
         coinbase_fee_summary: Arc<RwLock<Option<pt_coinbase::CoinbaseTransactionSummary>>>,
         rebalance_plan: Arc<RwLock<Option<RebalancePlan>>>,
         rebalance_approval: Arc<RwLock<Option<ApprovalToken>>>,
@@ -101,6 +103,7 @@ impl DashboardState {
             coinbase_orderbooks,
             route_opportunities,
             route_executions,
+            venue_capabilities,
             coinbase_fee_summary,
             rebalance_plan,
             rebalance_approval,
@@ -496,6 +499,7 @@ pub fn router(state: DashboardState) -> Router {
         .route("/state/feed/diagnostics", get(get_feed_diagnostics))
         .route("/state/parity/monitor", get(get_parity_monitor))
         .route("/state/parity/export-csv", post(post_parity_export_csv))
+        .route("/state/venues/capabilities", get(get_venue_capabilities))
         .route("/state/venues/latency", get(get_venue_latency))
         .route("/state/venues/fill-quality", get(get_venue_fill_quality))
         .route("/state/venues/rejects", get(get_venue_fill_quality))
@@ -1956,6 +1960,10 @@ fn build_wallet_intel_leaderboard(state: &DashboardState) -> Vec<WalletIntelSnap
 
 async fn get_venue_latency(State(state): State<DashboardState>) -> Json<Vec<VenueLatencyStats>> {
     Json(build_venue_latency_stats(&state))
+}
+
+async fn get_venue_capabilities(State(state): State<DashboardState>) -> Json<Vec<VenueCapability>> {
+    Json(state.venue_capabilities.read().clone())
 }
 
 async fn get_venue_fill_quality(

@@ -398,6 +398,18 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/VenueLatencyStats'
+  /state/venues/capabilities:
+    get:
+      summary: Venue capability registry used by execution policy branching
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VenueCapability'
   /state/venues/fill-quality:
     get:
       summary: Venue fill and reject quality rollups
@@ -1176,6 +1188,17 @@ components:
         cancel_events_10m: { type: integer }
         reject_rate_10m: { type: number }
         cancel_rate_10m: { type: number }
+    VenueCapability:
+      type: object
+      required: [venue, supports_post_only, supports_amend, supports_fix, min_tick, min_size, fee_model]
+      properties:
+        venue: { type: string }
+        supports_post_only: { type: boolean }
+        supports_amend: { type: boolean }
+        supports_fix: { type: boolean }
+        min_tick: { type: number }
+        min_size: { type: number }
+        fee_model: { type: string }
     VenueLatencyStats:
       type: object
       required: [venue, p50_ms, p95_ms, p99_ms, samples, ts]

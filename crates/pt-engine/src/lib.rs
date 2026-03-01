@@ -15,7 +15,7 @@ use pt_core::{
     ExecutionReport, KillSwitchState, MarketHistoryPoint, MarketSelection, MarketSnapshot,
     MetricsRegistry, OrderLifecycleState, PtError, PtResult, RebalanceIntent, RebalancePlan,
     RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side, TradingViewBias,
-    UserOrderEvent, Venue, WalletBalance, WalletModeConfig,
+    UserOrderEvent, Venue, VenueCapability, WalletBalance, WalletModeConfig,
 };
 use pt_dashboard::{router as dashboard_router, CoinbaseAuthController, DashboardState};
 use pt_market_discovery::MarketDiscoveryClient;
@@ -67,6 +67,7 @@ struct SharedState {
     coinbase_user_events: Arc<RwLock<Vec<UserOrderEvent>>>,
     route_opportunities: Arc<RwLock<Vec<RouteOpportunity>>>,
     route_executions: Arc<RwLock<Vec<RouteExecutionPlan>>>,
+    venue_capabilities: Arc<RwLock<Vec<VenueCapability>>>,
     coinbase_fee_summary: Arc<RwLock<Option<CoinbaseTransactionSummary>>>,
     wallet_drifts: Arc<RwLock<Vec<AllocationDrift>>>,
     rebalance_plan: Arc<RwLock<Option<RebalancePlan>>>,
@@ -95,6 +96,7 @@ impl SharedState {
             coinbase_user_events: Arc::new(RwLock::new(Vec::new())),
             route_opportunities: Arc::new(RwLock::new(Vec::new())),
             route_executions: Arc::new(RwLock::new(Vec::new())),
+            venue_capabilities: Arc::new(RwLock::new(Vec::new())),
             coinbase_fee_summary: Arc::new(RwLock::new(None)),
             wallet_drifts: Arc::new(RwLock::new(Vec::new())),
             rebalance_plan: Arc::new(RwLock::new(None)),
@@ -898,6 +900,7 @@ impl TradingEngine {
             .unwrap_or_else(|| "default".to_string());
         let metrics = Arc::new(MetricsRegistry::default());
         let state = SharedState::new(policy_from_config(&cfg));
+        *state.venue_capabilities.write() = venue_capabilities_from_config(&cfg);
         let min_expected_net = cfg.risk.min_expected_net;
 
         let market_discovery = MarketDiscoveryClient::new(
@@ -1250,6 +1253,7 @@ impl TradingEngine {
             self.state.coinbase_orderbooks.clone(),
             self.state.route_opportunities.clone(),
             self.state.route_executions.clone(),
+            self.state.venue_capabilities.clone(),
             self.state.coinbase_fee_summary.clone(),
             self.state.rebalance_plan.clone(),
             self.state.rebalance_approval.clone(),
@@ -1818,6 +1822,7 @@ impl TradingEngine {
                                 intent.side.clone(),
                                 intent.limit_price,
                                 desired_size,
+                                true,
                                 TopOfBook {
                                     best_bid: top.best_bid,
                                     best_ask: top.best_ask,
@@ -2705,6 +2710,59 @@ fn policy_from_config(cfg: &AppConfig) -> ExecutionPolicy {
             per_asset_overrides_bps: cfg.execution.edge_profiles.per_asset_overrides_bps.clone(),
         },
     }
+}
+
+fn venue_capabilities_from_config(cfg: &AppConfig) -> Vec<VenueCapability> {
+    let mut out = vec![
+        VenueCapability {
+            venue: Venue::Coinbase,
+            supports_post_only: true,
+            supports_amend: true,
+            supports_fix: false,
+            min_tick: 0.01,
+            min_size: 0.00000001,
+            fee_model: "tiered_maker_taker".to_string(),
+        },
+        VenueCapability {
+            venue: Venue::Polymarket,
+            supports_post_only: true,
+            supports_amend: false,
+            supports_fix: false,
+            min_tick: cfg
+                .venues
+                .polymarket
+                .filters
+                .max_spread
+                .min(0.01)
+                .max(0.001),
+            min_size: 1.0,
+            fee_model: "maker_reward_taker_fee".to_string(),
+        },
+    ];
+
+    if cfg.venues.kraken.enabled {
+        out.push(VenueCapability {
+            venue: Venue::Kraken,
+            supports_post_only: true,
+            supports_amend: false,
+            supports_fix: false,
+            min_tick: 0.01,
+            min_size: 0.00000001,
+            fee_model: "maker_taker".to_string(),
+        });
+    }
+    if cfg.venues.gemini.enabled {
+        out.push(VenueCapability {
+            venue: Venue::Gemini,
+            supports_post_only: true,
+            supports_amend: false,
+            supports_fix: false,
+            min_tick: 0.01,
+            min_size: 0.00000001,
+            fee_model: "maker_taker".to_string(),
+        });
+    }
+    out
 }
 
 fn should_attempt_coinbase_auth(cfg: &AppConfig) -> bool {
