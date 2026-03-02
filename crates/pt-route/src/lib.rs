@@ -24,6 +24,8 @@ pub fn find_route_opportunities(
     venue_maker_fees_bps: &HashMap<String, f64>,
     expected_slippage_bps_per_leg: f64,
     cancel_churn_bps_per_leg: f64,
+    reject_penalty_bps: f64,
+    latency_decay_penalty_bps: f64,
     edge_profile: &EdgeProfile,
 ) -> Vec<RouteOpportunity> {
     if capital_usd <= 0.0 {
@@ -57,7 +59,8 @@ pub fn find_route_opportunities(
                 expected_slippage_bps_per_leg,
                 cancel_churn_bps_per_leg,
             );
-            let net_bps = gross_bps - legs_cost_bps;
+            let net_bps =
+                gross_bps - legs_cost_bps - reject_penalty_bps - latency_decay_penalty_bps;
             let min_bps = min_edge_for_cycle(&e1.from, edge_profile);
             if net_bps < min_bps {
                 continue;
@@ -131,7 +134,8 @@ pub fn find_route_opportunities(
                     expected_slippage_bps_per_leg,
                     cancel_churn_bps_per_leg,
                 );
-                let net_bps = gross_bps - legs_cost_bps;
+                let net_bps =
+                    gross_bps - legs_cost_bps - reject_penalty_bps - latency_decay_penalty_bps;
                 let min_bps = min_edge_for_cycle(&e1.from, edge_profile);
                 if net_bps < min_bps {
                     continue;
@@ -314,6 +318,8 @@ mod tests {
             ]),
             1.0,
             1.0,
+            0.0,
+            0.0,
             &EdgeProfile {
                 maker_mm_spot_min_bps: 8.0,
                 conversion_cycle_min_bps: 5.0,
@@ -383,6 +389,8 @@ mod tests {
             &low_fees,
             1.0,
             1.0,
+            0.0,
+            0.0,
             &EdgeProfile {
                 maker_mm_spot_min_bps: 8.0,
                 conversion_cycle_min_bps: 0.0,
@@ -396,6 +404,8 @@ mod tests {
             &high_fees,
             1.0,
             1.0,
+            0.0,
+            0.0,
             &EdgeProfile {
                 maker_mm_spot_min_bps: 8.0,
                 conversion_cycle_min_bps: 0.0,
@@ -407,5 +417,69 @@ mod tests {
         assert!(!low.is_empty());
         assert!(!high.is_empty());
         assert!(low[0].expected_net_bps > high[0].expected_net_bps);
+    }
+
+    #[test]
+    fn reject_and_latency_penalties_reduce_net_edge() {
+        let mut books = HashMap::new();
+        books.insert(
+            "coinbase:BTC-USD".to_string(),
+            RouteBook {
+                best_bid: 100.0,
+                best_ask: 100.1,
+            },
+        );
+        books.insert(
+            "kraken:BTC-USDC".to_string(),
+            RouteBook {
+                best_bid: 101.3,
+                best_ask: 101.5,
+            },
+        );
+        books.insert(
+            "gemini:USDC-USD".to_string(),
+            RouteBook {
+                best_bid: 1.002,
+                best_ask: 1.003,
+            },
+        );
+        let fees = HashMap::from([
+            ("coinbase".to_string(), 1.0),
+            ("kraken".to_string(), 1.0),
+            ("gemini".to_string(), 1.0),
+        ]);
+        let baseline = find_route_opportunities(
+            &books,
+            20.0,
+            &fees,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            &EdgeProfile {
+                maker_mm_spot_min_bps: 8.0,
+                conversion_cycle_min_bps: 0.0,
+                position_reentry_min_bps: 40.0,
+                per_asset_overrides_bps: HashMap::new(),
+            },
+        );
+        let penalized = find_route_opportunities(
+            &books,
+            20.0,
+            &fees,
+            1.0,
+            1.0,
+            25.0,
+            10.0,
+            &EdgeProfile {
+                maker_mm_spot_min_bps: 0.0,
+                conversion_cycle_min_bps: 0.0,
+                position_reentry_min_bps: 40.0,
+                per_asset_overrides_bps: HashMap::new(),
+            },
+        );
+        assert!(!baseline.is_empty());
+        assert!(!penalized.is_empty());
+        assert!(baseline[0].expected_net_bps > penalized[0].expected_net_bps);
     }
 }

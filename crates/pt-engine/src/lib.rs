@@ -1796,6 +1796,7 @@ impl TradingEngine {
         let orderbooks = self.state.coinbase_orderbooks.clone();
         let kraken_books = self.state.kraken_route_books.clone();
         let gemini_books = self.state.gemini_route_books.clone();
+        let execution_events = self.state.execution_events.clone();
         let opportunities_state = self.state.route_opportunities.clone();
         let executions_state = self.state.route_executions.clone();
         let balances_state = self.state.wallet_balances.clone();
@@ -1812,13 +1813,14 @@ impl TradingEngine {
                 let books_snapshot = orderbooks.read().clone();
                 let kraken_snapshot = kraken_books.read().clone();
                 let gemini_snapshot = gemini_books.read().clone();
+                let now = Utc::now();
 
                 let mut route_books: HashMap<String, RouteBook> = HashMap::new();
-                for (product, book) in books_snapshot {
+                for (product, book) in &books_snapshot {
                     let best_bid = book.bids.first().map(|x| x.0).unwrap_or(0.0);
                     let best_ask = book.asks.first().map(|x| x.0).unwrap_or(0.0);
                     if best_bid > 0.0 && best_ask > 0.0 && best_bid < best_ask {
-                        if let Some(key) = venue_route_key("coinbase", &product) {
+                        if let Some(key) = venue_route_key("coinbase", product) {
                             route_books.insert(key, RouteBook { best_bid, best_ask });
                         }
                     }
@@ -1846,6 +1848,53 @@ impl TradingEngine {
                 }
 
                 let policy = execution_policy.read().clone();
+                let stale_book_ms = policy.stale_book_ms.max(1) as i64;
+                let max_coinbase_age_ms = books_snapshot
+                    .values()
+                    .filter_map(|book| {
+                        book.last_event_ts
+                            .map(|ts| (now - ts).num_milliseconds().max(0))
+                    })
+                    .max()
+                    .unwrap_or(stale_book_ms.saturating_mul(2));
+                let latency_decay_penalty_bps = if max_coinbase_age_ms <= stale_book_ms {
+                    (max_coinbase_age_ms as f64 / stale_book_ms as f64) * 5.0
+                } else {
+                    let overdue_ratio =
+                        (max_coinbase_age_ms - stale_book_ms) as f64 / stale_book_ms as f64;
+                    (5.0 + overdue_ratio * 20.0).min(50.0)
+                };
+                metrics.set_gauge(
+                    "routes_max_coinbase_book_age_ms",
+                    max_coinbase_age_ms as f64,
+                );
+                metrics.set_gauge("routes_latency_penalty_bps", latency_decay_penalty_bps);
+
+                let reject_cutoff = now - chrono::Duration::minutes(10);
+                let (rejects_10m, total_10m) = {
+                    let lock = execution_events.read();
+                    let mut rejects = 0usize;
+                    let mut total = 0usize;
+                    for ev in lock.iter().rev() {
+                        if ev.ts < reject_cutoff {
+                            break;
+                        }
+                        total += 1;
+                        if matches!(ev.state, pt_core::OrderLifecycleState::Rejected) {
+                            rejects += 1;
+                        }
+                    }
+                    (rejects, total)
+                };
+                let reject_ratio_10m = if total_10m == 0 {
+                    0.0
+                } else {
+                    rejects_10m as f64 / total_10m as f64
+                };
+                let reject_penalty_bps = (reject_ratio_10m * 50.0).min(50.0);
+                metrics.set_gauge("routes_reject_ratio_10m", reject_ratio_10m);
+                metrics.set_gauge("routes_reject_penalty_bps", reject_penalty_bps);
+
                 let mut venue_maker_fees_bps: HashMap<String, f64> = HashMap::new();
                 venue_maker_fees_bps.insert("coinbase".to_string(), policy.coinbase_fees.maker_bps);
                 venue_maker_fees_bps.insert("kraken".to_string(), policy.kraken_fees.maker_bps);
@@ -1856,6 +1905,8 @@ impl TradingEngine {
                     &venue_maker_fees_bps,
                     2.0,
                     1.0,
+                    reject_penalty_bps,
+                    latency_decay_penalty_bps,
                     &policy.edge_profiles,
                 );
                 let top: Vec<RouteOpportunity> = opportunities.into_iter().take(40).collect();

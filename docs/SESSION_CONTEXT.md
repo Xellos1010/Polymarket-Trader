@@ -1,6 +1,6 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1772420168`
+Generated at UNIX epoch seconds: `1772420340`
 
 ## Note
 Patched Coinbase blockers (rustls provider + SEC1 key handling), passed coinbase-smoke, added Rust strategy-lab crate + CLI + dashboard, and added wallet conversion + maker speed-test controls in main dashboard.
@@ -20,6 +20,9 @@ Added cross-venue route ingestion in `pt-engine`:
 Added venue-specific route fee modeling:
 - `execution.fees.kraken` and `execution.fees.gemini` are now supported with defaults.
 - Route net-edge now applies maker fee by leg venue instead of a single shared maker fee.
+Added route quality penalties:
+- Dynamic reject-risk penalty from rolling 10m execution reject ratio.
+- Dynamic latency-decay penalty from Coinbase L2 freshness relative to `execution.stale_book_ms`.
 
 ## Runtime
 `rustc`: `rustc 1.93.1 (01f6ddf75 2026-02-11)`

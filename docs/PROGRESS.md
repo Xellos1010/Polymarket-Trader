@@ -2,6 +2,18 @@
 
 ## Completed (Latest)
 
+- Route net-edge quality penalties added:
+  - Route scoring now applies a dynamic reject-risk penalty (rolling 10m reject ratio from execution events).
+  - Route scoring now applies a dynamic latency-decay penalty from Coinbase orderbook freshness vs `execution.stale_book_ms`.
+  - New runtime metrics:
+    - `routes_reject_ratio_10m`
+    - `routes_reject_penalty_bps`
+    - `routes_max_coinbase_book_age_ms`
+    - `routes_latency_penalty_bps`
+  - Validation status:
+    - `cargo check --workspace` passes
+    - `cargo test --workspace` passes
+
 - Cross-venue route cost model upgraded to venue-specific maker fees:
   - Added `execution.fees.kraken` and `execution.fees.gemini` config support (with defaults + schema support).
   - Extended runtime execution policy with Kraken/Gemini fee schedules.
