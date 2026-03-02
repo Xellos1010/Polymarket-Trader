@@ -1068,35 +1068,78 @@ impl TradingEngine {
         }
 
         let mut tasks: Vec<JoinHandle<()>> = Vec::new();
-
         tasks.push(self.spawn_dashboard_server());
         if self.cfg.signals.tradingview.enabled {
             tasks.push(self.spawn_tradingview_server());
         }
+        self.push_data_plane_tasks(&mut tasks, true);
+        self.await_shutdown(tasks).await
+    }
 
+    pub async fn run_homebase(&self) -> PtResult<()> {
+        info!(
+            mode = ?self.cfg.engine.mode,
+            portfolio_id = %self.portfolio_id,
+            "starting trading engine homebase mode"
+        );
+
+        if let EngineMode::Replay = self.cfg.engine.mode {
+            return self.run_replay_mode().await;
+        }
+
+        let mut tasks: Vec<JoinHandle<()>> = Vec::new();
+        tasks.push(self.spawn_dashboard_server());
+        if self.cfg.signals.tradingview.enabled {
+            tasks.push(self.spawn_tradingview_server());
+        }
+        self.push_data_plane_tasks(&mut tasks, false);
+        self.await_shutdown(tasks).await
+    }
+
+    pub async fn run_exec(&self) -> PtResult<()> {
+        info!(
+            mode = ?self.cfg.engine.mode,
+            portfolio_id = %self.portfolio_id,
+            "starting trading engine exec mode"
+        );
+
+        if let EngineMode::Replay = self.cfg.engine.mode {
+            return self.run_replay_mode().await;
+        }
+
+        let mut tasks: Vec<JoinHandle<()>> = Vec::new();
+        self.push_data_plane_tasks(&mut tasks, true);
+        self.await_shutdown(tasks).await
+    }
+
+    fn push_data_plane_tasks(&self, tasks: &mut Vec<JoinHandle<()>>, with_trading: bool) {
         tasks.push(self.spawn_market_refresh_loop());
         tasks.push(self.spawn_wallet_refresh_loop());
         if self.cfg.wallet.enabled {
             tasks.push(self.spawn_coinbase_wallet_sync_loop());
-            tasks.push(self.spawn_rebalance_planner_loop());
             tasks.push(self.spawn_coinbase_ws_loop());
             tasks.push(self.spawn_route_loop());
             tasks.push(self.spawn_fee_tier_loop());
+            if with_trading {
+                tasks.push(self.spawn_rebalance_planner_loop());
+            }
         }
         tasks.push(self.spawn_orderbook_loop());
-        tasks.push(self.spawn_quote_loop());
-        tasks.push(self.spawn_watchdog_loop());
+        if with_trading {
+            tasks.push(self.spawn_quote_loop());
+            tasks.push(self.spawn_watchdog_loop());
+        }
+    }
 
+    async fn await_shutdown(&self, tasks: Vec<JoinHandle<()>>) -> PtResult<()> {
         info!("engine running; press Ctrl+C to stop");
         tokio::signal::ctrl_c()
             .await
             .map_err(|e| PtError::Io(e.to_string()))?;
         info!("shutdown signal received");
-
         for task in tasks {
             task.abort();
         }
-
         Ok(())
     }
 

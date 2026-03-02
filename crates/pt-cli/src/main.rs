@@ -2,7 +2,10 @@ use clap::{Parser, Subcommand};
 use pt_coinbase::{
     CoinbaseAuthManager, CoinbaseWalletClient, CoinbaseWsEvent, CoinbaseWsRunConfig,
 };
-use pt_core::{ensure_rustls_crypto_provider, AppConfig, EngineMode, ReplayAcceptanceReport};
+use pt_core::{
+    apply_runtime_controls, ensure_rustls_crypto_provider, AppConfig, EngineMode,
+    ReplayAcceptanceReport, RuntimeRole,
+};
 use pt_engine::TradingEngine;
 use pt_strategy_lab::{
     fetch_coinbase_candles, load_profile as load_strategy_profile, optimize_random_walk_forward,
@@ -38,6 +41,8 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     Run,
+    RunHomebase,
+    RunExec,
     Status {
         #[arg(short, long, default_value = "http://127.0.0.1:8080/health")]
         url: String,
@@ -314,6 +319,18 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Commands::RunHomebase => {
+            if let Err(e) = run_homebase(&config_path).await {
+                error!(%e, "homebase engine failed");
+                std::process::exit(1);
+            }
+        }
+        Commands::RunExec => {
+            if let Err(e) = run_exec(&config_path).await {
+                error!(%e, "exec engine failed");
+                std::process::exit(1);
+            }
+        }
         Commands::Status { url } => {
             if let Err(e) = status(&url).await {
                 error!(%e, "status check failed");
@@ -575,6 +592,32 @@ async fn run(config_path: &str) -> Result<(), String> {
     let cfg = AppConfig::from_file(config_path).map_err(|e| e.to_string())?;
     let engine = TradingEngine::new(cfg).map_err(|e| e.to_string())?;
     engine.run().await.map_err(|e| e.to_string())
+}
+
+async fn run_homebase(config_path: &str) -> Result<(), String> {
+    info!(config_path, "loading config for homebase");
+    let provider =
+        ensure_rustls_crypto_provider().map_err(|e| format!("rustls provider init failed: {e}"))?;
+    info!(provider = %provider, "rustls provider ready");
+    let cfg = AppConfig::from_file(config_path).map_err(|e| e.to_string())?;
+    for note in apply_runtime_controls(&cfg.runtime, RuntimeRole::Homebase)? {
+        info!(note = %note, "runtime control");
+    }
+    let engine = TradingEngine::new(cfg).map_err(|e| e.to_string())?;
+    engine.run_homebase().await.map_err(|e| e.to_string())
+}
+
+async fn run_exec(config_path: &str) -> Result<(), String> {
+    info!(config_path, "loading config for exec");
+    let provider =
+        ensure_rustls_crypto_provider().map_err(|e| format!("rustls provider init failed: {e}"))?;
+    info!(provider = %provider, "rustls provider ready");
+    let cfg = AppConfig::from_file(config_path).map_err(|e| e.to_string())?;
+    for note in apply_runtime_controls(&cfg.runtime, RuntimeRole::Exec)? {
+        info!(note = %note, "runtime control");
+    }
+    let engine = TradingEngine::new(cfg).map_err(|e| e.to_string())?;
+    engine.run_exec().await.map_err(|e| e.to_string())
 }
 
 async fn status(url: &str) -> Result<(), String> {

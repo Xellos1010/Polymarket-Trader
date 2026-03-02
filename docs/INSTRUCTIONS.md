@@ -50,11 +50,20 @@ cargo run -p pt-cli -- strategy-profile-save --path data/output/strategy_profile
 cargo run -p pt-cli -- run --config config/config.toml
 ```
 
-5a. Open dashboards:
+5a. Split runtime modes (recommended):
+```bash
+# control-plane homebase (dashboard, analytics, wallet intel)
+cargo run -p pt-cli -- run-homebase --config config/config.toml
+
+# data-plane execution only (no dashboard)
+cargo run -p pt-cli -- run-exec --config config/config.toml
+```
+
+5b. Open dashboards:
 - Engine + ops dashboard: `http://127.0.0.1:8080`
 - Strategy lab/backtester: `http://127.0.0.1:9090`
 
-5b. New dashboard controls (Coinbase wallet-first):
+5c. New dashboard controls (Coinbase wallet-first):
 - Market dropdown now shows pair/bucket label instead of raw market id.
 - `CHART` / `BACKTESTER` tabs switch between live market charting and embedded strategy lab.
 - `LISTING PATTERN` tab overlays recently listed Coinbase products with configurable window, alignment, and normalization.

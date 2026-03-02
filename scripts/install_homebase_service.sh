@@ -18,7 +18,7 @@ cat > "$PLIST_PATH" <<PLIST
   <key>ProgramArguments</key>
   <array>
     <string>${ROOT_DIR}/target/release/pt-cli</string>
-    <string>run</string>
+    <string>run-homebase</string>
     <string>--config</string>
     <string>${CONFIG_PATH}</string>
   </array>
