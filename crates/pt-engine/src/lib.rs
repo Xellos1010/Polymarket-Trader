@@ -18,6 +18,8 @@ use pt_core::{
     UserOrderEvent, Venue, VenueCapability, WalletBalance, WalletModeConfig, WalletSignal,
 };
 use pt_dashboard::{router as dashboard_router, CoinbaseAuthController, DashboardState};
+use pt_gemini::GeminiClient;
+use pt_kraken::KrakenClient;
 use pt_market_discovery::MarketDiscoveryClient;
 use pt_order_manager::{
     OrderManager, OrderManagerConfig as RepriceManagerConfig, RestingOrder, TopOfBook,
@@ -64,6 +66,8 @@ struct SharedState {
     wallet_balances: Arc<RwLock<Vec<WalletBalance>>>,
     wallet_open_orders: Arc<RwLock<Vec<CoinbaseOrderSummary>>>,
     coinbase_orderbooks: Arc<RwLock<HashMap<String, CoinbaseOrderBookState>>>,
+    kraken_route_books: Arc<RwLock<HashMap<String, RouteBook>>>,
+    gemini_route_books: Arc<RwLock<HashMap<String, RouteBook>>>,
     coinbase_user_events: Arc<RwLock<Vec<UserOrderEvent>>>,
     route_opportunities: Arc<RwLock<Vec<RouteOpportunity>>>,
     route_executions: Arc<RwLock<Vec<RouteExecutionPlan>>>,
@@ -93,6 +97,8 @@ impl SharedState {
             wallet_balances: Arc::new(RwLock::new(Vec::new())),
             wallet_open_orders: Arc::new(RwLock::new(Vec::new())),
             coinbase_orderbooks: Arc::new(RwLock::new(HashMap::new())),
+            kraken_route_books: Arc::new(RwLock::new(HashMap::new())),
+            gemini_route_books: Arc::new(RwLock::new(HashMap::new())),
             coinbase_user_events: Arc::new(RwLock::new(Vec::new())),
             route_opportunities: Arc::new(RwLock::new(Vec::new())),
             route_executions: Arc::new(RwLock::new(Vec::new())),
@@ -913,6 +919,8 @@ pub struct TradingEngine {
     quote_cfg: QuoteConfig,
     poly_exec: Arc<dyn PolymarketExecution>,
     hedger: Arc<dyn HedgeExecutor>,
+    kraken_client: Option<Arc<KrakenClient>>,
+    gemini_client: Option<Arc<GeminiClient>>,
     coinbase_auth: Option<Arc<CoinbaseAuthManager>>,
     coinbase_wallet: Option<Arc<CoinbaseWalletClient>>,
     storage: Arc<Storage>,
@@ -1045,6 +1053,26 @@ impl TradingEngine {
             None
         };
 
+        let kraken_client = if cfg.venues.kraken.enabled {
+            Some(Arc::new(KrakenClient::new(
+                cfg.venues.kraken.api_base.clone(),
+                cfg.venues.kraken.api_key.clone(),
+                cfg.venues.kraken.api_secret.clone(),
+            )))
+        } else {
+            None
+        };
+
+        let gemini_client = if cfg.venues.gemini.enabled {
+            Some(Arc::new(GeminiClient::new(
+                cfg.venues.gemini.api_base.clone(),
+                cfg.venues.gemini.api_key.clone(),
+                cfg.venues.gemini.api_secret.clone(),
+            )))
+        } else {
+            None
+        };
+
         let sqlite_path = apply_portfolio_to_sqlite_path(&cfg.storage.sqlite_path, &portfolio_id);
         let parquet_dir = apply_portfolio_to_parquet_dir(&cfg.storage.parquet_dir, &portfolio_id);
 
@@ -1086,6 +1114,8 @@ impl TradingEngine {
             },
             poly_exec,
             hedger,
+            kraken_client,
+            gemini_client,
             coinbase_auth,
             coinbase_wallet,
             storage,
@@ -1154,6 +1184,8 @@ impl TradingEngine {
         if self.cfg.wallet.enabled {
             tasks.push(self.spawn_coinbase_wallet_sync_loop());
             tasks.push(self.spawn_coinbase_ws_loop());
+            tasks.push(self.spawn_kraken_book_loop());
+            tasks.push(self.spawn_gemini_book_loop());
             tasks.push(self.spawn_route_loop());
             tasks.push(self.spawn_fee_tier_loop());
             if with_trading {
@@ -1646,8 +1678,124 @@ impl TradingEngine {
         })
     }
 
+    fn spawn_kraken_book_loop(&self) -> JoinHandle<()> {
+        let Some(client) = self.kraken_client.clone() else {
+            return tokio::spawn(async {});
+        };
+
+        let books_state = self.state.kraken_route_books.clone();
+        let metrics = self.metrics.clone();
+        let refresh_ms = self.cfg.engine.loop_ms.max(250);
+        let products = if self.cfg.venues.kraken.products.is_empty() {
+            self.cfg.venues.coinbase.products.clone()
+        } else {
+            self.cfg.venues.kraken.products.clone()
+        };
+
+        tokio::spawn(async move {
+            if products.is_empty() {
+                warn!("kraken enabled but no products configured");
+                return;
+            }
+
+            loop {
+                let mut next = HashMap::new();
+                for product in &products {
+                    let request_pair = to_kraken_request_pair(product);
+                    match client.fetch_top_of_book(&request_pair).await {
+                        Ok(book) => {
+                            if book.bid > 0.0 && book.ask > 0.0 && book.bid < book.ask {
+                                if let Some(key) = venue_route_key("kraken", product) {
+                                    next.insert(
+                                        key,
+                                        RouteBook {
+                                            best_bid: book.bid,
+                                            best_ask: book.ask,
+                                        },
+                                    );
+                                    metrics.inc_counter("kraken_book_ok", 1.0);
+                                } else {
+                                    metrics.inc_counter("kraken_book_invalid", 1.0);
+                                }
+                            } else {
+                                metrics.inc_counter("kraken_book_invalid", 1.0);
+                            }
+                        }
+                        Err(e) => {
+                            warn!(%product, %e, "kraken top-of-book fetch failed");
+                            metrics.inc_counter("kraken_book_error", 1.0);
+                        }
+                    }
+                }
+
+                metrics.set_gauge("kraken_route_books_count", next.len() as f64);
+                *books_state.write() = next;
+                tokio::time::sleep(Duration::from_millis(refresh_ms)).await;
+            }
+        })
+    }
+
+    fn spawn_gemini_book_loop(&self) -> JoinHandle<()> {
+        let Some(client) = self.gemini_client.clone() else {
+            return tokio::spawn(async {});
+        };
+
+        let books_state = self.state.gemini_route_books.clone();
+        let metrics = self.metrics.clone();
+        let refresh_ms = self.cfg.engine.loop_ms.max(250);
+        let products = if self.cfg.venues.gemini.products.is_empty() {
+            self.cfg.venues.coinbase.products.clone()
+        } else {
+            self.cfg.venues.gemini.products.clone()
+        };
+
+        tokio::spawn(async move {
+            if products.is_empty() {
+                warn!("gemini enabled but no products configured");
+                return;
+            }
+
+            loop {
+                let mut next = HashMap::new();
+                for product in &products {
+                    let symbol = to_gemini_request_symbol(product);
+                    match client.fetch_top_of_book(&symbol).await {
+                        Ok(book) => {
+                            if book.bid > 0.0 && book.ask > 0.0 && book.bid < book.ask {
+                                if let Some(key) = venue_route_key("gemini", product) {
+                                    next.insert(
+                                        key,
+                                        RouteBook {
+                                            best_bid: book.bid,
+                                            best_ask: book.ask,
+                                        },
+                                    );
+                                    metrics.inc_counter("gemini_book_ok", 1.0);
+                                } else {
+                                    metrics.inc_counter("gemini_book_invalid", 1.0);
+                                }
+                            } else {
+                                metrics.inc_counter("gemini_book_invalid", 1.0);
+                            }
+                        }
+                        Err(e) => {
+                            warn!(%product, %e, "gemini top-of-book fetch failed");
+                            metrics.inc_counter("gemini_book_error", 1.0);
+                        }
+                    }
+                }
+
+                metrics.set_gauge("gemini_route_books_count", next.len() as f64);
+                *books_state.write() = next;
+                tokio::time::sleep(Duration::from_millis(refresh_ms)).await;
+            }
+        })
+    }
+
     fn spawn_route_loop(&self) -> JoinHandle<()> {
         let orderbooks = self.state.coinbase_orderbooks.clone();
+        let kraken_books = self.state.kraken_route_books.clone();
+        let gemini_books = self.state.gemini_route_books.clone();
         let opportunities_state = self.state.route_opportunities.clone();
         let executions_state = self.state.route_executions.clone();
         let balances_state = self.state.wallet_balances.clone();
@@ -1662,24 +1810,23 @@ impl TradingEngine {
             let mut last_route_id = String::new();
             loop {
                 let books_snapshot = orderbooks.read().clone();
-                if books_snapshot.len() < 2 {
-                    tokio::time::sleep(Duration::from_millis(refresh_ms)).await;
-                    continue;
-                }
+                let kraken_snapshot = kraken_books.read().clone();
+                let gemini_snapshot = gemini_books.read().clone();
 
-                let route_books: HashMap<String, RouteBook> = books_snapshot
-                    .iter()
-                    .filter_map(|(product, book)| {
-                        let best_bid = book.bids.first().map(|x| x.0).unwrap_or(0.0);
-                        let best_ask = book.asks.first().map(|x| x.0).unwrap_or(0.0);
-                        if best_bid > 0.0 && best_ask > 0.0 && best_bid < best_ask {
-                            Some((product.clone(), RouteBook { best_bid, best_ask }))
-                        } else {
-                            None
+                let mut route_books: HashMap<String, RouteBook> = HashMap::new();
+                for (product, book) in books_snapshot {
+                    let best_bid = book.bids.first().map(|x| x.0).unwrap_or(0.0);
+                    let best_ask = book.asks.first().map(|x| x.0).unwrap_or(0.0);
+                    if best_bid > 0.0 && best_ask > 0.0 && best_bid < best_ask {
+                        if let Some(key) = venue_route_key("coinbase", &product) {
+                            route_books.insert(key, RouteBook { best_bid, best_ask });
                         }
-                    })
-                    .collect();
+                    }
+                }
+                route_books.extend(kraken_snapshot.into_iter());
+                route_books.extend(gemini_snapshot.into_iter());
 
+                metrics.set_gauge("route_books_count", route_books.len() as f64);
                 if route_books.len() < 2 {
                     tokio::time::sleep(Duration::from_millis(refresh_ms)).await;
                     continue;
@@ -2765,6 +2912,100 @@ fn order_manager_slot(product_id: &str, side: &Side) -> String {
         Side::Sell => "sell",
     };
     format!("{}:{}", product_id.to_ascii_uppercase(), side_key)
+}
+
+fn venue_route_key(venue: &str, product_id: &str) -> Option<String> {
+    let (base, quote) = split_symbol_pair(product_id)?;
+    Some(format!("{}:{}-{}", venue.to_ascii_lowercase(), base, quote))
+}
+
+fn split_symbol_pair(product_id: &str) -> Option<(String, String)> {
+    let product = product_id
+        .split_once(':')
+        .map(|(_, pair)| pair)
+        .unwrap_or(product_id)
+        .trim();
+    if product.is_empty() {
+        return None;
+    }
+
+    let normalized = product
+        .replace('/', "-")
+        .replace('_', "-")
+        .to_ascii_uppercase();
+
+    let mut parts = normalized.split('-').filter(|p| !p.is_empty());
+    if let (Some(base), Some(quote)) = (parts.next(), parts.next()) {
+        return Some((normalize_asset_alias(base), normalize_asset_alias(quote)));
+    }
+
+    parse_compact_pair(&normalized)
+}
+
+fn parse_compact_pair(symbol: &str) -> Option<(String, String)> {
+    const QUOTES: [&str; 8] = ["USDC", "USDT", "USD", "EUR", "GBP", "BTC", "ETH", "SOL"];
+    let compact: String = symbol
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect();
+    if compact.is_empty() {
+        return None;
+    }
+    let upper = compact.to_ascii_uppercase();
+    for quote in QUOTES {
+        if upper.len() > quote.len() && upper.ends_with(quote) {
+            let base = &upper[..upper.len() - quote.len()];
+            if !base.is_empty() {
+                return Some((normalize_asset_alias(base), normalize_asset_alias(quote)));
+            }
+        }
+    }
+    None
+}
+
+fn normalize_asset_alias(asset: &str) -> String {
+    match asset.to_ascii_uppercase().as_str() {
+        "XBT" | "XXBT" => "BTC".to_string(),
+        "XETH" => "ETH".to_string(),
+        "XXRP" => "XRP".to_string(),
+        "XDG" => "DOGE".to_string(),
+        "ZUSD" => "USD".to_string(),
+        "ZEUR" => "EUR".to_string(),
+        "ZGBP" => "GBP".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn to_kraken_request_pair(product_id: &str) -> String {
+    if product_id.contains('-') || product_id.contains('/') || product_id.contains('_') {
+        if let Some((base, quote)) = split_symbol_pair(product_id) {
+            let base = match base.as_str() {
+                "BTC" => "XBT".to_string(),
+                _ => base,
+            };
+            return format!("{base}{quote}");
+        }
+    }
+    product_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_uppercase()
+}
+
+fn to_gemini_request_symbol(product_id: &str) -> String {
+    if let Some((base, quote)) = split_symbol_pair(product_id) {
+        return format!(
+            "{}{}",
+            base.to_ascii_lowercase(),
+            quote.to_ascii_lowercase()
+        );
+    }
+    product_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase()
 }
 
 fn policy_from_config(cfg: &AppConfig) -> ExecutionPolicy {

@@ -4151,6 +4151,8 @@ dependencies = [
  "pt-coinbase",
  "pt-core",
  "pt-dashboard",
+ "pt-gemini",
+ "pt-kraken",
  "pt-market-discovery",
  "pt-order-manager",
  "pt-polymarket",

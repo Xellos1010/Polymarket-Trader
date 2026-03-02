@@ -177,7 +177,12 @@ fn min_edge_for_cycle(seed_asset: &str, edge_profile: &EdgeProfile) -> f64 {
 
 fn build_edges(books: &HashMap<String, RouteBook>) -> Vec<DirectedEdge> {
     let mut edges = Vec::new();
-    for (product_id, book) in books {
+    let mut product_ids: Vec<&String> = books.keys().collect();
+    product_ids.sort();
+    for product_id in product_ids {
+        let Some(book) = books.get(product_id) else {
+            continue;
+        };
         let Some((base, quote)) = split_product(product_id) else {
             continue;
         };
@@ -207,7 +212,11 @@ fn build_edges(books: &HashMap<String, RouteBook>) -> Vec<DirectedEdge> {
 }
 
 fn split_product(product_id: &str) -> Option<(&str, &str)> {
-    let mut parts = product_id.split('-');
+    let pair = product_id
+        .split_once(':')
+        .map(|(_, pair)| pair)
+        .unwrap_or(product_id);
+    let mut parts = pair.split('-').filter(|p| !p.is_empty());
     let base = parts.next()?;
     let quote = parts.next()?;
     if base.is_empty() || quote.is_empty() {
@@ -224,21 +233,21 @@ mod tests {
     fn route_detection_returns_positive_net_cycle() {
         let mut books = HashMap::new();
         books.insert(
-            "BTC-USD".to_string(),
+            "coinbase:BTC-USD".to_string(),
             RouteBook {
                 best_bid: 100.0,
                 best_ask: 100.1,
             },
         );
         books.insert(
-            "BTC-USDC".to_string(),
+            "kraken:BTC-USDC".to_string(),
             RouteBook {
                 best_bid: 101.3,
                 best_ask: 101.5,
             },
         );
         books.insert(
-            "USDC-USD".to_string(),
+            "gemini:USDC-USD".to_string(),
             RouteBook {
                 best_bid: 1.002,
                 best_ask: 1.003,
@@ -261,5 +270,12 @@ mod tests {
 
         assert!(!opportunities.is_empty());
         assert!(opportunities[0].expected_net_bps > 0.0);
+    }
+
+    #[test]
+    fn split_product_supports_prefixed_pairs() {
+        assert_eq!(split_product("coinbase:BTC-USD"), Some(("BTC", "USD")));
+        assert_eq!(split_product("kraken:XBT-USD"), Some(("XBT", "USD")));
+        assert_eq!(split_product("gemini:BTC-USD"), Some(("BTC", "USD")));
     }
 }
