@@ -178,6 +178,14 @@
 - `status` TEXT NOT NULL (`ok|error`)
 - `reason` TEXT NOT NULL
 
+### `wallet_intel_snapshots`
+- `ts_ms` INTEGER NOT NULL
+- `portfolio_id` TEXT NOT NULL
+- `asset` TEXT NOT NULL
+- `horizon` TEXT NOT NULL
+- `bias` REAL NOT NULL
+- `confidence` REAL NOT NULL
+
 ## Strategy Lab Journal (SQLite)
 
 Default file: `data/strategy_lab/trade_journal.sqlite`

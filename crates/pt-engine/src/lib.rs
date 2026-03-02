@@ -15,7 +15,7 @@ use pt_core::{
     ExecutionReport, KillSwitchState, MarketHistoryPoint, MarketSelection, MarketSnapshot,
     MetricsRegistry, OrderLifecycleState, PtError, PtResult, RebalanceIntent, RebalancePlan,
     RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side, TradingViewBias,
-    UserOrderEvent, Venue, VenueCapability, WalletBalance, WalletModeConfig,
+    UserOrderEvent, Venue, VenueCapability, WalletBalance, WalletModeConfig, WalletSignal,
 };
 use pt_dashboard::{router as dashboard_router, CoinbaseAuthController, DashboardState};
 use pt_market_discovery::MarketDiscoveryClient;
@@ -315,6 +315,15 @@ impl Storage {
                 status TEXT NOT NULL,
                 reason TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS wallet_intel_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_ms INTEGER NOT NULL,
+                portfolio_id TEXT NOT NULL,
+                asset TEXT NOT NULL,
+                horizon TEXT NOT NULL,
+                bias REAL NOT NULL,
+                confidence REAL NOT NULL
+            );
             ",
         )
         .map_err(|e| PtError::Io(e.to_string()))?;
@@ -334,6 +343,7 @@ impl Storage {
         ensure_sqlite_column(&conn, "route_executions", "portfolio_id", "TEXT")?;
         ensure_sqlite_column(&conn, "fee_tier_snapshots", "portfolio_id", "TEXT")?;
         ensure_sqlite_column(&conn, "auth_key_events", "portfolio_id", "TEXT")?;
+        ensure_sqlite_column(&conn, "wallet_intel_snapshots", "portfolio_id", "TEXT")?;
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -709,6 +719,32 @@ impl Storage {
                 ],
             )
             .map_err(|e| PtError::Io(e.to_string()))?;
+        Ok(())
+    }
+
+    fn insert_wallet_intel_signals(&self, signals: &[WalletSignal]) -> PtResult<()> {
+        if signals.is_empty() {
+            return Ok(());
+        }
+        let conn = self.conn.lock();
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| PtError::Io(e.to_string()))?;
+        for s in signals {
+            tx.execute(
+                "INSERT INTO wallet_intel_snapshots (ts_ms, portfolio_id, asset, horizon, bias, confidence) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    s.ts.timestamp_millis(),
+                    &self.portfolio_id,
+                    s.asset.as_str(),
+                    format!("{:?}", s.horizon),
+                    s.bias,
+                    s.confidence
+                ],
+            )
+            .map_err(|e| PtError::Io(e.to_string()))?;
+        }
+        tx.commit().map_err(|e| PtError::Io(e.to_string()))?;
         Ok(())
     }
 
@@ -1404,6 +1440,7 @@ impl TradingEngine {
         let fused_bias = self.state.fused_bias.clone();
         let tv_bias = self.state.tv_bias.clone();
         let metrics = self.metrics.clone();
+        let storage = self.storage.clone();
         let refresh = self.cfg.ops.wallet_refresh_secs.max(10);
 
         tokio::spawn(async move {
@@ -1414,6 +1451,9 @@ impl TradingEngine {
                         let tv = tv_bias.read().clone();
                         let map = fusion.fuse(&wallet_signals, tv);
                         *fused_bias.write() = map;
+                        if let Err(e) = storage.insert_wallet_intel_signals(&wallet_signals) {
+                            error!(%e, "persist wallet intel snapshots failed");
+                        }
                         metrics.set_gauge("wallet_signals_count", wallet_signals.len() as f64);
                         metrics.inc_counter("wallet_refresh_ok", 1.0);
                     }
