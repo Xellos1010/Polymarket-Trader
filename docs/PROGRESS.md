@@ -2,6 +2,16 @@
 
 ## Completed (Latest)
 
+- Cross-venue route ingestion wiring completed:
+  - Added runtime Kraken/Gemini route-book refresh loops in `pt-engine`.
+  - Added cross-venue merge in route engine (`coinbase + kraken + gemini`) before opportunity scoring.
+  - Normalized route leg identifiers to prefixed format (`<venue>:<base>-<quote>`) for venue-aware filtering/export.
+  - Added compact/prefixed pair parsing helpers for symbol normalization (`BTC-USD`, `btcusd`, `kraken:XBTUSD` style inputs).
+  - Route parser now supports prefixed products and deterministic edge ordering.
+  - Validation status:
+    - `cargo check --workspace` passes
+    - `cargo test --workspace` passes
+
 - Master Optimization v4 baseline scaffolding pass completed:
   - Added multi-venue config contracts for `venues.kraken` and `venues.gemini` (schema + runtime config parsing/validation).
   - Added runtime/hardware-aware config contracts:

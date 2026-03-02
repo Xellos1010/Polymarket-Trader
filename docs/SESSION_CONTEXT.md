@@ -1,6 +1,6 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1772172705`
+Generated at UNIX epoch seconds: `1772417969`
 
 ## Note
 Patched Coinbase blockers (rustls provider + SEC1 key handling), passed coinbase-smoke, added Rust strategy-lab crate + CLI + dashboard, and added wallet conversion + maker speed-test controls in main dashboard.
@@ -13,6 +13,10 @@ Added Master Optimization v4 scaffolding:
 - New endpoints: `/state/feed/diagnostics`, `/state/venues/*`, `/state/routes/export-csv`, `/state/wallet-intel/*`.
 - New profile: `config/profiles/live_linux_ultra_tight.toml`.
 - New scripts: `scripts/linux_tune_baseline.sh`, `scripts/install_homebase_service.sh`.
+Added cross-venue route ingestion in `pt-engine`:
+- Dedicated Kraken/Gemini top-of-book loops feeding route books.
+- Route merge now consumes `coinbase + kraken + gemini` with venue-prefixed leg IDs.
+- `pt-route` now supports prefixed products (`coinbase:BTC-USD`) and deterministic product iteration for stable route ordering.
 
 ## Runtime
 `rustc`: `rustc 1.93.1 (01f6ddf75 2026-02-11)`
@@ -20,6 +24,8 @@ Added Master Optimization v4 scaffolding:
 
 ## Core Commands
 - Run engine: `cargo run -p pt-cli -- run --config config/config.toml`
+- Run homebase mode: `cargo run -p pt-cli -- run-homebase --config config/config.toml`
+- Run exec-only mode: `cargo run -p pt-cli -- run-exec --config config/config.toml`
 - Live preflight: `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
 - Dashboard: `http://127.0.0.1:8080/`
 - Health: `cargo run -p pt-cli -- status --url http://127.0.0.1:8080/health`
@@ -39,6 +45,7 @@ Added Master Optimization v4 scaffolding:
 - Market history: `curl -s "http://127.0.0.1:8080/state/history?limit=120" | jq`
 - Coinbase orderbook: `curl -s http://127.0.0.1:8080/state/coinbase/orderbook | jq '.[0:5]'`
 - Route opportunities: `curl -s http://127.0.0.1:8080/state/routes/opportunities | jq '.[0:5]'`
+- Route opportunities (venue filtered): `curl -s "http://127.0.0.1:8080/state/routes/opportunities?venue_set=coinbase,kraken,gemini" | jq '.[0:5]'`
 - Feed health: `curl -s http://127.0.0.1:8080/state/feed/health | jq`
 - Feed diagnostics: `curl -s http://127.0.0.1:8080/state/feed/diagnostics | jq`
 - Parity monitor: `curl -s http://127.0.0.1:8080/state/parity/monitor | jq '.rows[0:5]'`
