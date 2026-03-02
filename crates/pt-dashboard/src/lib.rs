@@ -463,6 +463,11 @@ struct WalletIntelExportResponse {
     message: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct RouteOpportunitiesQuery {
+    venue_set: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 struct ListingCandidateInternal {
     product_id: String,
@@ -1697,8 +1702,51 @@ async fn get_coinbase_auth(
 
 async fn get_route_opportunities(
     State(state): State<DashboardState>,
+    Query(query): Query<RouteOpportunitiesQuery>,
 ) -> Json<Vec<RouteOpportunity>> {
-    Json(state.route_opportunities.read().clone())
+    let mut rows = state.route_opportunities.read().clone();
+    if let Some(raw) = query.venue_set.as_deref() {
+        let wanted: Vec<String> = raw
+            .split(',')
+            .map(|v| v.trim().to_ascii_lowercase())
+            .filter(|v| !v.is_empty())
+            .collect();
+        if !wanted.is_empty() {
+            let allow_coinbase = wanted.iter().any(|v| v == "coinbase");
+            let allow_polymarket = wanted.iter().any(|v| v == "polymarket");
+            let allow_kraken = wanted.iter().any(|v| v == "kraken");
+            let allow_gemini = wanted.iter().any(|v| v == "gemini");
+
+            rows.retain(|opp| {
+                // Current route engine produces Coinbase spot opportunities.
+                // Reserve leg-prefix convention (<venue>:<product>) for future multi-venue routing.
+                let has_prefixed = opp
+                    .legs
+                    .iter()
+                    .any(|l| l.product_id.contains(':') && l.product_id.split(':').count() >= 2);
+                if has_prefixed {
+                    opp.legs.iter().all(|l| {
+                        let venue = l
+                            .product_id
+                            .split(':')
+                            .next()
+                            .unwrap_or_default()
+                            .to_ascii_lowercase();
+                        match venue.as_str() {
+                            "coinbase" => allow_coinbase,
+                            "polymarket" => allow_polymarket,
+                            "kraken" => allow_kraken,
+                            "gemini" => allow_gemini,
+                            _ => false,
+                        }
+                    })
+                } else {
+                    allow_coinbase
+                }
+            });
+        }
+    }
+    Json(rows)
 }
 
 async fn get_route_executions(

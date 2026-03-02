@@ -242,6 +242,13 @@ paths:
   /state/routes/opportunities:
     get:
       summary: Ranked conversion/route opportunities
+      parameters:
+        - in: query
+          name: venue_set
+          required: false
+          schema:
+            type: string
+          description: Comma-separated venue filter, e.g. `coinbase,kraken,gemini`.
       responses:
         '200':
           description: OK
