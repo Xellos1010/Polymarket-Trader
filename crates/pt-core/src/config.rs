@@ -331,7 +331,27 @@ impl Default for ExecutionFeeVenueConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionFeesConfig {
     pub coinbase: ExecutionFeeVenueConfig,
+    #[serde(default = "default_kraken_fee_config")]
+    pub kraken: ExecutionFeeVenueConfig,
+    #[serde(default = "default_gemini_fee_config")]
+    pub gemini: ExecutionFeeVenueConfig,
     pub polymarket: ExecutionFeeVenueConfig,
+}
+
+fn default_kraken_fee_config() -> ExecutionFeeVenueConfig {
+    ExecutionFeeVenueConfig {
+        maker_bps: 16.0,
+        taker_bps: 26.0,
+        rebate_bps_est: 0.0,
+    }
+}
+
+fn default_gemini_fee_config() -> ExecutionFeeVenueConfig {
+    ExecutionFeeVenueConfig {
+        maker_bps: 20.0,
+        taker_bps: 35.0,
+        rebate_bps_est: 0.0,
+    }
 }
 
 impl Default for ExecutionFeesConfig {
@@ -342,6 +362,8 @@ impl Default for ExecutionFeesConfig {
                 taker_bps: 12.0,
                 rebate_bps_est: 0.0,
             },
+            kraken: default_kraken_fee_config(),
+            gemini: default_gemini_fee_config(),
             polymarket: ExecutionFeeVenueConfig {
                 maker_bps: 0.0,
                 taker_bps: 5.0,

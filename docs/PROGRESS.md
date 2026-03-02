@@ -2,6 +2,15 @@
 
 ## Completed (Latest)
 
+- Cross-venue route cost model upgraded to venue-specific maker fees:
+  - Added `execution.fees.kraken` and `execution.fees.gemini` config support (with defaults + schema support).
+  - Extended runtime execution policy with Kraken/Gemini fee schedules.
+  - Route scoring now charges per-leg fee by venue prefix (`coinbase:`, `kraken:`, `gemini:`) instead of a single global maker fee.
+  - Added route test coverage for venue-fee sensitivity (`venue_specific_fees_change_net_edge`).
+  - Validation status:
+    - `cargo check --workspace` passes
+    - `cargo test --workspace` passes
+
 - Cross-venue route ingestion wiring completed:
   - Added runtime Kraken/Gemini route-book refresh loops in `pt-engine`.
   - Added cross-venue merge in route engine (`coinbase + kraken + gemini`) before opportunity scoring.

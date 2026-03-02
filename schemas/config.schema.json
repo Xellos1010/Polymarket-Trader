@@ -222,6 +222,26 @@
               },
               "additionalProperties": false
             },
+            "kraken": {
+              "type": "object",
+              "required": ["maker_bps", "taker_bps", "rebate_bps_est"],
+              "properties": {
+                "maker_bps": { "type": "number", "minimum": 0 },
+                "taker_bps": { "type": "number", "minimum": 0 },
+                "rebate_bps_est": { "type": "number", "minimum": 0 }
+              },
+              "additionalProperties": false
+            },
+            "gemini": {
+              "type": "object",
+              "required": ["maker_bps", "taker_bps", "rebate_bps_est"],
+              "properties": {
+                "maker_bps": { "type": "number", "minimum": 0 },
+                "taker_bps": { "type": "number", "minimum": 0 },
+                "rebate_bps_est": { "type": "number", "minimum": 0 }
+              },
+              "additionalProperties": false
+            },
             "polymarket": {
               "type": "object",
               "required": ["maker_bps", "taker_bps", "rebate_bps_est"],

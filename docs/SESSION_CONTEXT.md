@@ -1,6 +1,6 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1772417969`
+Generated at UNIX epoch seconds: `1772420168`
 
 ## Note
 Patched Coinbase blockers (rustls provider + SEC1 key handling), passed coinbase-smoke, added Rust strategy-lab crate + CLI + dashboard, and added wallet conversion + maker speed-test controls in main dashboard.
@@ -17,6 +17,9 @@ Added cross-venue route ingestion in `pt-engine`:
 - Dedicated Kraken/Gemini top-of-book loops feeding route books.
 - Route merge now consumes `coinbase + kraken + gemini` with venue-prefixed leg IDs.
 - `pt-route` now supports prefixed products (`coinbase:BTC-USD`) and deterministic product iteration for stable route ordering.
+Added venue-specific route fee modeling:
+- `execution.fees.kraken` and `execution.fees.gemini` are now supported with defaults.
+- Route net-edge now applies maker fee by leg venue instead of a single shared maker fee.
 
 ## Runtime
 `rustc`: `rustc 1.93.1 (01f6ddf75 2026-02-11)`

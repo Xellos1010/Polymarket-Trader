@@ -1846,10 +1846,14 @@ impl TradingEngine {
                 }
 
                 let policy = execution_policy.read().clone();
+                let mut venue_maker_fees_bps: HashMap<String, f64> = HashMap::new();
+                venue_maker_fees_bps.insert("coinbase".to_string(), policy.coinbase_fees.maker_bps);
+                venue_maker_fees_bps.insert("kraken".to_string(), policy.kraken_fees.maker_bps);
+                venue_maker_fees_bps.insert("gemini".to_string(), policy.gemini_fees.maker_bps);
                 let opportunities = find_route_opportunities(
                     &route_books,
                     capital_slice,
-                    policy.coinbase_fees.maker_bps,
+                    &venue_maker_fees_bps,
                     2.0,
                     1.0,
                     &policy.edge_profiles,
@@ -3029,6 +3033,16 @@ fn policy_from_config(cfg: &AppConfig) -> ExecutionPolicy {
             maker_bps: cfg.execution.fees.coinbase.maker_bps,
             taker_bps: cfg.execution.fees.coinbase.taker_bps,
             rebate_bps_est: cfg.execution.fees.coinbase.rebate_bps_est,
+        },
+        kraken_fees: pt_core::VenueFeeSchedule {
+            maker_bps: cfg.execution.fees.kraken.maker_bps,
+            taker_bps: cfg.execution.fees.kraken.taker_bps,
+            rebate_bps_est: cfg.execution.fees.kraken.rebate_bps_est,
+        },
+        gemini_fees: pt_core::VenueFeeSchedule {
+            maker_bps: cfg.execution.fees.gemini.maker_bps,
+            taker_bps: cfg.execution.fees.gemini.taker_bps,
+            rebate_bps_est: cfg.execution.fees.gemini.rebate_bps_est,
         },
         polymarket_fees: pt_core::VenueFeeSchedule {
             maker_bps: cfg.execution.fees.polymarket.maker_bps,

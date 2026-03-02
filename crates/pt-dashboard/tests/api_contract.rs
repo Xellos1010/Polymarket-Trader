@@ -111,6 +111,16 @@ fn fixture_state() -> DashboardState {
             taker_bps: 12.0,
             rebate_bps_est: 0.0,
         },
+        kraken_fees: VenueFeeSchedule {
+            maker_bps: 16.0,
+            taker_bps: 26.0,
+            rebate_bps_est: 0.0,
+        },
+        gemini_fees: VenueFeeSchedule {
+            maker_bps: 20.0,
+            taker_bps: 35.0,
+            rebate_bps_est: 0.0,
+        },
         polymarket_fees: VenueFeeSchedule {
             maker_bps: 0.0,
             taker_bps: 5.0,

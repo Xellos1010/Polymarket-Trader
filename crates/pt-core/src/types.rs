@@ -277,6 +277,8 @@ pub struct ExecutionPolicy {
     pub stale_book_ms: u64,
     pub vectors: EntryExitVector,
     pub coinbase_fees: VenueFeeSchedule,
+    pub kraken_fees: VenueFeeSchedule,
+    pub gemini_fees: VenueFeeSchedule,
     pub polymarket_fees: VenueFeeSchedule,
     pub edge_profiles: EdgeProfile,
 }
