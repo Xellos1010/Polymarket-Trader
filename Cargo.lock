@@ -3559,9 +3559,13 @@ dependencies = [
 name = "pt-cli"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "clap",
+ "parking_lot",
+ "pt-coinbase",
  "pt-core",
+ "pt-dashboard",
  "pt-engine",
  "pt-market-discovery",
  "pt-polymarket",

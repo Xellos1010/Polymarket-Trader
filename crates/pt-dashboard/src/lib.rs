@@ -1,15 +1,48 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
+    http::{header, HeaderValue, StatusCode},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
+use chrono::Utc;
 use parking_lot::RwLock;
 use pt_core::{
-    Asset, ExecutionReport, KillSwitchState, MarketHistoryPoint, MarketSnapshot, MetricsRegistry,
-    RiskState,
+    Asset, ExecutionReport, KillSwitchState, LiveArmState, MarketHistoryPoint, MarketSnapshot,
+    MetricsRegistry, OrderRoute, ProductDetailView, ProductId, ProductStrategyConfigView,
+    RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
+    WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use serde_json::Value;
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+
+#[derive(Clone)]
+pub struct CoinbaseDashboardHandles {
+    pub mode: Arc<RwLock<String>>,
+    pub live_arm: Arc<RwLock<LiveArmState>>,
+    pub products: Arc<RwLock<Vec<WorkstationProduct>>>,
+    pub scanner: Arc<RwLock<Vec<ScannerRow>>>,
+    pub product_details: Arc<RwLock<HashMap<String, ProductDetailView>>>,
+    pub orders: Arc<RwLock<Vec<WorkstationOrder>>>,
+    pub strategies: Arc<RwLock<Vec<ProductStrategyConfigView>>>,
+    pub imports: Arc<RwLock<Vec<StrategyLabImportSummary>>>,
+}
+
+impl Default for CoinbaseDashboardHandles {
+    fn default() -> Self {
+        Self {
+            mode: Arc::new(RwLock::new("paper".to_string())),
+            live_arm: Arc::new(RwLock::new(LiveArmState::default())),
+            products: Arc::new(RwLock::new(Vec::new())),
+            scanner: Arc::new(RwLock::new(Vec::new())),
+            product_details: Arc::new(RwLock::new(HashMap::new())),
+            orders: Arc::new(RwLock::new(Vec::new())),
+            strategies: Arc::new(RwLock::new(Vec::new())),
+            imports: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct DashboardHandles {
@@ -21,6 +54,35 @@ pub struct DashboardHandles {
     pub recent_executions: Arc<RwLock<Vec<ExecutionReport>>>,
     pub fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
     pub inventory_usd: Arc<RwLock<f64>>,
+    pub coinbase: CoinbaseDashboardHandles,
+}
+
+impl Default for DashboardHandles {
+    fn default() -> Self {
+        Self {
+            metrics: Arc::new(MetricsRegistry::default()),
+            risk_state: Arc::new(RwLock::new(RiskState::default())),
+            kill_switch: Arc::new(RwLock::new(KillSwitchState::Running)),
+            latest_books: Arc::new(RwLock::new(HashMap::new())),
+            market_history: Arc::new(RwLock::new(HashMap::new())),
+            recent_executions: Arc::new(RwLock::new(Vec::new())),
+            fused_bias: Arc::new(RwLock::new(HashMap::new())),
+            inventory_usd: Arc::new(RwLock::new(0.0)),
+            coinbase: CoinbaseDashboardHandles::default(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct CoinbaseDashboardState {
+    pub mode: Arc<RwLock<String>>,
+    pub live_arm: Arc<RwLock<LiveArmState>>,
+    pub products: Arc<RwLock<Vec<WorkstationProduct>>>,
+    pub scanner: Arc<RwLock<Vec<ScannerRow>>>,
+    pub product_details: Arc<RwLock<HashMap<String, ProductDetailView>>>,
+    pub orders: Arc<RwLock<Vec<WorkstationOrder>>>,
+    pub strategies: Arc<RwLock<Vec<ProductStrategyConfigView>>>,
+    pub imports: Arc<RwLock<Vec<StrategyLabImportSummary>>>,
 }
 
 #[derive(Clone)]
@@ -33,6 +95,7 @@ pub struct DashboardState {
     pub recent_executions: Arc<RwLock<Vec<ExecutionReport>>>,
     pub fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
     pub inventory_usd: Arc<RwLock<f64>>,
+    pub coinbase: CoinbaseDashboardState,
 }
 
 impl DashboardState {
@@ -46,6 +109,16 @@ impl DashboardState {
             recent_executions: handles.recent_executions,
             fused_bias: handles.fused_bias,
             inventory_usd: handles.inventory_usd,
+            coinbase: CoinbaseDashboardState {
+                mode: handles.coinbase.mode,
+                live_arm: handles.coinbase.live_arm,
+                products: handles.coinbase.products,
+                scanner: handles.coinbase.scanner,
+                product_details: handles.coinbase.product_details,
+                orders: handles.coinbase.orders,
+                strategies: handles.coinbase.strategies,
+                imports: handles.coinbase.imports,
+            },
         }
     }
 }
@@ -84,15 +157,66 @@ struct MarketHistoryResponse {
     points: Vec<MarketHistoryPoint>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct ModeResponse {
+    mode: String,
+    live_arm: LiveArmState,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct StrategiesResponse {
+    mode: String,
+    live_arm: LiveArmState,
+    strategies: Vec<ProductStrategyConfigView>,
+    imports: Vec<StrategyLabImportSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ActionResponse {
+    ok: bool,
+    message: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct HistoryQuery {
     market_id: Option<String>,
     limit: Option<usize>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct ModeRequest {
+    mode: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LiveArmRequest {
+    reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct StrategyLabImportRequest {
+    path: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ManualOrderRequest {
+    product_id: String,
+    side: String,
+    route: Option<String>,
+    quote_notional: Option<f64>,
+    base_size: Option<f64>,
+    limit_price: Option<f64>,
+    post_only: Option<bool>,
+    priority_fill: Option<bool>,
+    strategy_name: Option<String>,
+    expected_net_bps: Option<f64>,
+}
+
 pub fn router(state: DashboardState) -> Router {
     Router::new()
         .route("/", get(get_dashboard))
+        .route("/assets/*path", get(get_frontend_asset))
+        .route("/favicon.ico", get(get_favicon))
         .route("/health", get(get_health))
         .route("/healthz", get(get_health))
         .route("/ready", get(get_health))
@@ -107,11 +231,39 @@ pub fn router(state: DashboardState) -> Router {
         .route("/ops/halt", post(post_halt))
         .route("/ops/resume", post(post_resume))
         .route("/ops/flatten", post(post_flatten))
+        .route("/api/v1/products", get(get_products))
+        .route("/api/v1/scanner", get(get_scanner))
+        .route("/api/v1/products/:product_id", get(get_product_detail))
+        .route("/api/v1/orders", get(get_orders).post(post_order))
+        .route("/api/v1/strategies", get(get_strategies))
+        .route("/api/v1/mode", post(post_mode))
+        .route("/api/v1/live/arm", post(post_live_arm))
+        .route("/api/v1/live/disarm", post(post_live_disarm))
+        .route("/api/v1/orders/:order_id/cancel", post(post_cancel_order))
+        .route("/api/v1/strategy-lab/import", post(post_strategy_lab_import))
         .with_state(state)
 }
 
-async fn get_dashboard() -> &'static str {
-    DASHBOARD_HTML
+async fn get_dashboard() -> Html<String> {
+    let html = read_frontend_file("index.html")
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .unwrap_or_else(|| FRONTEND_FALLBACK_HTML.to_string());
+    Html(html)
+}
+
+async fn get_frontend_asset(Path(path): Path<String>) -> Response {
+    let requested = path;
+    match read_frontend_file(&requested) {
+        Some(bytes) => bytes_response(bytes, content_type_for(&requested)),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn get_favicon() -> Response {
+    match read_frontend_file("favicon.ico") {
+        Some(bytes) => bytes_response(bytes, "image/x-icon"),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 async fn get_health(State(state): State<DashboardState>) -> Json<Health> {
@@ -236,320 +388,413 @@ async fn post_flatten(State(state): State<DashboardState>) -> Json<Health> {
     })
 }
 
-const DASHBOARD_HTML: &str = r#"<!doctype html>
+async fn get_products(State(state): State<DashboardState>) -> Json<Vec<WorkstationProduct>> {
+    let mut rows = state.coinbase.products.read().clone();
+    rows.sort_by(|a, b| a.product_id.as_str().cmp(b.product_id.as_str()));
+    Json(rows)
+}
+
+async fn get_scanner(State(state): State<DashboardState>) -> Json<Vec<ScannerRow>> {
+    let mut rows = state.coinbase.scanner.read().clone();
+    rows.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Json(rows)
+}
+
+async fn get_product_detail(
+    State(state): State<DashboardState>,
+    Path(product_id): Path<String>,
+) -> Result<Json<ProductDetailView>, StatusCode> {
+    let existing_detail = state.coinbase.product_details.read().get(&product_id).cloned();
+    let current_orders = state
+        .coinbase
+        .orders
+        .read()
+        .iter()
+        .filter(|order| order.product_id.as_str() == product_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    let current_imports = state.coinbase.imports.read().clone();
+    if let Some(mut detail) = existing_detail {
+        detail.orders = current_orders;
+        detail.imports = current_imports;
+        return Ok(Json(detail));
+    }
+
+    let products = state.coinbase.products.read();
+    let Some(product) = products
+        .iter()
+        .find(|product| product.product_id.as_str() == product_id)
+        .cloned()
+    else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    drop(products);
+
+    let scanner = state.coinbase.scanner.read();
+    let scanner_row = scanner
+        .iter()
+        .find(|row| row.product_id.as_str() == product_id)
+        .cloned();
+    drop(scanner);
+
+    let strategies = state.coinbase.strategies.read();
+    let strategy = strategies
+        .iter()
+        .find(|row| row.product_id.as_str() == product_id)
+        .cloned();
+    drop(strategies);
+
+    let detail = ProductDetailView {
+        product,
+        microstructure: scanner_row
+            .as_ref()
+            .map(scanner_row_to_microstructure)
+            .unwrap_or_default(),
+        strategy: strategy
+            .as_ref()
+            .map(strategy_view_to_vector)
+            .unwrap_or_default(),
+        eligibility: scanner_row
+            .as_ref()
+            .map(|row| row.current_risk_eligibility.clone())
+            .unwrap_or_else(|| TradingEligibility {
+                product_id: ProductId::from(product_id.clone()),
+                live_tradable: false,
+                scan_only: true,
+                eligible: false,
+                reasons: vec!["product detail not yet ranked by scanner".to_string()],
+            }),
+        orders: current_orders,
+        imports: current_imports,
+    };
+
+    Ok(Json(detail))
+}
+
+async fn get_orders(State(state): State<DashboardState>) -> Json<Vec<WorkstationOrder>> {
+    let mut rows = state.coinbase.orders.read().clone();
+    rows.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    Json(rows)
+}
+
+async fn get_strategies(State(state): State<DashboardState>) -> Json<StrategiesResponse> {
+    Json(StrategiesResponse {
+        mode: state.coinbase.mode.read().clone(),
+        live_arm: state.coinbase.live_arm.read().clone(),
+        strategies: state.coinbase.strategies.read().clone(),
+        imports: state.coinbase.imports.read().clone(),
+    })
+}
+
+async fn post_mode(
+    State(state): State<DashboardState>,
+    Json(payload): Json<ModeRequest>,
+) -> Result<Json<ModeResponse>, (StatusCode, Json<ActionResponse>)> {
+    let mode = payload.mode.trim().to_ascii_lowercase();
+    if !matches!(mode.as_str(), "replay" | "paper" | "live") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ActionResponse {
+                ok: false,
+                message: "mode must be one of replay|paper|live".to_string(),
+            }),
+        ));
+    }
+
+    *state.coinbase.mode.write() = mode.clone();
+    let mut arm = state.coinbase.live_arm.write();
+    arm.mode = Some(mode.clone());
+    arm.updated_at = Some(Utc::now());
+    let response = ModeResponse {
+        mode,
+        live_arm: arm.clone(),
+    };
+    Ok(Json(response))
+}
+
+async fn post_live_arm(
+    State(state): State<DashboardState>,
+    Json(payload): Json<LiveArmRequest>,
+) -> Json<ModeResponse> {
+    let mode = state.coinbase.mode.read().clone();
+    let now = Utc::now();
+    let mut arm = state.coinbase.live_arm.write();
+    arm.armed = true;
+    arm.mode = Some(mode.clone());
+    arm.reason = payload.reason.clone();
+    arm.auto_disarm_reason = None;
+    arm.armed_at = Some(now);
+    arm.updated_at = Some(now);
+    *state.kill_switch.write() = KillSwitchState::Running;
+
+    Json(ModeResponse {
+        mode,
+        live_arm: arm.clone(),
+    })
+}
+
+async fn post_live_disarm(
+    State(state): State<DashboardState>,
+    Json(payload): Json<LiveArmRequest>,
+) -> Json<ModeResponse> {
+    let mode = state.coinbase.mode.read().clone();
+    let now = Utc::now();
+    let mut arm = state.coinbase.live_arm.write();
+    arm.armed = false;
+    arm.mode = Some(mode.clone());
+    arm.reason = payload.reason.clone().or_else(|| Some("manual disarm".to_string()));
+    arm.updated_at = Some(now);
+    *state.kill_switch.write() = KillSwitchState::ManualHalt;
+
+    Json(ModeResponse {
+        mode,
+        live_arm: arm.clone(),
+    })
+}
+
+async fn post_order(
+    State(state): State<DashboardState>,
+    Json(payload): Json<ManualOrderRequest>,
+) -> Result<Json<WorkstationOrder>, (StatusCode, Json<ActionResponse>)> {
+    let side = parse_side(&payload.side).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ActionResponse {
+                ok: false,
+                message: "side must be buy or sell".to_string(),
+            }),
+        )
+    })?;
+    let route = parse_route(payload.route.as_deref()).unwrap_or(OrderRoute::Maker);
+    let now = Utc::now();
+    let status = if matches!(route, OrderRoute::ScanOnly) {
+        WorkstationOrderStatus::ScanOnly
+    } else {
+        WorkstationOrderStatus::Draft
+    };
+    let order = WorkstationOrder {
+        order_id: format!("manual-{}", now.timestamp_millis()),
+        client_order_id: Some(format!("manual-{}", now.timestamp_nanos_opt().unwrap_or_default())),
+        product_id: ProductId::from(payload.product_id),
+        instrument: None,
+        side: Some(side),
+        route: Some(route),
+        status: Some(status),
+        live: state.coinbase.mode.read().as_str() == "live",
+        post_only: payload.post_only.unwrap_or(true),
+        limit_price: payload.limit_price,
+        base_size: payload.base_size.unwrap_or(0.0),
+        quote_notional: payload.quote_notional.unwrap_or(0.0),
+        expected_net_bps: payload.expected_net_bps.unwrap_or(0.0),
+        reason: payload
+            .strategy_name
+            .clone()
+            .map(|strategy| {
+                let priority_fill = if payload.priority_fill.unwrap_or(false) {
+                    " priority_fill"
+                } else {
+                    ""
+                };
+                format!("queued from dashboard ({strategy}{priority_fill})")
+            }),
+        created_at: Some(now),
+        updated_at: Some(now),
+    };
+    state.coinbase.orders.write().push(order.clone());
+    Ok(Json(order))
+}
+
+async fn post_cancel_order(
+    State(state): State<DashboardState>,
+    Path(order_id): Path<String>,
+) -> Result<Json<ActionResponse>, (StatusCode, Json<ActionResponse>)> {
+    let mut orders = state.coinbase.orders.write();
+    let Some(order) = orders.iter_mut().find(|order| order.order_id == order_id) else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ActionResponse {
+                ok: false,
+                message: format!("unknown order_id {order_id}"),
+            }),
+        ));
+    };
+
+    order.status = Some(match order.status {
+        Some(WorkstationOrderStatus::Draft) => WorkstationOrderStatus::Canceled,
+        _ => WorkstationOrderStatus::CancelRequested,
+    });
+    order.reason = Some("cancel requested from dashboard".to_string());
+    order.updated_at = Some(Utc::now());
+
+    Ok(Json(ActionResponse {
+        ok: true,
+        message: format!("cancel queued for {order_id}"),
+    }))
+}
+
+async fn post_strategy_lab_import(
+    State(state): State<DashboardState>,
+    Json(payload): Json<StrategyLabImportRequest>,
+) -> Result<Json<StrategyLabImportSummary>, (StatusCode, Json<ActionResponse>)> {
+    let summary = summarize_strategy_lab_import(&payload.path).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ActionResponse {
+                ok: false,
+                message: e,
+            }),
+        )
+    })?;
+    state.coinbase.imports.write().push(summary.clone());
+    Ok(Json(summary))
+}
+
+fn summarize_strategy_lab_import(path: &str) -> Result<StrategyLabImportSummary, String> {
+    let raw = fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
+    let payload: Value =
+        serde_json::from_str(&raw).map_err(|e| format!("failed to parse strategy-lab JSON: {e}"))?;
+    let markets = payload
+        .get("markets")
+        .and_then(Value::as_object)
+        .map(|rows| rows.keys().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    let mut best_variants = Vec::new();
+    if let Some(rows) = payload.get("markets").and_then(Value::as_object) {
+        for (market, value) in rows {
+            if let Some(default_variant) = value.get("default_variant").and_then(Value::as_str) {
+                best_variants.push(format!("{market}:{default_variant}"));
+                continue;
+            }
+            if let Some(variants) = value.get("variants").and_then(Value::as_object) {
+                if let Some((name, _)) = variants.iter().next() {
+                    best_variants.push(format!("{market}:{name}"));
+                }
+            }
+        }
+    }
+
+    Ok(StrategyLabImportSummary {
+        import_id: format!("import-{}", Utc::now().timestamp_millis()),
+        path: path.to_string(),
+        imported_at: Some(Utc::now()),
+        markets,
+        best_variants,
+    })
+}
+
+fn scanner_row_to_microstructure(row: &ScannerRow) -> pt_core::MarketMicrostructureSnapshot {
+    pt_core::MarketMicrostructureSnapshot {
+        product_id: row.product_id.clone(),
+        instrument: row.instrument.clone(),
+        best_bid: row.best_bid,
+        best_ask: row.best_ask,
+        mid_price: row.mid_price,
+        spread_bps: row.spread_bps,
+        imbalance: row.imbalance,
+        tape_direction: row.tape_direction,
+        realized_volatility: row.realized_volatility,
+        fill_rate_estimate: row.fill_rate_estimate,
+        one_way_persistence: row.one_way_persistence,
+        ts: row.ts,
+    }
+}
+
+fn strategy_view_to_vector(view: &ProductStrategyConfigView) -> pt_core::StrategyVector {
+    pt_core::StrategyVector {
+        product_id: view.product_id.clone(),
+        strategy_name: view.strategy_name.clone(),
+        plugin_score: view.plugin_signal,
+        action: Some(TradeAction::Hold),
+        ..pt_core::StrategyVector::default()
+    }
+}
+
+fn parse_side(raw: &str) -> Option<Side> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "buy" => Some(Side::Buy),
+        "sell" => Some(Side::Sell),
+        _ => None,
+    }
+}
+
+fn parse_route(raw: Option<&str>) -> Option<OrderRoute> {
+    match raw.unwrap_or("maker").trim().to_ascii_lowercase().as_str() {
+        "maker" => Some(OrderRoute::Maker),
+        "taker" => Some(OrderRoute::Taker),
+        "scan_only" | "scan-only" => Some(OrderRoute::ScanOnly),
+        _ => None,
+    }
+}
+
+fn read_frontend_file(relative_path: &str) -> Option<Vec<u8>> {
+    let path = frontend_dist_dir().join(relative_path);
+    fs::read(path).ok()
+}
+
+fn frontend_dist_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("frontend")
+        .join("dist")
+}
+
+fn content_type_for(path: &str) -> &'static str {
+    if path.ends_with(".js") {
+        "application/javascript; charset=utf-8"
+    } else if path.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else if path.ends_with(".svg") {
+        "image/svg+xml"
+    } else if path.ends_with(".ico") {
+        "image/x-icon"
+    } else if path.ends_with(".json") {
+        "application/json; charset=utf-8"
+    } else {
+        "application/octet-stream"
+    }
+}
+
+fn bytes_response(bytes: Vec<u8>, content_type: &'static str) -> Response {
+    let mut response = bytes.into_response();
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(content_type),
+    );
+    response
+}
+
+const FRONTEND_FALLBACK_HTML: &str = r#"<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Polymarket Trader Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coinbase Workstation</title>
   <style>
-    :root {
-      --bg: #0f172a;
-      --panel: #111827;
-      --panel2: #1f2937;
-      --text: #e5e7eb;
-      --muted: #94a3b8;
-      --buy: #10b981;
-      --sell: #ef4444;
-      --warn: #f59e0b;
-      --accent: #38bdf8;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      color: var(--text);
-      background: radial-gradient(1200px 800px at 20% -10%, #1e293b, var(--bg));
-    }
-    .wrap { max-width: 1280px; margin: 0 auto; padding: 16px; }
-    .title {
-      display: flex; justify-content: space-between; align-items: center;
-      gap: 12px; margin-bottom: 16px;
-    }
-    .title h1 { margin: 0; font-size: 20px; letter-spacing: 0.5px; color: var(--accent); }
-    .status { color: var(--muted); font-size: 12px; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 12px;
-    }
-    .card {
-      background: linear-gradient(180deg, var(--panel), var(--panel2));
-      border: 1px solid #243042;
-      border-radius: 10px;
-      padding: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-    }
-    .kpis { grid-column: span 12; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-    .kpi { background: #0b1220; border: 1px solid #1e293b; border-radius: 8px; padding: 8px; }
-    .kpi .label { color: var(--muted); font-size: 11px; }
-    .kpi .value { font-size: 16px; margin-top: 4px; }
-    .chart { grid-column: span 6; }
-    .controls { grid-column: span 12; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    button {
-      background: #0b1220; color: var(--text); border: 1px solid #334155;
-      border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 12px;
-    }
-    button:hover { border-color: var(--accent); }
-    select {
-      background: #0b1220;
-      color: var(--text);
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 12px;
-      min-width: 340px;
-      max-width: 100%;
-    }
-    .table-card { grid-column: span 6; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th, td { text-align: left; padding: 6px; border-bottom: 1px solid #1e293b; }
-    th { color: var(--muted); position: sticky; top: 0; background: #0f172a; }
-    .scroll { max-height: 360px; overflow: auto; }
-    .buy { color: var(--buy); }
-    .sell { color: var(--sell); }
-    .warn { color: var(--warn); }
-    .tiny { color: var(--muted); font-size: 11px; }
-    canvas {
-      width: 100%;
-      height: 200px;
-      background: #0b1220;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-    }
-    @media (max-width: 960px) {
-      .kpis { grid-template-columns: repeat(2, 1fr); }
-      .chart, .controls, .table-card { grid-column: span 12; }
-      select { min-width: 100%; }
-    }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #071018; color: #f3f6fb; }
+    main { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { color: #98abc0; line-height: 1.5; }
+    .card { background: #0f1b29; border: 1px solid #203346; border-radius: 16px; padding: 20px; margin-top: 20px; }
+    code { color: #9dd8ff; }
+    a { color: #9dd8ff; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="title">
-      <h1>Polymarket Trader</h1>
-      <div class="status" id="status">Loading...</div>
+  <main>
+    <h1>Coinbase Workstation</h1>
+    <p>The React/Vite frontend bundle is not present in <code>crates/pt-dashboard/frontend/dist</code> yet, but the API is live.</p>
+    <div class="card">
+      <p>Core endpoints:</p>
+      <p><a href="/api/v1/scanner">/api/v1/scanner</a></p>
+      <p><a href="/api/v1/products">/api/v1/products</a></p>
+      <p><a href="/api/v1/orders">/api/v1/orders</a></p>
+      <p><a href="/api/v1/strategies">/api/v1/strategies</a></p>
     </div>
-    <div class="grid">
-      <div class="kpis">
-        <div class="kpi"><div class="label">Kill Switch</div><div class="value" id="k_kill">-</div></div>
-        <div class="kpi"><div class="label">Daily PnL</div><div class="value" id="k_pnl">-</div></div>
-        <div class="kpi"><div class="label">Open Notional</div><div class="value" id="k_open">-</div></div>
-        <div class="kpi"><div class="label">Unhedged Delta</div><div class="value" id="k_delta">-</div></div>
-        <div class="kpi"><div class="label">Open Markets</div><div class="value" id="k_markets">-</div></div>
-        <div class="kpi"><div class="label">Inventory USD</div><div class="value" id="k_inv">-</div></div>
-      </div>
-
-      <div class="card chart">
-        <div class="tiny">Daily PnL (rolling)</div>
-        <canvas id="pnlChart" width="640" height="220"></canvas>
-      </div>
-
-      <div class="card chart">
-        <div class="tiny">Selected Market Mid-Price (rolling)</div>
-        <canvas id="marketChart" width="640" height="220"></canvas>
-        <div class="tiny" id="marketMeta">No market selected</div>
-      </div>
-
-      <div class="card controls">
-        <button onclick="op('/ops/halt')">HALT</button>
-        <button onclick="op('/ops/resume')">RESUME</button>
-        <button onclick="op('/ops/flatten')">FLATTEN</button>
-        <label class="tiny" for="marketSelect">Market</label>
-        <select id="marketSelect"></select>
-        <div class="tiny" id="opsResult"></div>
-      </div>
-
-      <div class="card table-card">
-        <div class="tiny">Current Books</div>
-        <div class="scroll">
-          <table>
-            <thead><tr><th>Market</th><th>Bid</th><th>Ask</th><th>Spread</th><th>TS</th></tr></thead>
-            <tbody id="booksBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card table-card">
-        <div class="tiny">Recent Executions</div>
-        <div class="scroll">
-          <table>
-            <thead><tr><th>TS</th><th>Venue</th><th>Status</th><th>Side</th><th>Qty</th><th>Px</th></tr></thead>
-            <tbody id="execBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card table-card" style="grid-column: span 12;">
-        <div class="tiny">Asset Bias</div>
-        <div class="scroll">
-          <table>
-            <thead><tr><th>Asset</th><th>Bias</th></tr></thead>
-            <tbody id="biasBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const pnlSeries = [];
-    let selectedMarketId = null;
-    let marketSignature = '';
-
-    function fmtNum(n) {
-      const v = Number(n || 0);
-      if (!Number.isFinite(v)) return '-';
-      return v.toFixed(4);
-    }
-
-    function drawSeries(canvasId, series, color) {
-      const canvas = document.getElementById(canvasId);
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 5; i++) {
-        const y = 20 + i * 45;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
-      }
-
-      if (series.length < 2) return;
-
-      const min = Math.min(...series);
-      const max = Math.max(...series);
-      const span = (max - min) || 1;
-
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      series.forEach((v, i) => {
-        const x = (i / (series.length - 1)) * (canvas.width - 20) + 10;
-        const y = canvas.height - 15 - ((v - min) / span) * (canvas.height - 30);
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      });
-      ctx.stroke();
-    }
-
-    function syncMarketSelect(markets) {
-      const select = document.getElementById('marketSelect');
-      const ids = markets.map(x => x.market_id);
-      const signature = ids.join('|');
-
-      if (!selectedMarketId || !ids.includes(selectedMarketId)) {
-        selectedMarketId = ids.length > 0 ? ids[0] : null;
-      }
-
-      if (signature !== marketSignature) {
-        marketSignature = signature;
-        select.innerHTML = '';
-        ids.forEach(id => {
-          const opt = document.createElement('option');
-          opt.value = id;
-          opt.textContent = id;
-          select.appendChild(opt);
-        });
-      }
-
-      if (selectedMarketId) {
-        select.value = selectedMarketId;
-      }
-    }
-
-    function drawMarket(points) {
-      const mids = points.map(p => Number(p.mid || 0));
-      drawSeries('marketChart', mids, '#10b981');
-      const meta = document.getElementById('marketMeta');
-      if (points.length === 0) {
-        meta.textContent = 'No market history points available yet';
-        return;
-      }
-
-      const last = points[points.length - 1];
-      const marketId = selectedMarketId || last.market_id;
-      meta.textContent = `${marketId} mid=${fmtNum(last.mid)} spread=${fmtNum(last.spread)} ts=${new Date(last.ts).toLocaleTimeString()}`;
-    }
-
-    async function op(path) {
-      try {
-        const r = await fetch(path, { method: 'POST' });
-        document.getElementById('opsResult').textContent = await r.text();
-      } catch (e) {
-        document.getElementById('opsResult').textContent = String(e);
-      }
-    }
-
-    async function tick() {
-      try {
-        const [h, r, b, e, bias, inv, markets] = await Promise.all([
-          fetch('/health').then(x => x.json()),
-          fetch('/state/risk').then(x => x.json()),
-          fetch('/state/books').then(x => x.json()),
-          fetch('/state/executions').then(x => x.json()),
-          fetch('/state/bias').then(x => x.json()),
-          fetch('/state/inventory').then(x => x.json()),
-          fetch('/state/markets').then(x => x.json()),
-        ]);
-
-        syncMarketSelect(markets);
-
-        let historyUrl = '/state/history?limit=360';
-        if (selectedMarketId) {
-          historyUrl += `&market_id=${encodeURIComponent(selectedMarketId)}`;
-        }
-        const history = await fetch(historyUrl).then(x => x.json());
-        if (history.market_id && history.market_id !== selectedMarketId) {
-          selectedMarketId = history.market_id;
-          syncMarketSelect(markets);
-        }
-
-        document.getElementById('status').textContent = `Updated ${new Date().toLocaleTimeString()}`;
-        document.getElementById('k_kill').textContent = h.kill_switch;
-        document.getElementById('k_pnl').textContent = fmtNum(r.daily_pnl);
-        document.getElementById('k_open').textContent = fmtNum(r.open_notional);
-        document.getElementById('k_delta').textContent = fmtNum(r.unhedged_delta);
-        document.getElementById('k_markets').textContent = r.open_markets;
-        document.getElementById('k_inv').textContent = fmtNum(inv.inventory_usd);
-
-        pnlSeries.push(Number(r.daily_pnl || 0));
-        if (pnlSeries.length > 240) pnlSeries.shift();
-        drawSeries('pnlChart', pnlSeries, '#38bdf8');
-        drawMarket(history.points || []);
-
-        const booksBody = document.getElementById('booksBody');
-        booksBody.innerHTML = b.slice(0, 120).map(x =>
-          `<tr><td>${x.market_id}</td><td>${fmtNum(x.bid)}</td><td>${fmtNum(x.ask)}</td><td>${fmtNum(x.spread)}</td><td>${new Date(x.ts).toLocaleTimeString()}</td></tr>`
-        ).join('');
-
-        const execBody = document.getElementById('execBody');
-        execBody.innerHTML = e.slice(0, 160).map(x => {
-          const sideClass = x.side === 'Buy' ? 'buy' : 'sell';
-          const statusClass = (x.status === 'Rejected' || x.status === 'Error') ? 'warn' : '';
-          return `<tr><td>${new Date(x.ts).toLocaleTimeString()}</td><td>${x.venue}</td><td class="${statusClass}">${x.status}</td><td class="${sideClass}">${x.side}</td><td>${fmtNum(x.filled_qty)}</td><td>${fmtNum(x.avg_px)}</td></tr>`;
-        }).join('');
-
-        const biasBody = document.getElementById('biasBody');
-        biasBody.innerHTML = bias.map(x => `<tr><td>${x.asset}</td><td>${fmtNum(x.bias)}</td></tr>`).join('');
-      } catch (err) {
-        document.getElementById('status').textContent = `Error: ${err}`;
-      }
-    }
-
-    document.getElementById('marketSelect').addEventListener('change', (ev) => {
-      selectedMarketId = ev.target.value || null;
-    });
-
-    tick();
-    setInterval(tick, 1000);
-  </script>
+  </main>
 </body>
 </html>
 "#;

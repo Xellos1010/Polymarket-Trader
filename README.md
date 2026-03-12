@@ -1,6 +1,6 @@
 # Polymarket Trader (Rust)
 
-Rust-first autonomous trading workspace for Polymarket crypto markets with Coinbase spot hedge support, hard risk controls, replay/paper/live modes, and operator dashboard.
+Rust-first trading workspace with a Coinbase-native workstation, replay/paper/live modes, legacy Polymarket support, hard risk controls, and operator tooling.
 
 ## Workspace crates
 
@@ -21,7 +21,7 @@ Rust-first autonomous trading workspace for Polymarket crypto markets with Coinb
 
 ```bash
 cp config/config.example.toml config/config.toml
-cargo run -p pt-cli -- run --config config/config.toml
+cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper
 ```
 
 Open dashboard:
@@ -72,6 +72,10 @@ Use `.env.example` as the baseline for local/dev shells.
 
 ## CLI utilities
 
+- Coinbase workstation:
+  - `cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper`
+  - `cargo run -p pt-cli -- coinbase up --config config/config.toml --mode replay`
+  - `cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000`
 - Live preflight gate:
   - `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
 - Maker opportunity scan (live orderbook spread/entry ranking):
