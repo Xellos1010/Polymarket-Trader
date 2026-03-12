@@ -285,6 +285,86 @@ pub struct OpsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UiConfig {
+    pub mode_default: String,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self {
+            mode_default: "basic".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapitalTierRuleConfig {
+    pub min_equity_usd: f64,
+    pub reserve_pct: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapitalPlanConfig {
+    pub enabled: bool,
+    pub daily_contribution_usd: f64,
+    pub tiers: Vec<CapitalTierRuleConfig>,
+}
+
+impl Default for CapitalPlanConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            daily_contribution_usd: 10.0,
+            tiers: vec![
+                CapitalTierRuleConfig {
+                    min_equity_usd: 0.0,
+                    reserve_pct: 0.0,
+                },
+                CapitalTierRuleConfig {
+                    min_equity_usd: 250.0,
+                    reserve_pct: 0.20,
+                },
+                CapitalTierRuleConfig {
+                    min_equity_usd: 500.0,
+                    reserve_pct: 0.30,
+                },
+            ],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquitiesModeConfig {
+    pub enabled: bool,
+}
+
+impl Default for EquitiesModeConfig {
+    fn default() -> Self {
+        Self { enabled: false }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquitiesConfig {
+    #[serde(default)]
+    pub products: Vec<String>,
+    #[serde(default)]
+    pub paper: EquitiesModeConfig,
+    #[serde(default)]
+    pub live: EquitiesModeConfig,
+}
+
+impl Default for EquitiesConfig {
+    fn default() -> Self {
+        Self {
+            products: Vec::new(),
+            paper: EquitiesModeConfig { enabled: true },
+            live: EquitiesModeConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionModeConfig {
     MakerFirst,
@@ -623,6 +703,12 @@ pub struct AppConfig {
     pub wallet_intel: WalletIntelConfig,
     #[serde(default)]
     pub benchmark: BenchmarkConfig,
+    #[serde(default)]
+    pub ui: UiConfig,
+    #[serde(default)]
+    pub capital_plan: CapitalPlanConfig,
+    #[serde(default)]
+    pub equities: EquitiesConfig,
 }
 
 impl AppConfig {
@@ -870,6 +956,36 @@ impl AppConfig {
             return Err(PtError::Config(
                 "ops.risk_watchdog_ms must be > 0".to_string(),
             ));
+        }
+        if !matches!(
+            self.ui.mode_default.trim().to_ascii_lowercase().as_str(),
+            "basic" | "advanced"
+        ) {
+            return Err(PtError::Config(
+                "ui.mode_default must be 'basic' or 'advanced'".to_string(),
+            ));
+        }
+        if self.capital_plan.daily_contribution_usd < 0.0 {
+            return Err(PtError::Config(
+                "capital_plan.daily_contribution_usd must be >= 0".to_string(),
+            ));
+        }
+        if self.capital_plan.enabled && self.capital_plan.tiers.is_empty() {
+            return Err(PtError::Config(
+                "capital_plan.tiers must not be empty when enabled".to_string(),
+            ));
+        }
+        for (idx, tier) in self.capital_plan.tiers.iter().enumerate() {
+            if tier.min_equity_usd < 0.0 {
+                return Err(PtError::Config(format!(
+                    "capital_plan.tiers[{idx}].min_equity_usd must be >= 0"
+                )));
+            }
+            if !(0.0..=1.0).contains(&tier.reserve_pct) {
+                return Err(PtError::Config(format!(
+                    "capital_plan.tiers[{idx}].reserve_pct must be in [0,1]"
+                )));
+            }
         }
         if self.runtime.affinity.enabled {
             if self.runtime.affinity.feed_cores.is_empty()

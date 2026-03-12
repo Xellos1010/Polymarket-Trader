@@ -10,12 +10,13 @@ use pt_coinbase::{
     HedgeExecutor, HedgeIntent, PaperCoinbaseHedger,
 };
 use pt_core::{
-    AllocationDrift, AppConfig, ApprovalToken, Asset, CoinbaseL2Update, CoinbaseOrderBookState,
-    EngineMode, ExecutionCostAttribution, ExecutionEvent, ExecutionMode, ExecutionPolicy,
+    AllocationDrift, AppConfig, ApprovalToken, Asset, CapitalLedgerEntry, CapitalTierRule,
+    CoinbaseL2Update, CoinbaseOrderBookState, EngineMode, EquityPaperRun, EquityProductSnapshot,
+    EquitySessionState, ExecutionCostAttribution, ExecutionEvent, ExecutionMode, ExecutionPolicy,
     ExecutionReport, KillSwitchState, MarketHistoryPoint, MarketSelection, MarketSnapshot,
     MetricsRegistry, OrderLifecycleState, PtError, PtResult, RebalanceIntent, RebalancePlan,
     RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side, TradingViewBias,
-    UserOrderEvent, Venue, VenueCapability, WalletBalance, WalletModeConfig, WalletSignal,
+    UiMode, UserOrderEvent, Venue, VenueCapability, WalletBalance, WalletModeConfig, WalletSignal,
 };
 use pt_dashboard::{router as dashboard_router, CoinbaseAuthController, DashboardState};
 use pt_gemini::GeminiClient;
@@ -77,10 +78,14 @@ struct SharedState {
     rebalance_plan: Arc<RwLock<Option<RebalancePlan>>>,
     rebalance_approval: Arc<RwLock<Option<ApprovalToken>>>,
     force_unwind: Arc<RwLock<bool>>,
+    ui_mode: Arc<RwLock<UiMode>>,
+    capital_ledger: Arc<RwLock<Vec<CapitalLedgerEntry>>>,
+    equities_universe: Arc<RwLock<Vec<EquityProductSnapshot>>>,
+    equity_paper_runs: Arc<RwLock<Vec<EquityPaperRun>>>,
 }
 
 impl SharedState {
-    fn new(policy: ExecutionPolicy) -> Self {
+    fn new(policy: ExecutionPolicy, ui_mode: UiMode) -> Self {
         Self {
             selected_markets: Arc::new(RwLock::new(Vec::new())),
             latest_books: Arc::new(RwLock::new(HashMap::new())),
@@ -108,6 +113,10 @@ impl SharedState {
             rebalance_plan: Arc::new(RwLock::new(None)),
             rebalance_approval: Arc::new(RwLock::new(None)),
             force_unwind: Arc::new(RwLock::new(false)),
+            ui_mode: Arc::new(RwLock::new(ui_mode)),
+            capital_ledger: Arc::new(RwLock::new(Vec::new())),
+            equities_universe: Arc::new(RwLock::new(Vec::new())),
+            equity_paper_runs: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -330,6 +339,76 @@ impl Storage {
                 bias REAL NOT NULL,
                 confidence REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS capital_contributions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_ms INTEGER NOT NULL,
+                portfolio_id TEXT NOT NULL,
+                day_utc TEXT NOT NULL,
+                amount_usd REAL NOT NULL,
+                note TEXT
+            );
+            CREATE TABLE IF NOT EXISTS capital_reserve_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_ms INTEGER NOT NULL,
+                portfolio_id TEXT NOT NULL,
+                day_utc TEXT NOT NULL,
+                realized_pnl_usd REAL NOT NULL,
+                reserve_transfer_usd REAL NOT NULL,
+                reinvested_usd REAL NOT NULL,
+                status TEXT NOT NULL,
+                note TEXT
+            );
+            CREATE TABLE IF NOT EXISTS capital_daily_rollups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_ms INTEGER NOT NULL,
+                portfolio_id TEXT NOT NULL,
+                day_utc TEXT NOT NULL,
+                equity_before_usd REAL NOT NULL,
+                equity_after_usd REAL NOT NULL,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS equity_products_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_ms INTEGER NOT NULL,
+                portfolio_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                product_id TEXT NOT NULL,
+                tradable INTEGER NOT NULL,
+                session_state TEXT NOT NULL,
+                min_order_size REAL NOT NULL,
+                quote_increment REAL NOT NULL,
+                source TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS equity_paper_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_ms INTEGER NOT NULL,
+                portfolio_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                bars INTEGER NOT NULL,
+                trades INTEGER NOT NULL,
+                net_pnl_usd REAL NOT NULL,
+                max_drawdown_pct REAL NOT NULL,
+                notes TEXT
+            );
+            CREATE TABLE IF NOT EXISTS equity_paper_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_ms INTEGER NOT NULL,
+                portfolio_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                qty REAL NOT NULL,
+                price REAL NOT NULL,
+                pnl_usd REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS ui_preferences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts_ms INTEGER NOT NULL,
+                portfolio_id TEXT NOT NULL,
+                key TEXT NOT NULL,
+                value TEXT NOT NULL
+            );
             ",
         )
         .map_err(|e| PtError::Io(e.to_string()))?;
@@ -350,6 +429,13 @@ impl Storage {
         ensure_sqlite_column(&conn, "fee_tier_snapshots", "portfolio_id", "TEXT")?;
         ensure_sqlite_column(&conn, "auth_key_events", "portfolio_id", "TEXT")?;
         ensure_sqlite_column(&conn, "wallet_intel_snapshots", "portfolio_id", "TEXT")?;
+        ensure_sqlite_column(&conn, "capital_contributions", "portfolio_id", "TEXT")?;
+        ensure_sqlite_column(&conn, "capital_reserve_actions", "portfolio_id", "TEXT")?;
+        ensure_sqlite_column(&conn, "capital_daily_rollups", "portfolio_id", "TEXT")?;
+        ensure_sqlite_column(&conn, "equity_products_snapshots", "portfolio_id", "TEXT")?;
+        ensure_sqlite_column(&conn, "equity_paper_runs", "portfolio_id", "TEXT")?;
+        ensure_sqlite_column(&conn, "equity_paper_trades", "portfolio_id", "TEXT")?;
+        ensure_sqlite_column(&conn, "ui_preferences", "portfolio_id", "TEXT")?;
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -754,6 +840,103 @@ impl Storage {
         Ok(())
     }
 
+    fn insert_equity_product_snapshots(&self, snapshots: &[EquityProductSnapshot]) -> PtResult<()> {
+        if snapshots.is_empty() {
+            return Ok(());
+        }
+        let conn = self.conn.lock();
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| PtError::Io(e.to_string()))?;
+        for s in snapshots {
+            tx.execute(
+                "INSERT INTO equity_products_snapshots (ts_ms, portfolio_id, symbol, product_id, tradable, session_state, min_order_size, quote_increment, source) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    s.ts.timestamp_millis(),
+                    &self.portfolio_id,
+                    s.symbol,
+                    s.product_id,
+                    if s.tradable { 1 } else { 0 },
+                    format!("{:?}", s.session_state),
+                    s.min_order_size,
+                    s.quote_increment,
+                    s.source,
+                ],
+            )
+            .map_err(|e| PtError::Io(e.to_string()))?;
+        }
+        tx.commit().map_err(|e| PtError::Io(e.to_string()))?;
+        Ok(())
+    }
+
+    fn insert_equity_paper_run(&self, run: &EquityPaperRun) -> PtResult<()> {
+        self.conn
+            .lock()
+            .execute(
+                "INSERT INTO equity_paper_runs (ts_ms, portfolio_id, run_id, symbol, bars, trades, net_pnl_usd, max_drawdown_pct, notes) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    run.ts.timestamp_millis(),
+                    &self.portfolio_id,
+                    run.run_id,
+                    run.symbol,
+                    run.bars as i64,
+                    run.trades as i64,
+                    run.net_pnl_usd,
+                    run.max_drawdown_pct,
+                    run.notes,
+                ],
+            )
+            .map_err(|e| PtError::Io(e.to_string()))?;
+        Ok(())
+    }
+
+    fn insert_capital_ledger_entry(&self, entry: &CapitalLedgerEntry) -> PtResult<()> {
+        let conn = self.conn.lock();
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| PtError::Io(e.to_string()))?;
+        tx.execute(
+            "INSERT INTO capital_contributions (ts_ms, portfolio_id, day_utc, amount_usd, note) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                entry.ts.timestamp_millis(),
+                &self.portfolio_id,
+                entry.day_utc,
+                entry.contribution_usd,
+                entry.note,
+            ],
+        )
+        .map_err(|e| PtError::Io(e.to_string()))?;
+        tx.execute(
+            "INSERT INTO capital_reserve_actions (ts_ms, portfolio_id, day_utc, realized_pnl_usd, reserve_transfer_usd, reinvested_usd, status, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                entry.ts.timestamp_millis(),
+                &self.portfolio_id,
+                entry.day_utc,
+                entry.realized_pnl_usd,
+                entry.reserve_transfer_usd,
+                entry.reinvested_usd,
+                entry.status,
+                entry.note,
+            ],
+        )
+        .map_err(|e| PtError::Io(e.to_string()))?;
+        let payload = serde_json::to_string(entry).map_err(|e| PtError::Serde(e.to_string()))?;
+        tx.execute(
+            "INSERT INTO capital_daily_rollups (ts_ms, portfolio_id, day_utc, equity_before_usd, equity_after_usd, payload) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                entry.ts.timestamp_millis(),
+                &self.portfolio_id,
+                entry.day_utc,
+                entry.equity_before_usd,
+                entry.equity_after_usd,
+                payload,
+            ],
+        )
+        .map_err(|e| PtError::Io(e.to_string()))?;
+        tx.commit().map_err(|e| PtError::Io(e.to_string()))?;
+        Ok(())
+    }
+
     fn roll_snapshots_if_due(&self) -> PtResult<()> {
         let now_ms = Utc::now().timestamp_millis();
         let last = *self.last_roll_ms.read();
@@ -943,7 +1126,10 @@ impl TradingEngine {
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| "default".to_string());
         let metrics = Arc::new(MetricsRegistry::default());
-        let state = SharedState::new(policy_from_config(&cfg));
+        let state = SharedState::new(
+            policy_from_config(&cfg),
+            UiMode::from_str(&cfg.ui.mode_default),
+        );
         *state.venue_capabilities.write() = venue_capabilities_from_config(&cfg);
         let min_expected_net = cfg.risk.min_expected_net;
 
@@ -1188,6 +1374,8 @@ impl TradingEngine {
             tasks.push(self.spawn_gemini_book_loop());
             tasks.push(self.spawn_route_loop());
             tasks.push(self.spawn_fee_tier_loop());
+            tasks.push(self.spawn_equity_probe_loop());
+            tasks.push(self.spawn_capital_ledger_flush_loop());
             if with_trading {
                 tasks.push(self.spawn_rebalance_planner_loop());
             }
@@ -1373,6 +1561,22 @@ impl TradingEngine {
             self.coinbase_wallet.clone(),
             self.cfg.venues.coinbase.products.clone(),
             self.cfg.engine.mode.clone(),
+            self.portfolio_id.clone(),
+            self.state.ui_mode.clone(),
+            self.cfg.capital_plan.enabled,
+            self.cfg.capital_plan.daily_contribution_usd,
+            self.cfg
+                .capital_plan
+                .tiers
+                .iter()
+                .map(|tier| CapitalTierRule {
+                    min_equity_usd: tier.min_equity_usd,
+                    reserve_pct: tier.reserve_pct,
+                })
+                .collect(),
+            self.state.capital_ledger.clone(),
+            self.state.equities_universe.clone(),
+            self.state.equity_paper_runs.clone(),
         );
 
         tokio::spawn(async move {
@@ -1970,6 +2174,148 @@ impl TradingEngine {
                     }
                 }
                 tokio::time::sleep(Duration::from_secs(300)).await;
+            }
+        })
+    }
+
+    fn spawn_equity_probe_loop(&self) -> JoinHandle<()> {
+        let Some(wallet_client) = self.coinbase_wallet.clone() else {
+            return tokio::spawn(async {});
+        };
+        if !self.cfg.equities.paper.enabled && !self.cfg.equities.live.enabled {
+            return tokio::spawn(async {});
+        }
+
+        let metrics = self.metrics.clone();
+        let storage = self.storage.clone();
+        let equities_state = self.state.equities_universe.clone();
+        let paper_runs_state = self.state.equity_paper_runs.clone();
+        let products = if self.cfg.equities.products.is_empty() {
+            self.cfg.venues.coinbase.products.clone()
+        } else {
+            self.cfg.equities.products.clone()
+        };
+        let paper_enabled = self.cfg.equities.paper.enabled;
+
+        tokio::spawn(async move {
+            if products.is_empty() {
+                return;
+            }
+            loop {
+                let mut snapshots = Vec::new();
+                for product_id in &products {
+                    match wallet_client.get_product(product_id).await {
+                        Ok(product) => {
+                            let status = product.status.trim().to_ascii_uppercase();
+                            let session_state = if product.trading_disabled {
+                                EquitySessionState::Halted
+                            } else if status.contains("HALT") {
+                                EquitySessionState::Halted
+                            } else if status.contains("ONLINE")
+                                || status.contains("TRADING")
+                                || status.contains("OPEN")
+                            {
+                                EquitySessionState::Open
+                            } else if status.contains("OFFLINE") || status.contains("CLOSED") {
+                                EquitySessionState::Closed
+                            } else {
+                                EquitySessionState::Unknown
+                            };
+                            let symbol = product_id
+                                .split('-')
+                                .next()
+                                .unwrap_or(product_id)
+                                .to_string();
+                            let min_order_size =
+                                product.base_min_size.parse::<f64>().unwrap_or(0.0);
+                            let quote_increment =
+                                product.quote_increment.parse::<f64>().unwrap_or(0.0);
+                            let tradable = !product.trading_disabled && !product.cancel_only;
+                            snapshots.push(EquityProductSnapshot {
+                                symbol,
+                                product_id: product_id.to_string(),
+                                tradable,
+                                session_state,
+                                min_order_size,
+                                quote_increment,
+                                ts: Utc::now(),
+                                source: "coinbase_product_probe".to_string(),
+                            });
+                            metrics.inc_counter("equity_probe_ok", 1.0);
+                        }
+                        Err(e) => {
+                            warn!(%product_id, %e, "equity probe product fetch failed");
+                            metrics.inc_counter("equity_probe_error", 1.0);
+                        }
+                    }
+                }
+                if !snapshots.is_empty() {
+                    *equities_state.write() = snapshots.clone();
+                    if let Err(e) = storage.insert_equity_product_snapshots(&snapshots) {
+                        error!(%e, "persist equity snapshots failed");
+                    }
+                    if paper_enabled {
+                        let run = EquityPaperRun {
+                            run_id: format!("equity-probe-{}", Utc::now().timestamp_millis()),
+                            symbol: snapshots
+                                .first()
+                                .map(|s| s.symbol.clone())
+                                .unwrap_or_else(|| "N/A".to_string()),
+                            bars: snapshots.len(),
+                            trades: 0,
+                            net_pnl_usd: 0.0,
+                            max_drawdown_pct: 0.0,
+                            ts: Utc::now(),
+                            notes: Some("paper capability probe snapshot".to_string()),
+                        };
+                        {
+                            let mut lock = paper_runs_state.write();
+                            lock.push(run.clone());
+                            if lock.len() > 200 {
+                                let drop_n = lock.len() - 200;
+                                lock.drain(0..drop_n);
+                            }
+                        }
+                        if let Err(e) = storage.insert_equity_paper_run(&run) {
+                            error!(%e, "persist equity paper run failed");
+                        }
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_secs(300)).await;
+            }
+        })
+    }
+
+    fn spawn_capital_ledger_flush_loop(&self) -> JoinHandle<()> {
+        let ledger_state = self.state.capital_ledger.clone();
+        let storage = self.storage.clone();
+        let metrics = self.metrics.clone();
+        tokio::spawn(async move {
+            let mut seen: HashMap<String, ()> = HashMap::new();
+            loop {
+                let rows = ledger_state.read().clone();
+                for row in &rows {
+                    if seen.contains_key(&row.entry_id) {
+                        continue;
+                    }
+                    match storage.insert_capital_ledger_entry(row) {
+                        Ok(_) => {
+                            seen.insert(row.entry_id.clone(), ());
+                            metrics.inc_counter("capital_ledger_persist_ok", 1.0);
+                        }
+                        Err(e) => {
+                            error!(%e, entry_id=%row.entry_id, "persist capital ledger entry failed");
+                            metrics.inc_counter("capital_ledger_persist_error", 1.0);
+                        }
+                    }
+                }
+                if seen.len() > 2_000 {
+                    let active: HashMap<String, ()> =
+                        rows.iter().map(|r| (r.entry_id.clone(), ())).collect();
+                    seen.retain(|k, _| active.contains_key(k));
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         })
     }

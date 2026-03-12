@@ -2,6 +2,45 @@
 
 ## Completed (Latest)
 
+- Local realtime homebase expansion pass completed (Coinbase-first + cross-exchange shadow + capital/equity lab):
+  - Config/runtime contracts added:
+    - `ui.mode_default`
+    - `capital_plan.enabled`, `capital_plan.daily_contribution_usd`, `capital_plan.tiers`
+    - `equities.products`, `equities.paper.enabled`, `equities.live.enabled`
+    - active `config/config.toml` now includes `[venues.kraken]` and `[venues.gemini]` shadow blocks.
+    - new profile: `config/profiles/local_paper_guarded_realtime.toml`
+  - Dashboard API surfaces added:
+    - `GET /state/ui/mode`
+    - `POST /ops/ui/mode`
+    - `GET /state/crossvenue/shadow-summary`
+    - `GET /state/strategy/downturn-summary`
+    - `GET /state/capital/plan`
+    - `POST /ops/capital/close-day`
+    - `GET /state/capital/ledger`
+    - `GET /state/equities/universe`
+    - `GET /state/equities/paper-runs`
+  - Dashboard UI updates:
+    - Basic/Advanced mode toggle with local persistence.
+    - New cards for cross-venue summary, downturn summary, capital planner close-day flow, equity universe, and equity paper runs.
+    - Advanced diagnostics cards are hidden in Basic mode.
+  - Engine/runtime updates:
+    - shared state added for UI mode, capital ledger, equity universe, and equity paper runs.
+    - equity probe loop added (Coinbase product capability snapshots).
+    - capital-ledger async flush loop added (persists close-day ledger rows to SQLite).
+  - SQLite schema expanded:
+    - `capital_contributions`
+    - `capital_reserve_actions`
+    - `capital_daily_rollups`
+    - `equity_products_snapshots`
+    - `equity_paper_runs`
+    - `equity_paper_trades`
+    - `ui_preferences`
+  - Validation status:
+    - `cargo check --workspace` passes
+    - `cargo test --workspace` passes
+    - `cargo run -p pt-cli -- coinbase-smoke --config config/config.toml --timeout-ms 8000` passes
+    - local runtime endpoint smoke passes for new state/ops endpoints.
+
 - Route net-edge quality penalties added:
   - Route scoring now applies a dynamic reject-risk penalty (rolling 10m reject ratio from execution events).
   - Route scoring now applies a dynamic latency-decay penalty from Coinbase orderbook freshness vs `execution.stale_book_ms`.

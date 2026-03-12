@@ -186,6 +186,69 @@
 - `bias` REAL NOT NULL
 - `confidence` REAL NOT NULL
 
+### `capital_contributions`
+- `ts_ms` INTEGER NOT NULL
+- `portfolio_id` TEXT NOT NULL
+- `day_utc` TEXT NOT NULL
+- `amount_usd` REAL NOT NULL
+- `note` TEXT NULL
+
+### `capital_reserve_actions`
+- `ts_ms` INTEGER NOT NULL
+- `portfolio_id` TEXT NOT NULL
+- `day_utc` TEXT NOT NULL
+- `realized_pnl_usd` REAL NOT NULL
+- `reserve_transfer_usd` REAL NOT NULL
+- `reinvested_usd` REAL NOT NULL
+- `status` TEXT NOT NULL
+- `note` TEXT NULL
+
+### `capital_daily_rollups`
+- `ts_ms` INTEGER NOT NULL
+- `portfolio_id` TEXT NOT NULL
+- `day_utc` TEXT NOT NULL
+- `equity_before_usd` REAL NOT NULL
+- `equity_after_usd` REAL NOT NULL
+- `payload` TEXT NOT NULL (`CapitalLedgerEntry` JSON)
+
+### `equity_products_snapshots`
+- `ts_ms` INTEGER NOT NULL
+- `portfolio_id` TEXT NOT NULL
+- `symbol` TEXT NOT NULL
+- `product_id` TEXT NOT NULL
+- `tradable` INTEGER NOT NULL
+- `session_state` TEXT NOT NULL
+- `min_order_size` REAL NOT NULL
+- `quote_increment` REAL NOT NULL
+- `source` TEXT NOT NULL
+
+### `equity_paper_runs`
+- `ts_ms` INTEGER NOT NULL
+- `portfolio_id` TEXT NOT NULL
+- `run_id` TEXT NOT NULL
+- `symbol` TEXT NOT NULL
+- `bars` INTEGER NOT NULL
+- `trades` INTEGER NOT NULL
+- `net_pnl_usd` REAL NOT NULL
+- `max_drawdown_pct` REAL NOT NULL
+- `notes` TEXT NULL
+
+### `equity_paper_trades`
+- `ts_ms` INTEGER NOT NULL
+- `portfolio_id` TEXT NOT NULL
+- `run_id` TEXT NOT NULL
+- `symbol` TEXT NOT NULL
+- `side` TEXT NOT NULL
+- `qty` REAL NOT NULL
+- `price` REAL NOT NULL
+- `pnl_usd` REAL NOT NULL
+
+### `ui_preferences`
+- `ts_ms` INTEGER NOT NULL
+- `portfolio_id` TEXT NOT NULL
+- `key` TEXT NOT NULL
+- `value` TEXT NOT NULL
+
 ## Strategy Lab Journal (SQLite)
 
 Default file: `data/strategy_lab/trade_journal.sqlite`

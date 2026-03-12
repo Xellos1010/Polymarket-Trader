@@ -7,11 +7,13 @@ use axum::{
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use parking_lot::RwLock;
 use pt_core::{
-    AllocationDrift, ApprovalToken, Asset, AuthReloadResult, CoinbaseOrderBookState, EngineMode,
+    AllocationDrift, ApprovalToken, Asset, AuthReloadResult, CapitalLedgerEntry, CapitalTierRule,
+    CoinbaseOrderBookState, CrossVenueShadowSummary, DailyReserveRecommendation,
+    DownturnAnalysisSummary, EngineMode, EquityPaperRun, EquityProductSnapshot,
     ExecutionCostAttribution, ExecutionEvent, ExecutionPolicy, ExecutionReport, KillSwitchState,
     MarketHistoryPoint, MarketSelection, MarketSnapshot, MetricsRegistry, RebalancePlan,
-    RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side, VenueCapability,
-    VenueFillQualityStats, VenueLatencyStats, WalletBalance, WalletIntelSnapshot,
+    RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side, UiMode,
+    VenueCapability, VenueFillQualityStats, VenueLatencyStats, WalletBalance, WalletIntelSnapshot,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -52,6 +54,14 @@ pub struct DashboardState {
     pub coinbase_wallet_client: Option<Arc<pt_coinbase::CoinbaseWalletClient>>,
     pub coinbase_products: Vec<String>,
     pub engine_mode: EngineMode,
+    pub portfolio_id: String,
+    pub ui_mode: Arc<RwLock<UiMode>>,
+    pub capital_plan_enabled: bool,
+    pub capital_daily_contribution_usd: f64,
+    pub capital_tiers: Vec<CapitalTierRule>,
+    pub capital_ledger: Arc<RwLock<Vec<CapitalLedgerEntry>>>,
+    pub equities_universe: Arc<RwLock<Vec<EquityProductSnapshot>>>,
+    pub equity_paper_runs: Arc<RwLock<Vec<EquityPaperRun>>>,
 }
 
 impl DashboardState {
@@ -83,6 +93,14 @@ impl DashboardState {
         coinbase_wallet_client: Option<Arc<pt_coinbase::CoinbaseWalletClient>>,
         coinbase_products: Vec<String>,
         engine_mode: EngineMode,
+        portfolio_id: String,
+        ui_mode: Arc<RwLock<UiMode>>,
+        capital_plan_enabled: bool,
+        capital_daily_contribution_usd: f64,
+        capital_tiers: Vec<CapitalTierRule>,
+        capital_ledger: Arc<RwLock<Vec<CapitalLedgerEntry>>>,
+        equities_universe: Arc<RwLock<Vec<EquityProductSnapshot>>>,
+        equity_paper_runs: Arc<RwLock<Vec<EquityPaperRun>>>,
     ) -> Self {
         Self {
             metrics,
@@ -112,6 +130,14 @@ impl DashboardState {
             coinbase_wallet_client,
             coinbase_products,
             engine_mode,
+            portfolio_id,
+            ui_mode,
+            capital_plan_enabled,
+            capital_daily_contribution_usd,
+            capital_tiers,
+            capital_ledger,
+            equities_universe,
+            equity_paper_runs,
         }
     }
 }
@@ -171,6 +197,35 @@ struct RebalanceApprovalResponse {
 #[derive(Debug, Clone, Deserialize)]
 struct CoinbaseAuthSwitchRequest {
     profile_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct UiModeResponse {
+    mode: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct UiModeRequest {
+    mode: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CrossVenueShadowResponse {
+    summary: CrossVenueShadowSummary,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CapitalPlanResponse {
+    enabled: bool,
+    recommendation: DailyReserveRecommendation,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CapitalCloseDayRequest {
+    contribution_usd: Option<f64>,
+    realized_pnl_usd: Option<f64>,
+    note: Option<String>,
+    approve: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -502,7 +557,16 @@ pub fn router(state: DashboardState) -> Router {
         .route("/state/listings/l2-archive", get(get_listing_l2_archive))
         .route("/state/feed/health", get(get_feed_health))
         .route("/state/feed/diagnostics", get(get_feed_diagnostics))
+        .route("/state/ui/mode", get(get_ui_mode))
+        .route(
+            "/state/crossvenue/shadow-summary",
+            get(get_crossvenue_shadow_summary),
+        )
         .route("/state/parity/monitor", get(get_parity_monitor))
+        .route(
+            "/state/strategy/downturn-summary",
+            get(get_downturn_summary),
+        )
         .route("/state/parity/export-csv", post(post_parity_export_csv))
         .route("/state/venues/capabilities", get(get_venue_capabilities))
         .route("/state/venues/latency", get(get_venue_latency))
@@ -526,6 +590,10 @@ pub fn router(state: DashboardState) -> Router {
         .route("/state/routes/opportunities", get(get_route_opportunities))
         .route("/state/routes/executions", get(get_route_executions))
         .route("/state/routes/export-csv", post(post_routes_export_csv))
+        .route("/state/capital/plan", get(get_capital_plan))
+        .route("/state/capital/ledger", get(get_capital_ledger))
+        .route("/state/equities/universe", get(get_equities_universe))
+        .route("/state/equities/paper-runs", get(get_equities_paper_runs))
         .route("/state/fees/summary", get(get_fees_summary))
         .route(
             "/state/wallet-intel/coinbase",
@@ -545,7 +613,9 @@ pub fn router(state: DashboardState) -> Router {
         )
         .route("/ops/halt", post(post_halt))
         .route("/ops/resume", post(post_resume))
+        .route("/ops/ui/mode", post(post_ui_mode))
         .route("/ops/flatten", post(post_flatten))
+        .route("/ops/capital/close-day", post(post_capital_close_day))
         .route(
             "/ops/profile/pilot-ultra-tight",
             post(post_profile_pilot_ultra_tight),
@@ -1447,6 +1517,324 @@ async fn get_feed_diagnostics(
         reject_rate_10m: reject_rate,
         cancel_rate_10m: cancel_rate,
     })
+}
+
+fn tier_reserve_pct(tiers: &[CapitalTierRule], equity_usd: f64) -> (f64, String) {
+    let mut selected = (0.0_f64, "tier_0".to_string());
+    let mut ordered: Vec<&CapitalTierRule> = tiers.iter().collect();
+    ordered.sort_by(|a, b| a.min_equity_usd.total_cmp(&b.min_equity_usd));
+    for tier in ordered {
+        if equity_usd >= tier.min_equity_usd {
+            selected = (
+                tier.reserve_pct.clamp(0.0, 1.0),
+                format!(">=${:.2}", tier.min_equity_usd),
+            );
+        }
+    }
+    selected
+}
+
+fn build_daily_reserve_recommendation(state: &DashboardState) -> DailyReserveRecommendation {
+    let ts = Utc::now();
+    let equity_usd = state
+        .wallet_balances
+        .read()
+        .iter()
+        .map(|b| b.usd_value.max(0.0))
+        .sum::<f64>();
+    let realized_pnl_usd = state.risk_state.read().daily_pnl;
+    let (reserve_pct, tier_label) = tier_reserve_pct(&state.capital_tiers, equity_usd);
+    let mut blocked_reason = None;
+    if !state.capital_plan_enabled {
+        blocked_reason = Some("capital_plan_disabled".to_string());
+    } else if !matches!(*state.kill_switch.read(), KillSwitchState::Running) {
+        blocked_reason = Some("killswitch_not_running".to_string());
+    } else if realized_pnl_usd <= 0.0 {
+        blocked_reason = Some("non_positive_realized_pnl".to_string());
+    }
+    let reserve_recommendation_usd = if blocked_reason.is_none() {
+        (realized_pnl_usd.max(0.0) * reserve_pct).max(0.0)
+    } else {
+        0.0
+    };
+    let reinvest_recommendation_usd = if blocked_reason.is_none() {
+        (realized_pnl_usd - reserve_recommendation_usd).max(0.0)
+    } else {
+        0.0
+    };
+    DailyReserveRecommendation {
+        ts,
+        equity_usd,
+        realized_pnl_usd,
+        reserve_pct,
+        reserve_recommendation_usd,
+        reinvest_recommendation_usd,
+        daily_contribution_usd: state.capital_daily_contribution_usd.max(0.0),
+        projected_next_equity_usd: equity_usd
+            + state.capital_daily_contribution_usd.max(0.0)
+            + reinvest_recommendation_usd,
+        tier_label,
+        blocked_reason,
+    }
+}
+
+fn route_leg_venue(leg: &pt_core::RouteLeg) -> Option<String> {
+    let parts: Vec<&str> = leg.product_id.split(':').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let venue = parts[0].trim().to_ascii_lowercase();
+    if venue.is_empty() {
+        None
+    } else {
+        Some(venue)
+    }
+}
+
+fn build_crossvenue_shadow_summary(state: &DashboardState) -> CrossVenueShadowSummary {
+    let rows = state.route_opportunities.read().clone();
+    let mut total = 0usize;
+    let mut coinbase_only = 0usize;
+    let mut cross = 0usize;
+    let mut venues_seen: HashMap<String, ()> = HashMap::new();
+    let mut best_expected_net_bps = f64::NEG_INFINITY;
+    let mut best_route_id = None;
+
+    for row in &rows {
+        total += 1;
+        let mut row_venues: HashMap<String, ()> = HashMap::new();
+        if row.legs.is_empty() {
+            row_venues.insert("coinbase".to_string(), ());
+        } else {
+            for leg in &row.legs {
+                if let Some(venue) = route_leg_venue(leg) {
+                    row_venues.insert(venue, ());
+                } else {
+                    row_venues.insert("coinbase".to_string(), ());
+                }
+            }
+        }
+        for v in row_venues.keys() {
+            venues_seen.insert(v.clone(), ());
+        }
+        if row_venues.len() <= 1 && row_venues.contains_key("coinbase") {
+            coinbase_only += 1;
+        } else {
+            cross += 1;
+        }
+        if row.expected_net_bps > best_expected_net_bps {
+            best_expected_net_bps = row.expected_net_bps;
+            best_route_id = Some(row.route_id.clone());
+        }
+    }
+
+    let mut venues = venues_seen.keys().cloned().collect::<Vec<_>>();
+    venues.sort();
+    CrossVenueShadowSummary {
+        ts: Utc::now(),
+        total_opportunities: total,
+        coinbase_only_count: coinbase_only,
+        cross_venue_count: cross,
+        venues_seen: venues,
+        best_expected_net_bps: if best_expected_net_bps.is_finite() {
+            best_expected_net_bps
+        } else {
+            0.0
+        },
+        best_route_id,
+    }
+}
+
+fn build_downturn_summary(state: &DashboardState) -> DownturnAnalysisSummary {
+    let ts = Utc::now();
+    let window = "4h".to_string();
+    let mut mids: Vec<f64> = Vec::new();
+    let mut spreads: Vec<f64> = Vec::new();
+    for points in state.market_history.read().values() {
+        for p in points.iter().rev().take(240) {
+            mids.push(p.mid);
+            spreads.push(p.spread);
+        }
+    }
+    mids.sort_by(|a, b| a.total_cmp(b));
+    let drawdown_pct = if mids.len() >= 2 {
+        let min = mids.first().copied().unwrap_or(0.0);
+        let max = mids.last().copied().unwrap_or(0.0);
+        if max > 0.0 {
+            ((max - min) / max).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    } else {
+        0.0
+    };
+    let spread_avg = if spreads.is_empty() {
+        0.0
+    } else {
+        spreads.iter().sum::<f64>() / spreads.len() as f64
+    };
+    let bearish_score = drawdown_pct.min(1.0);
+    let volatility_score = (spread_avg * 100.0).clamp(0.0, 1.0);
+    let risk_off = bearish_score >= 0.25 || volatility_score >= 0.35;
+
+    let mut baseline_net_edge_bps = 0.0;
+    let mut candidate_net_edge_bps = 0.0;
+    if !state.route_opportunities.read().is_empty() {
+        let mut sorted = state.route_opportunities.read().clone();
+        sorted.sort_by(|a, b| b.expected_net_bps.total_cmp(&a.expected_net_bps));
+        candidate_net_edge_bps = sorted.first().map(|r| r.expected_net_bps).unwrap_or(0.0);
+        baseline_net_edge_bps = sorted
+            .iter()
+            .skip(1)
+            .take(5)
+            .map(|r| r.expected_net_bps)
+            .sum::<f64>()
+            / sorted.iter().skip(1).take(5).count().max(1) as f64;
+    }
+    let pass = !risk_off || candidate_net_edge_bps >= baseline_net_edge_bps;
+    let reason = if pass {
+        "candidate acceptable for current regime".to_string()
+    } else {
+        "risk_off regime with weak candidate edge".to_string()
+    };
+
+    DownturnAnalysisSummary {
+        ts,
+        regime_window: window,
+        bearish_score,
+        volatility_score,
+        drawdown_pct,
+        risk_off,
+        baseline_net_edge_bps,
+        candidate_net_edge_bps,
+        pass,
+        reason,
+    }
+}
+
+async fn get_ui_mode(State(state): State<DashboardState>) -> Json<UiModeResponse> {
+    Json(UiModeResponse {
+        mode: state.ui_mode.read().as_str().to_string(),
+    })
+}
+
+async fn post_ui_mode(
+    State(state): State<DashboardState>,
+    AxumJson(req): AxumJson<UiModeRequest>,
+) -> Json<UiModeResponse> {
+    *state.ui_mode.write() = UiMode::from_str(&req.mode);
+    Json(UiModeResponse {
+        mode: state.ui_mode.read().as_str().to_string(),
+    })
+}
+
+async fn get_crossvenue_shadow_summary(
+    State(state): State<DashboardState>,
+) -> Json<CrossVenueShadowResponse> {
+    Json(CrossVenueShadowResponse {
+        summary: build_crossvenue_shadow_summary(&state),
+    })
+}
+
+async fn get_downturn_summary(
+    State(state): State<DashboardState>,
+) -> Json<DownturnAnalysisSummary> {
+    Json(build_downturn_summary(&state))
+}
+
+async fn get_capital_plan(State(state): State<DashboardState>) -> Json<CapitalPlanResponse> {
+    Json(CapitalPlanResponse {
+        enabled: state.capital_plan_enabled,
+        recommendation: build_daily_reserve_recommendation(&state),
+    })
+}
+
+async fn get_capital_ledger(State(state): State<DashboardState>) -> Json<Vec<CapitalLedgerEntry>> {
+    let mut rows = state.capital_ledger.read().clone();
+    rows.sort_by(|a, b| b.ts.cmp(&a.ts));
+    Json(rows)
+}
+
+async fn post_capital_close_day(
+    State(state): State<DashboardState>,
+    AxumJson(req): AxumJson<CapitalCloseDayRequest>,
+) -> Json<CapitalLedgerEntry> {
+    let recommendation = build_daily_reserve_recommendation(&state);
+    let contribution_usd = req
+        .contribution_usd
+        .unwrap_or(state.capital_daily_contribution_usd)
+        .max(0.0);
+    let realized_pnl_usd = req
+        .realized_pnl_usd
+        .unwrap_or(recommendation.realized_pnl_usd);
+    let approve = req.approve.unwrap_or(true);
+    let reserve_pct = recommendation.reserve_pct.clamp(0.0, 1.0);
+    let blocked = if !state.capital_plan_enabled {
+        Some("capital_plan_disabled".to_string())
+    } else if !matches!(*state.kill_switch.read(), KillSwitchState::Running) {
+        Some("killswitch_not_running".to_string())
+    } else if realized_pnl_usd <= 0.0 {
+        Some("non_positive_realized_pnl".to_string())
+    } else {
+        None
+    };
+    let reserve_transfer_usd = if approve && blocked.is_none() {
+        (realized_pnl_usd.max(0.0) * reserve_pct).max(0.0)
+    } else {
+        0.0
+    };
+    let reinvested_usd = if approve && blocked.is_none() {
+        (realized_pnl_usd - reserve_transfer_usd).max(0.0)
+    } else {
+        0.0
+    };
+    let equity_before_usd = recommendation.equity_usd.max(0.0);
+    let equity_after_usd = equity_before_usd + contribution_usd + reinvested_usd;
+    let status = if !approve {
+        "rejected_by_operator".to_string()
+    } else if let Some(reason) = blocked {
+        format!("blocked:{reason}")
+    } else {
+        "closed".to_string()
+    };
+
+    let entry = CapitalLedgerEntry {
+        entry_id: format!("cap-{}", Utc::now().timestamp_millis()),
+        portfolio_id: state.portfolio_id.clone(),
+        day_utc: Utc::now().date_naive().to_string(),
+        ts: Utc::now(),
+        contribution_usd,
+        realized_pnl_usd,
+        reserve_transfer_usd,
+        reinvested_usd,
+        equity_before_usd,
+        equity_after_usd,
+        status,
+        note: req.note,
+    };
+    {
+        let mut lock = state.capital_ledger.write();
+        lock.push(entry.clone());
+        if lock.len() > 730 {
+            let drop_n = lock.len() - 730;
+            lock.drain(0..drop_n);
+        }
+    }
+    Json(entry)
+}
+
+async fn get_equities_universe(
+    State(state): State<DashboardState>,
+) -> Json<Vec<EquityProductSnapshot>> {
+    let mut rows = state.equities_universe.read().clone();
+    rows.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+    Json(rows)
+}
+
+async fn get_equities_paper_runs(State(state): State<DashboardState>) -> Json<Vec<EquityPaperRun>> {
+    let mut rows = state.equity_paper_runs.read().clone();
+    rows.sort_by(|a, b| b.ts.cmp(&a.ts));
+    Json(rows)
 }
 
 fn build_parity_monitor(state: &DashboardState) -> ParityMonitorResponse {
@@ -2955,6 +3343,11 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         <button onclick="op('/ops/flatten')">FLATTEN</button>
         <button onclick="op('/ops/execution/unwind')">UNWIND</button>
         <button onclick="op('/ops/profile/pilot-ultra-tight')">PILOT PROFILE</button>
+        <label class="tiny" for="uiModeSelect">View</label>
+        <select id="uiModeSelect" style="min-width:120px;">
+          <option value="basic">Basic</option>
+          <option value="advanced">Advanced</option>
+        </select>
         <button class="tab-btn active" id="chartTabBtn">CHART</button>
         <button class="tab-btn" id="backtestTabBtn">BACKTESTER</button>
         <button class="tab-btn" id="listingTabBtn">LISTING PATTERN</button>
@@ -3041,7 +3434,7 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         </div>
       </div>
 
-      <div class="card table-card">
+      <div class="card table-card advanced-only">
         <div class="tiny">Current Books</div>
         <div class="scroll">
           <table>
@@ -3061,7 +3454,7 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         </div>
       </div>
 
-      <div class="card table-card">
+      <div class="card table-card advanced-only">
         <div class="tiny">Execution Costs</div>
         <div class="scroll">
           <table>
@@ -3081,7 +3474,7 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         </div>
       </div>
 
-      <div class="card table-card">
+      <div class="card table-card advanced-only">
         <div class="tiny">Coinbase Open Orders</div>
         <div class="scroll">
           <table>
@@ -3091,7 +3484,7 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         </div>
       </div>
 
-      <div class="card table-card">
+      <div class="card table-card advanced-only">
         <div class="tiny">Coinbase L2 Top</div>
         <div class="scroll">
           <table>
@@ -3112,11 +3505,53 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
       </div>
 
       <div class="card table-card">
+        <div class="tiny">Cross-Exchange Shadow Summary</div>
+        <div class="tiny" id="crossVenueSummary">cross-venue: -</div>
+      </div>
+
+      <div class="card table-card">
+        <div class="tiny">Downturn Strategy Summary</div>
+        <div class="tiny" id="downturnSummary">downturn: -</div>
+      </div>
+
+      <div class="card table-card">
+        <div class="tiny">Capital Planner (Conservative Ramp)</div>
+        <div class="tiny" id="capitalPlanSummary">capital plan: -</div>
+        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+          <input id="capitalContributionInput" placeholder="contribution usd" style="min-width:150px;" />
+          <input id="capitalPnlInput" placeholder="realized pnl usd" style="min-width:150px;" />
+          <input id="capitalNoteInput" placeholder="note" style="min-width:220px;" />
+          <button id="capitalCloseDayBtn">CLOSE DAY</button>
+        </div>
+        <div class="tiny" id="capitalCloseResult"></div>
+      </div>
+
+      <div class="card table-card">
+        <div class="tiny">Equity Universe (Paper Capability)</div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Symbol</th><th>Product</th><th>Tradable</th><th>Session</th><th>Min Size</th></tr></thead>
+            <tbody id="equityBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card table-card">
+        <div class="tiny">Equity Paper Runs</div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Run</th><th>Symbol</th><th>Bars</th><th>Trades</th><th>PnL</th></tr></thead>
+            <tbody id="equityRunsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card table-card advanced-only">
         <div class="tiny">Feed Health</div>
         <div class="tiny" id="feedHealthSummary">feed health: -</div>
       </div>
 
-      <div class="card table-card">
+      <div class="card table-card advanced-only">
         <div class="tiny">Parity Monitor</div>
         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
           <button id="parityExportCsvBtn">EXPORT PARITY CSV</button>
@@ -3142,7 +3577,7 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         <div class="tiny" id="rebalanceOpsResult"></div>
       </div>
 
-      <div class="card table-card">
+      <div class="card table-card advanced-only">
         <div class="tiny">Coinbase Auth</div>
         <div class="tiny" id="coinbaseAuthSummary">auth: unknown</div>
         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
@@ -3184,7 +3619,7 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         <div class="tiny" id="makerResult"></div>
       </div>
 
-      <div class="card table-card">
+      <div class="card table-card advanced-only">
         <div class="tiny">Route Execution Plans</div>
         <div class="scroll">
           <table>
@@ -3194,7 +3629,7 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         </div>
       </div>
 
-      <div class="card table-card" style="grid-column: span 12;">
+      <div class="card table-card advanced-only" style="grid-column: span 12;">
         <div class="tiny">Asset Bias</div>
         <div class="scroll">
           <table>
@@ -3216,6 +3651,9 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
     let listingCandidates = [];
     let lastListingOverlay = null;
     let lastParityRows = [];
+    let uiModeStorageKey = 'pt_dashboard_ui_mode';
+    let defaultUiMode = (localStorage.getItem(uiModeStorageKey) || 'basic').toLowerCase();
+    let uiMode = (defaultUiMode === 'advanced') ? 'advanced' : 'basic';
 
     function fmtNum(n) {
       const v = Number(n || 0);
@@ -3578,6 +4016,32 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
       }
     }
 
+    function applyUiMode(mode) {
+      const normalized = (String(mode || 'basic').toLowerCase() === 'advanced') ? 'advanced' : 'basic';
+      document.querySelectorAll('.advanced-only').forEach((el) => {
+        if (normalized === 'advanced') {
+          el.classList.remove('hidden');
+        } else {
+          el.classList.add('hidden');
+        }
+      });
+      const select = document.getElementById('uiModeSelect');
+      if (select && select.value !== normalized) {
+        select.value = normalized;
+      }
+      localStorage.setItem(uiModeStorageKey, normalized);
+      return normalized;
+    }
+
+    async function syncUiModeFromServer() {
+      try {
+        const response = await fetch('/state/ui/mode').then((x) => x.json());
+        return applyUiMode(response && response.mode ? response.mode : uiMode);
+      } catch (_) {
+        return applyUiMode(uiMode);
+      }
+    }
+
     function setActiveTab(tab) {
       activeTab = tab;
       const chartBtn = document.getElementById('chartTabBtn');
@@ -3821,7 +4285,33 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
 
     async function tick() {
       try {
-        const [h, r, b, e, exCosts, vectors, wallet, allocations, rebalance, cbOrders, cbBook, cbAuth, routes, routeExec, feeSummary, bias, inv, markets, feedHealth, parity] = await Promise.all([
+        const [
+          h,
+          r,
+          b,
+          e,
+          exCosts,
+          vectors,
+          wallet,
+          allocations,
+          rebalance,
+          cbOrders,
+          cbBook,
+          cbAuth,
+          routes,
+          routeExec,
+          feeSummary,
+          bias,
+          inv,
+          markets,
+          feedHealth,
+          parity,
+          crossVenue,
+          downturn,
+          capitalPlan,
+          equityUniverse,
+          equityRuns,
+        ] = await Promise.all([
           fetch('/health').then(x => x.json()),
           fetch('/state/risk').then(x => x.json()),
           fetch('/state/books').then(x => x.json()),
@@ -3842,6 +4332,11 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
           fetch('/state/markets').then(x => x.json()),
           fetch('/state/feed/health').then(x => x.json()),
           fetch('/state/parity/monitor').then(x => x.json()),
+          fetch('/state/crossvenue/shadow-summary').then(x => x.json()),
+          fetch('/state/strategy/downturn-summary').then(x => x.json()),
+          fetch('/state/capital/plan').then(x => x.json()),
+          fetch('/state/equities/universe').then(x => x.json()),
+          fetch('/state/equities/paper-runs').then(x => x.json()),
         ]);
 
         syncMarketSelect(markets);
@@ -3919,6 +4414,42 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
         const routesBody = document.getElementById('routesBody');
         routesBody.innerHTML = (routes || []).slice(0, 80).map(x =>
           `<tr><td>${x.route_id}</td><td>${fmtNum(x.expected_net_bps)}</td><td>${fmtNum(x.gross_edge_bps)}</td><td>${fmtNum(x.expected_usd_profit)}</td></tr>`
+        ).join('');
+
+        const crossSummary = (crossVenue && crossVenue.summary) ? crossVenue.summary : {};
+        document.getElementById('crossVenueSummary').textContent =
+          `total=${crossSummary.total_opportunities || 0} cross=${crossSummary.cross_venue_count || 0} ` +
+          `coinbase_only=${crossSummary.coinbase_only_count || 0} best=${fmtNum(crossSummary.best_expected_net_bps)}bps ` +
+          `venues=${(crossSummary.venues_seen || []).join(',') || '-'}`;
+
+        document.getElementById('downturnSummary').textContent =
+          `window=${downturn.regime_window || '-'} risk_off=${downturn.risk_off ? 'yes' : 'no'} ` +
+          `bearish=${fmtNum((downturn.bearish_score || 0) * 100)}% drawdown=${fmtNum((downturn.drawdown_pct || 0) * 100)}% ` +
+          `candidate=${fmtNum(downturn.candidate_net_edge_bps || 0)}bps baseline=${fmtNum(downturn.baseline_net_edge_bps || 0)}bps ` +
+          `gate=${downturn.pass ? 'PASS' : 'FAIL'} reason=${downturn.reason || ''}`;
+
+        const plan = (capitalPlan && capitalPlan.recommendation) ? capitalPlan.recommendation : null;
+        if (plan) {
+          document.getElementById('capitalPlanSummary').textContent =
+            `equity=${fmtNum(plan.equity_usd)} pnl=${fmtNum(plan.realized_pnl_usd)} reserve=${fmtNum(plan.reserve_recommendation_usd)} ` +
+            `reinvest=${fmtNum(plan.reinvest_recommendation_usd)} contrib=${fmtNum(plan.daily_contribution_usd)} ` +
+            `next=${fmtNum(plan.projected_next_equity_usd)} tier=${plan.tier_label || '-'} block=${plan.blocked_reason || 'none'}`;
+          const cInput = document.getElementById('capitalContributionInput');
+          if (cInput && !cInput.value) cInput.value = fmtNum(plan.daily_contribution_usd);
+          const pInput = document.getElementById('capitalPnlInput');
+          if (pInput && !pInput.value) pInput.value = fmtNum(plan.realized_pnl_usd);
+        } else {
+          document.getElementById('capitalPlanSummary').textContent = 'capital plan unavailable';
+        }
+
+        const equityBody = document.getElementById('equityBody');
+        equityBody.innerHTML = (equityUniverse || []).slice(0, 120).map((x) =>
+          `<tr><td>${escapeHtml(x.symbol || '-')}</td><td>${escapeHtml(x.product_id || '-')}</td><td>${x.tradable ? 'yes' : 'no'}</td><td>${escapeHtml(x.session_state || 'unknown')}</td><td>${fmtNum(x.min_order_size)}</td></tr>`
+        ).join('');
+
+        const equityRunsBody = document.getElementById('equityRunsBody');
+        equityRunsBody.innerHTML = (equityRuns || []).slice(0, 120).map((x) =>
+          `<tr><td>${escapeHtml(x.run_id || '-')}</td><td>${escapeHtml(x.symbol || '-')}</td><td>${x.bars || 0}</td><td>${x.trades || 0}</td><td>${fmtNum(x.net_pnl_usd)}</td></tr>`
         ).join('');
 
         const feedHealthSummary = document.getElementById('feedHealthSummary');
@@ -4015,6 +4546,14 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
     document.getElementById('listingNormalization').addEventListener('change', async () => {
       await refreshListingPanel(true);
     });
+    document.getElementById('uiModeSelect').addEventListener('change', async (ev) => {
+      const nextMode = applyUiMode(ev.target.value);
+      try {
+        await postJsonData('/ops/ui/mode', { mode: nextMode });
+      } catch (_) {
+        // local mode still applies even if server write fails
+      }
+    });
 
     document.getElementById('convertPreviewBtn').addEventListener('click', async () => {
       await runConvert(false, false);
@@ -4079,6 +4618,25 @@ const DASHBOARD_HTML: &str = r#"<!doctype html>
       }
     });
 
+    document.getElementById('capitalCloseDayBtn').addEventListener('click', async () => {
+      const contributionText = (document.getElementById('capitalContributionInput').value || '').trim();
+      const pnlText = (document.getElementById('capitalPnlInput').value || '').trim();
+      const note = (document.getElementById('capitalNoteInput').value || '').trim();
+      const contribution = contributionText === '' ? null : Number(contributionText);
+      const realizedPnl = pnlText === '' ? null : Number(pnlText);
+      const payload = {
+        contribution_usd: Number.isFinite(contribution) ? contribution : null,
+        realized_pnl_usd: Number.isFinite(realizedPnl) ? realizedPnl : null,
+        note: note || null,
+        approve: true,
+      };
+      const res = await postJsonData('/ops/capital/close-day', payload);
+      document.getElementById('capitalCloseResult').textContent =
+        `entry=${res.entry_id || '-'} status=${res.status || '-'} reserve=${fmtNum(res.reserve_transfer_usd)} reinvest=${fmtNum(res.reinvested_usd)} after=${fmtNum(res.equity_after_usd)}`;
+    });
+
+    applyUiMode(uiMode);
+    syncUiModeFromServer();
     setActiveTab(activeTab);
     tick();
     setInterval(tick, 1000);

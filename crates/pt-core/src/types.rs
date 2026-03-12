@@ -596,3 +596,120 @@ pub struct ReplayAcceptanceReport {
     pub effective_fee_bps_avg: f64,
     pub created_ts: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UiMode {
+    Basic,
+    Advanced,
+}
+
+impl UiMode {
+    pub fn from_str(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "advanced" => Self::Advanced,
+            _ => Self::Basic,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Basic => "basic",
+            Self::Advanced => "advanced",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapitalTierRule {
+    pub min_equity_usd: f64,
+    pub reserve_pct: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailyReserveRecommendation {
+    pub ts: DateTime<Utc>,
+    pub equity_usd: f64,
+    pub realized_pnl_usd: f64,
+    pub reserve_pct: f64,
+    pub reserve_recommendation_usd: f64,
+    pub reinvest_recommendation_usd: f64,
+    pub daily_contribution_usd: f64,
+    pub projected_next_equity_usd: f64,
+    pub tier_label: String,
+    pub blocked_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapitalLedgerEntry {
+    pub entry_id: String,
+    pub portfolio_id: String,
+    pub day_utc: String,
+    pub ts: DateTime<Utc>,
+    pub contribution_usd: f64,
+    pub realized_pnl_usd: f64,
+    pub reserve_transfer_usd: f64,
+    pub reinvested_usd: f64,
+    pub equity_before_usd: f64,
+    pub equity_after_usd: f64,
+    pub status: String,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EquitySessionState {
+    Open,
+    Closed,
+    Halted,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquityProductSnapshot {
+    pub symbol: String,
+    pub product_id: String,
+    pub tradable: bool,
+    pub session_state: EquitySessionState,
+    pub min_order_size: f64,
+    pub quote_increment: f64,
+    pub ts: DateTime<Utc>,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquityPaperRun {
+    pub run_id: String,
+    pub symbol: String,
+    pub bars: usize,
+    pub trades: usize,
+    pub net_pnl_usd: f64,
+    pub max_drawdown_pct: f64,
+    pub ts: DateTime<Utc>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownturnAnalysisSummary {
+    pub ts: DateTime<Utc>,
+    pub regime_window: String,
+    pub bearish_score: f64,
+    pub volatility_score: f64,
+    pub drawdown_pct: f64,
+    pub risk_off: bool,
+    pub baseline_net_edge_bps: f64,
+    pub candidate_net_edge_bps: f64,
+    pub pass: bool,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossVenueShadowSummary {
+    pub ts: DateTime<Utc>,
+    pub total_opportunities: usize,
+    pub coinbase_only_count: usize,
+    pub cross_venue_count: usize,
+    pub venues_seen: Vec<String>,
+    pub best_expected_net_bps: f64,
+    pub best_route_id: Option<String>,
+}

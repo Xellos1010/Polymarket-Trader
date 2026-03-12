@@ -3,12 +3,13 @@ use chrono::Utc;
 use parking_lot::RwLock;
 use pt_coinbase::CoinbaseOrderSummary;
 use pt_core::{
-    AllocationDrift, ApprovalToken, Asset, CoinbaseOrderBookState, EdgeProfile, EngineMode,
-    EntryExitVector, ExecutionCostAttribution, ExecutionEvent, ExecutionMode, ExecutionPolicy,
-    ExecutionReport, ExecutionStatus, KillSwitchState, MarketHistoryPoint, MarketSnapshot,
-    MetricsRegistry, OrderLifecycleState, RebalanceIntent, RebalancePlan, RebalancePlanStatus,
-    RiskState, RouteExecutionPlan, RouteOpportunity, Side, StrategyClass, Venue, VenueCapability,
-    VenueFeeSchedule, WalletBalance,
+    AllocationDrift, ApprovalToken, Asset, CapitalLedgerEntry, CapitalTierRule,
+    CoinbaseOrderBookState, EdgeProfile, EngineMode, EntryExitVector, EquityPaperRun,
+    EquityProductSnapshot, ExecutionCostAttribution, ExecutionEvent, ExecutionMode,
+    ExecutionPolicy, ExecutionReport, ExecutionStatus, KillSwitchState, MarketHistoryPoint,
+    MarketSnapshot, MetricsRegistry, OrderLifecycleState, RebalanceIntent, RebalancePlan,
+    RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side, StrategyClass,
+    UiMode, Venue, VenueCapability, VenueFeeSchedule, WalletBalance,
 };
 use pt_dashboard::{router, DashboardState};
 use serde_json::{json, Value};
@@ -296,6 +297,27 @@ fn fixture_state() -> DashboardState {
         None,
         vec!["BTC-USD".to_string()],
         EngineMode::Paper,
+        "default".to_string(),
+        Arc::new(RwLock::new(UiMode::Basic)),
+        true,
+        10.0,
+        vec![
+            CapitalTierRule {
+                min_equity_usd: 0.0,
+                reserve_pct: 0.0,
+            },
+            CapitalTierRule {
+                min_equity_usd: 250.0,
+                reserve_pct: 0.20,
+            },
+            CapitalTierRule {
+                min_equity_usd: 500.0,
+                reserve_pct: 0.30,
+            },
+        ],
+        Arc::new(RwLock::new(Vec::<CapitalLedgerEntry>::new())),
+        Arc::new(RwLock::new(Vec::<EquityProductSnapshot>::new())),
+        Arc::new(RwLock::new(Vec::<EquityPaperRun>::new())),
     )
 }
 

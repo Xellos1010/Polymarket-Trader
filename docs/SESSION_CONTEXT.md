@@ -23,6 +23,14 @@ Added venue-specific route fee modeling:
 Added route quality penalties:
 - Dynamic reject-risk penalty from rolling 10m execution reject ratio.
 - Dynamic latency-decay penalty from Coinbase L2 freshness relative to `execution.stale_book_ms`.
+Added local realtime homebase expansion:
+- Basic/Advanced dashboard mode (`/state/ui/mode`, `/ops/ui/mode`).
+- Cross-exchange shadow summary (`/state/crossvenue/shadow-summary`).
+- Downturn strategy summary (`/state/strategy/downturn-summary`).
+- Capital planner + close-day workflow (`/state/capital/plan`, `/ops/capital/close-day`, `/state/capital/ledger`).
+- Equity capability probe + paper run surfaces (`/state/equities/universe`, `/state/equities/paper-runs`).
+- Added config blocks: `ui`, `capital_plan`, `equities`.
+- Added SQLite runtime tables for capital/equity persistence.
 
 ## Runtime
 `rustc`: `rustc 1.93.1 (01f6ddf75 2026-02-11)`

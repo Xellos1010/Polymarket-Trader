@@ -368,6 +368,55 @@
       },
       "additionalProperties": false
     },
+    "ui": {
+      "type": "object",
+      "properties": {
+        "mode_default": { "type": "string", "enum": ["basic", "advanced"] }
+      },
+      "additionalProperties": false
+    },
+    "capital_plan": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "daily_contribution_usd": { "type": "number", "minimum": 0 },
+        "tiers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["min_equity_usd", "reserve_pct"],
+            "properties": {
+              "min_equity_usd": { "type": "number", "minimum": 0 },
+              "reserve_pct": { "type": "number", "minimum": 0, "maximum": 1 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "equities": {
+      "type": "object",
+      "properties": {
+        "products": { "type": "array", "items": { "type": "string" } },
+        "paper": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "live": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "runtime": {
       "type": "object",
       "properties": {

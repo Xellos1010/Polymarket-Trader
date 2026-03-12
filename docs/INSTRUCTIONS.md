@@ -65,6 +65,7 @@ cargo run -p pt-cli -- run-exec --config config/config.toml
 
 5c. New dashboard controls (Coinbase wallet-first):
 - Market dropdown now shows pair/bucket label instead of raw market id.
+- `View` selector supports `Basic` and `Advanced` mode (persisted in browser localStorage and mirrored to `/ops/ui/mode`).
 - `CHART` / `BACKTESTER` tabs switch between live market charting and embedded strategy lab.
 - `LISTING PATTERN` tab overlays recently listed Coinbase products with configurable window, alignment, and normalization.
   - `EXPORT CSV` exports the current overlay series as row-wise CSV (`product_id,label,source,anchor_time,index,ts,value`).
@@ -79,6 +80,11 @@ cargo run -p pt-cli -- run-exec --config config/config.toml
 - `Maker Orderbook Speed Test`:
   - choose product, side, base size.
   - run paper/live test to measure preview/post/cancel latency.
+- New realtime panels:
+  - `Cross-Exchange Shadow Summary`
+  - `Downturn Strategy Summary`
+  - `Capital Planner (Conservative Ramp)` with `CLOSE DAY`
+  - `Equity Universe (Paper Capability)` + `Equity Paper Runs`
 
 6. Wallet-first operator checks (assist mode):
 ```bash
@@ -137,6 +143,15 @@ cargo run -p pt-cli -- coinbase-auth-switch --profile primary
 ```bash
 curl -s http://127.0.0.1:8080/state/feed/health | jq
 curl -s http://127.0.0.1:8080/state/feed/diagnostics | jq
+curl -s http://127.0.0.1:8080/state/ui/mode | jq
+curl -s -X POST http://127.0.0.1:8080/ops/ui/mode -H 'content-type: application/json' -d '{"mode":"advanced"}' | jq
+curl -s http://127.0.0.1:8080/state/crossvenue/shadow-summary | jq
+curl -s http://127.0.0.1:8080/state/strategy/downturn-summary | jq
+curl -s http://127.0.0.1:8080/state/capital/plan | jq
+curl -s -X POST http://127.0.0.1:8080/ops/capital/close-day -H 'content-type: application/json' -d '{"contribution_usd":10,"realized_pnl_usd":1.0,"approve":true}' | jq
+curl -s http://127.0.0.1:8080/state/capital/ledger | jq '.[0:5]'
+curl -s http://127.0.0.1:8080/state/equities/universe | jq '.[0:10]'
+curl -s http://127.0.0.1:8080/state/equities/paper-runs | jq '.[0:10]'
 curl -s http://127.0.0.1:8080/state/parity/monitor | jq '.rows[0:5]'
 curl -s -X POST http://127.0.0.1:8080/state/parity/export-csv -H 'content-type: application/json' -d '{"limit":500,"include_failures":true}' | jq
 curl -s http://127.0.0.1:8080/state/venues/latency | jq
@@ -201,6 +216,15 @@ Use `bias_gain` per variant to control plugin influence.
 - `GET /state/fees/summary`
 - `GET /state/feed/health`
 - `GET /state/feed/diagnostics`
+- `GET /state/ui/mode`
+- `POST /ops/ui/mode` (`{"mode":"basic|advanced"}`)
+- `GET /state/crossvenue/shadow-summary`
+- `GET /state/strategy/downturn-summary`
+- `GET /state/capital/plan`
+- `POST /ops/capital/close-day`
+- `GET /state/capital/ledger`
+- `GET /state/equities/universe`
+- `GET /state/equities/paper-runs`
 - `GET /state/parity/monitor`
 - `POST /state/parity/export-csv`
 - `GET /state/venues/latency`

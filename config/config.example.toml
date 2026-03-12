@@ -121,6 +121,16 @@ maker_bps = 6.0
 taker_bps = 12.0
 rebate_bps_est = 0.0
 
+[execution.fees.kraken]
+maker_bps = 16.0
+taker_bps = 26.0
+rebate_bps_est = 0.0
+
+[execution.fees.gemini]
+maker_bps = 20.0
+taker_bps = 35.0
+rebate_bps_est = 0.0
+
 [execution.fees.polymarket]
 maker_bps = 0.0
 taker_bps = 5.0
@@ -181,6 +191,27 @@ metrics_flush_secs = 5
 market_refresh_secs = 60
 wallet_refresh_secs = 30
 risk_watchdog_ms = 100
+
+[ui]
+mode_default = "basic"
+
+[capital_plan]
+enabled = true
+daily_contribution_usd = 10.0
+tiers = [
+  { min_equity_usd = 0.0, reserve_pct = 0.0 },
+  { min_equity_usd = 250.0, reserve_pct = 0.20 },
+  { min_equity_usd = 500.0, reserve_pct = 0.30 },
+]
+
+[equities]
+products = []
+
+[equities.paper]
+enabled = true
+
+[equities.live]
+enabled = false
 
 [runtime.affinity]
 enabled = false

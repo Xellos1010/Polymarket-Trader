@@ -139,6 +139,15 @@ For macOS homebase boot persistence:
 - `GET /state/fees/summary`
 - `GET /state/feed/health`
 - `GET /state/feed/diagnostics`
+- `GET /state/ui/mode`
+- `POST /ops/ui/mode`
+- `GET /state/crossvenue/shadow-summary`
+- `GET /state/strategy/downturn-summary`
+- `GET /state/capital/plan`
+- `POST /ops/capital/close-day`
+- `GET /state/capital/ledger`
+- `GET /state/equities/universe`
+- `GET /state/equities/paper-runs`
 - `GET /state/parity/monitor`
 - `POST /state/parity/export-csv`
 - `GET /state/venues/latency`
