@@ -652,8 +652,7 @@ fn parse_input_expr(expr: &str) -> Option<(PineInputKind, String)> {
         return None;
     }
     let mut kind = PineInputKind::Generic;
-    if expr.starts_with("input.") {
-        let suffix = &expr["input.".len()..];
+    if let Some(suffix) = expr.strip_prefix("input.") {
         let open = suffix.find('(')?;
         let label = suffix[..open].trim().to_ascii_lowercase();
         kind = match label.as_str() {

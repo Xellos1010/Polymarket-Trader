@@ -10,7 +10,7 @@ use pt_core::{
     MarketSelection, MarketSnapshot, MetricsRegistry, PtError, PtResult, RiskState, Side,
     TradingViewBias,
 };
-use pt_dashboard::{router as dashboard_router, DashboardState};
+use pt_dashboard::{router as dashboard_router, DashboardHandles, DashboardState};
 use pt_market_discovery::MarketDiscoveryClient;
 use pt_polymarket::{
     LivePolymarketConfig, LivePolymarketExecutor, PaperPolymarketExecutor, PolymarketClient,
@@ -489,16 +489,16 @@ impl TradingEngine {
 
     fn spawn_dashboard_server(&self) -> JoinHandle<()> {
         let bind = self.cfg.ops.dashboard_bind.clone();
-        let state = DashboardState::new(
-            self.metrics.clone(),
-            self.state.risk_state.clone(),
-            self.state.kill_switch.clone(),
-            self.state.latest_books.clone(),
-            self.state.market_history.clone(),
-            self.state.recent_executions.clone(),
-            self.state.fused_bias.clone(),
-            self.state.inventory_usd.clone(),
-        );
+        let state = DashboardState::new(DashboardHandles {
+            metrics: self.metrics.clone(),
+            risk_state: self.state.risk_state.clone(),
+            kill_switch: self.state.kill_switch.clone(),
+            latest_books: self.state.latest_books.clone(),
+            market_history: self.state.market_history.clone(),
+            recent_executions: self.state.recent_executions.clone(),
+            fused_bias: self.state.fused_bias.clone(),
+            inventory_usd: self.state.inventory_usd.clone(),
+        });
 
         tokio::spawn(async move {
             let app = dashboard_router(state);

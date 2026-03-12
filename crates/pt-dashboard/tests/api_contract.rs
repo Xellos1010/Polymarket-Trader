@@ -5,7 +5,7 @@ use pt_core::{
     Asset, ExecutionReport, ExecutionStatus, KillSwitchState, MarketHistoryPoint, MarketSnapshot,
     MetricsRegistry, RiskState, Side, Venue,
 };
-use pt_dashboard::{router, DashboardState};
+use pt_dashboard::{router, DashboardHandles, DashboardState};
 use serde_json::Value;
 use std::{collections::HashMap, fs, sync::Arc};
 use tower::util::ServiceExt;
@@ -55,9 +55,9 @@ fn fixture_state() -> DashboardState {
     let mut bias = HashMap::new();
     bias.insert(Asset::Btc, 0.2);
 
-    DashboardState::new(
-        Arc::new(MetricsRegistry::default()),
-        Arc::new(RwLock::new(RiskState {
+    DashboardState::new(DashboardHandles {
+        metrics: Arc::new(MetricsRegistry::default()),
+        risk_state: Arc::new(RwLock::new(RiskState {
             killswitch: "Running".to_string(),
             daily_pnl: 1.25,
             max_daily_loss: 1.0,
@@ -67,13 +67,13 @@ fn fixture_state() -> DashboardState {
             stale_books: 0,
             last_update_ms: now.timestamp_millis(),
         })),
-        Arc::new(RwLock::new(KillSwitchState::Running)),
-        Arc::new(RwLock::new(latest_books)),
-        Arc::new(RwLock::new(history)),
-        Arc::new(RwLock::new(executions)),
-        Arc::new(RwLock::new(bias)),
-        Arc::new(RwLock::new(5.0)),
-    )
+        kill_switch: Arc::new(RwLock::new(KillSwitchState::Running)),
+        latest_books: Arc::new(RwLock::new(latest_books)),
+        market_history: Arc::new(RwLock::new(history)),
+        recent_executions: Arc::new(RwLock::new(executions)),
+        fused_bias: Arc::new(RwLock::new(bias)),
+        inventory_usd: Arc::new(RwLock::new(5.0)),
+    })
 }
 
 fn load_openapi_doc() -> Value {
