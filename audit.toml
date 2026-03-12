@@ -1,0 +1,9 @@
+[advisories]
+ignore = [
+  "RUSTSEC-2026-0037",
+  "RUSTSEC-2024-0388",
+  "RUSTSEC-2024-0436",
+]
+
+[yanked]
+enabled = false

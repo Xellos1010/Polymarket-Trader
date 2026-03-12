@@ -12,6 +12,18 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone)]
+pub struct DashboardHandles {
+    pub metrics: Arc<MetricsRegistry>,
+    pub risk_state: Arc<RwLock<RiskState>>,
+    pub kill_switch: Arc<RwLock<KillSwitchState>>,
+    pub latest_books: Arc<RwLock<HashMap<String, MarketSnapshot>>>,
+    pub market_history: Arc<RwLock<HashMap<String, Vec<MarketHistoryPoint>>>>,
+    pub recent_executions: Arc<RwLock<Vec<ExecutionReport>>>,
+    pub fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
+    pub inventory_usd: Arc<RwLock<f64>>,
+}
+
+#[derive(Clone)]
 pub struct DashboardState {
     pub metrics: Arc<MetricsRegistry>,
     pub risk_state: Arc<RwLock<RiskState>>,
@@ -24,25 +36,16 @@ pub struct DashboardState {
 }
 
 impl DashboardState {
-    pub fn new(
-        metrics: Arc<MetricsRegistry>,
-        risk_state: Arc<RwLock<RiskState>>,
-        kill_switch: Arc<RwLock<KillSwitchState>>,
-        latest_books: Arc<RwLock<HashMap<String, MarketSnapshot>>>,
-        market_history: Arc<RwLock<HashMap<String, Vec<MarketHistoryPoint>>>>,
-        recent_executions: Arc<RwLock<Vec<ExecutionReport>>>,
-        fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
-        inventory_usd: Arc<RwLock<f64>>,
-    ) -> Self {
+    pub fn new(handles: DashboardHandles) -> Self {
         Self {
-            metrics,
-            risk_state,
-            kill_switch,
-            latest_books,
-            market_history,
-            recent_executions,
-            fused_bias,
-            inventory_usd,
+            metrics: handles.metrics,
+            risk_state: handles.risk_state,
+            kill_switch: handles.kill_switch,
+            latest_books: handles.latest_books,
+            market_history: handles.market_history,
+            recent_executions: handles.recent_executions,
+            fused_bias: handles.fused_bias,
+            inventory_usd: handles.inventory_usd,
         }
     }
 }
