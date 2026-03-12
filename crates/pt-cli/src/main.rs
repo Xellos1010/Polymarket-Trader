@@ -968,11 +968,19 @@ async fn scan_markets(
     };
 
     let mut rows: Vec<MarketScanRow> = Vec::new();
+    let mut book_fetch_failures = 0usize;
+    let mut sample_book_fetch_error: Option<String> = None;
 
     for market in markets {
         let best = match polymarket.get_best_book(&market.token_id_yes).await {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(err) => {
+                book_fetch_failures += 1;
+                if sample_book_fetch_error.is_none() {
+                    sample_book_fetch_error = Some(err.to_string());
+                }
+                continue;
+            }
         };
 
         let snap = MarketSnapshot {
@@ -1020,6 +1028,22 @@ async fn scan_markets(
             liquidity: market.liquidity,
             tier: format!("{:?}", market.tier),
         });
+    }
+
+    if rows.is_empty() && book_fetch_failures > 0 {
+        return Err(format!(
+            "scan-markets failed to fetch order books for all {} discovered markets (sample error: {})",
+            book_fetch_failures,
+            sample_book_fetch_error.unwrap_or_else(|| "unknown error".to_string())
+        ));
+    }
+
+    if book_fetch_failures > 0 {
+        eprintln!(
+            "scan-markets: skipped {} markets due to order book fetch failures (sample error: {})",
+            book_fetch_failures,
+            sample_book_fetch_error.unwrap_or_else(|| "unknown error".to_string())
+        );
     }
 
     rows.sort_by(|a, b| {
