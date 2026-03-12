@@ -1,6 +1,10 @@
+use chrono::Utc;
 use clap::{Parser, Subcommand};
-use pt_core::{AppConfig, EngineMode};
+use pt_core::{AppConfig, EngineMode, MarketSnapshot};
 use pt_engine::TradingEngine;
+use pt_market_discovery::MarketDiscoveryClient;
+use pt_polymarket::PolymarketClient;
+use pt_quote::{build_quote_intent, expected_net, CostInputs, QuoteConfig};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -62,6 +66,18 @@ enum Commands {
         out: String,
         #[arg(long)]
         note: Option<String>,
+    },
+    ScanMarkets {
+        #[arg(long, default_value_t = 40)]
+        limit: usize,
+        #[arg(long, default_value_t = 10)]
+        top: usize,
+        #[arg(long, default_value_t = 0.003)]
+        adverse_sel_est: f64,
+        #[arg(long, default_value_t = 0.001)]
+        hedge_cost_est: f64,
+        #[arg(long, default_value_t = 0.0005)]
+        gas_amortized_est: f64,
     },
 }
 
@@ -164,6 +180,27 @@ async fn main() {
         Commands::SaveContext { out, note } => {
             if let Err(e) = save_context(&out, note.as_deref(), &config_path) {
                 error!(%e, "save context failed");
+                std::process::exit(1);
+            }
+        }
+        Commands::ScanMarkets {
+            limit,
+            top,
+            adverse_sel_est,
+            hedge_cost_est,
+            gas_amortized_est,
+        } => {
+            if let Err(e) = scan_markets(
+                &config_path,
+                limit,
+                top,
+                adverse_sel_est,
+                hedge_cost_est,
+                gas_amortized_est,
+            )
+            .await
+            {
+                error!(%e, "market scan failed");
                 std::process::exit(1);
             }
         }
@@ -883,4 +920,172 @@ mod tests {
         assert_eq!(path, "config/custom.toml");
         std::env::remove_var("PT_CONFIG_PATH");
     }
+}
+
+#[derive(Debug, Clone)]
+struct MarketScanRow {
+    market_id: String,
+    slug: String,
+    question: String,
+    bid: f64,
+    ask: f64,
+    spread: f64,
+    expected_net: f64,
+    quote_bid: f64,
+    quote_ask: f64,
+    volume24h: f64,
+    liquidity: f64,
+    tier: String,
+}
+
+async fn scan_markets(
+    config_path: &str,
+    limit: usize,
+    top: usize,
+    adverse_sel_est: f64,
+    hedge_cost_est: f64,
+    gas_amortized_est: f64,
+) -> Result<(), String> {
+    let cfg = AppConfig::from_file(config_path).map_err(|e| e.to_string())?;
+    let discovery = MarketDiscoveryClient::new(
+        cfg.venues.polymarket.gamma_api.clone(),
+        cfg.venues.polymarket.filters.clone(),
+    );
+    let polymarket = PolymarketClient::new(
+        cfg.venues.polymarket.clob_api.clone(),
+        cfg.venues.polymarket.clob_ws.clone(),
+    );
+
+    let mut markets = discovery
+        .fetch_all_markets()
+        .await
+        .map_err(|e| format!("fetch_all_markets failed: {e}"))?;
+    markets.truncate(limit.max(1));
+
+    let quote_cfg = QuoteConfig {
+        min_expected_net: cfg.risk.min_expected_net,
+        ..QuoteConfig::default()
+    };
+
+    let mut rows: Vec<MarketScanRow> = Vec::new();
+    let mut book_fetch_failures = 0usize;
+    let mut sample_book_fetch_error: Option<String> = None;
+
+    for market in markets {
+        let best = match polymarket.get_best_book(&market.token_id_yes).await {
+            Ok(v) => v,
+            Err(err) => {
+                book_fetch_failures += 1;
+                if sample_book_fetch_error.is_none() {
+                    sample_book_fetch_error = Some(err.to_string());
+                }
+                continue;
+            }
+        };
+
+        let snap = MarketSnapshot {
+            market_id: market.market_id.clone(),
+            token_id: market.token_id_yes.clone(),
+            bid: best.best_bid,
+            ask: best.best_ask,
+            spread: best.spread,
+            liquidity: market.liquidity,
+            ts: Utc::now(),
+        };
+
+        let costs = CostInputs {
+            rebate_est: if market.fees_enabled { 0.001 } else { 0.0 },
+            adverse_sel_est,
+            hedge_cost_est,
+            gas_amortized_est,
+        };
+
+        let exp = expected_net(
+            snap.ask - snap.bid,
+            costs.rebate_est,
+            costs.adverse_sel_est,
+            costs.hedge_cost_est,
+            costs.gas_amortized_est,
+        );
+
+        let (quote_bid, quote_ask) =
+            match build_quote_intent(&market, &snap, 0.0, 0.0, &costs, &quote_cfg) {
+                Some(q) => (q.bid_px, q.ask_px),
+                None => (0.0, 0.0),
+            };
+
+        rows.push(MarketScanRow {
+            market_id: market.market_id,
+            slug: market.slug,
+            question: market.question,
+            bid: snap.bid,
+            ask: snap.ask,
+            spread: snap.spread,
+            expected_net: exp,
+            quote_bid,
+            quote_ask,
+            volume24h: market.volume24h,
+            liquidity: market.liquidity,
+            tier: format!("{:?}", market.tier),
+        });
+    }
+
+    if rows.is_empty() && book_fetch_failures > 0 {
+        return Err(format!(
+            "scan-markets failed to fetch order books for all {} discovered markets (sample error: {})",
+            book_fetch_failures,
+            sample_book_fetch_error.unwrap_or_else(|| "unknown error".to_string())
+        ));
+    }
+
+    if book_fetch_failures > 0 {
+        eprintln!(
+            "scan-markets: skipped {} markets due to order book fetch failures (sample error: {})",
+            book_fetch_failures,
+            sample_book_fetch_error.unwrap_or_else(|| "unknown error".to_string())
+        );
+    }
+
+    rows.sort_by(|a, b| {
+        b.expected_net
+            .partial_cmp(&a.expected_net)
+            .unwrap_or(Ordering::Equal)
+    });
+
+    let take_n = top.max(1).min(rows.len());
+    println!(
+        "scan_markets: showing top {} / {} opportunities (maker-focused expected_net)",
+        take_n,
+        rows.len()
+    );
+    println!(
+        "{: <12} {: <11} {: >7} {: >7} {: >8} {: >10} {: >10} {: >10} {: >10} {: >10}",
+        "market_id", "tier", "bid", "ask", "spread", "exp_net", "q_bid", "q_ask", "vol24h", "liq"
+    );
+
+    for r in rows.iter().take(take_n) {
+        println!(
+            "{: <12} {: <11} {: >7.4} {: >7.4} {: >8.4} {: >10.4} {: >10.4} {: >10.4} {: >10.0} {: >10.0}",
+            truncate_id(&r.market_id),
+            r.tier,
+            r.bid,
+            r.ask,
+            r.spread,
+            r.expected_net,
+            r.quote_bid,
+            r.quote_ask,
+            r.volume24h,
+            r.liquidity,
+        );
+        println!("    slug={} | question={}", r.slug, r.question);
+    }
+
+    Ok(())
+}
+
+fn truncate_id(v: &str) -> String {
+    if v.len() <= 12 {
+        return v.to_string();
+    }
+    format!("{}…", &v[..11])
 }

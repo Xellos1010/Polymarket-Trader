@@ -74,6 +74,9 @@ Use `.env.example` as the baseline for local/dev shells.
 
 - Live preflight gate:
   - `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
+- Maker opportunity scan (live orderbook spread/entry ranking):
+  - `cargo run -p pt-cli -- scan-markets --config config/config.toml --limit 60 --top 15`
+  - tune assumptions: `cargo run -p pt-cli -- scan-markets --config config/config.toml --adverse-sel-est 0.0025 --hedge-cost-est 0.0008 --gas-amortized-est 0.0003`
 - Extract Pine parameters:
   - `cargo run -p pt-cli -- pine-params --path pine-scripts/<script> --out data/tuning/pine_params.json`
 - Generate/tune Pine candidates:

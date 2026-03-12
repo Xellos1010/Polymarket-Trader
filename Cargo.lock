@@ -3559,9 +3559,13 @@ dependencies = [
 name = "pt-cli"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "pt-core",
  "pt-engine",
+ "pt-market-discovery",
+ "pt-polymarket",
+ "pt-quote",
  "rand 0.9.2",
  "reqwest 0.12.28",
  "serde",
