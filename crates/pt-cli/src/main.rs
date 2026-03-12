@@ -939,9 +939,16 @@ fn now_unix() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::resolve_config_path;
+    use lazy_static::lazy_static;
+    use parking_lot::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
 
     #[test]
     fn resolve_config_uses_env_when_default_is_passed() {
+        let _guard = TEST_MUTEX.lock();
         std::env::set_var("PT_CONFIG_PATH", "config/alt.toml");
         let path = resolve_config_path("config/config.toml");
         assert_eq!(path, "config/alt.toml");
@@ -950,6 +957,7 @@ mod tests {
 
     #[test]
     fn resolve_config_keeps_explicit_cli_path() {
+        let _guard = TEST_MUTEX.lock();
         std::env::set_var("PT_CONFIG_PATH", "config/alt.toml");
         let path = resolve_config_path("config/custom.toml");
         assert_eq!(path, "config/custom.toml");

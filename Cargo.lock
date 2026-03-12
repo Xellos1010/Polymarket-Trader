@@ -3562,6 +3562,7 @@ dependencies = [
  "axum",
  "chrono",
  "clap",
+ "lazy_static",
  "parking_lot",
  "pt-coinbase",
  "pt-core",

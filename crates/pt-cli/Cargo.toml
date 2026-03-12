@@ -24,3 +24,7 @@ pt-engine = { path = "../pt-engine" }
 pt-market-discovery = { path = "../pt-market-discovery" }
 pt-polymarket = { path = "../pt-polymarket" }
 pt-quote = { path = "../pt-quote" }
+
+[dev-dependencies]
+lazy_static = "1.4.0"
+parking_lot = "0.12.3"

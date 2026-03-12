@@ -1,0 +1,21 @@
+{
+  "run": {
+    "command": "nx test pt-cli",
+    "startTime": "2026-03-12T23:05:46.155Z",
+    "endTime": "2026-03-12T23:06:16.090Z",
+    "inner": false
+  },
+  "tasks": [
+    {
+      "taskId": "pt-cli:test",
+      "target": "test",
+      "projectName": "pt-cli",
+      "hash": "377839719975879731",
+      "startTime": "2026-03-12T23:05:46.163Z",
+      "endTime": "2026-03-12T23:06:16.089Z",
+      "params": "",
+      "cacheStatus": "cache-miss",
+      "status": 0
+    }
+  ]
+}
