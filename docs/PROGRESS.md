@@ -20,15 +20,18 @@
 - Persistent SQLite trade journal now records runs/trades and exposes per-market attribution summaries.
 - Strategy-lab promotion tooling now converts selected market/variant into replay NDJSON for Rust replay mode.
 - Replay acceptance tooling now validates promoted replay NDJSON plus optional SQLite risk/execution evidence.
+- Phase 1 evidence bundle scaffolding now exists for dated run bundles plus a strict gate report (`scripts/phase1_evidence_bundle.sh`, `tools/phase1_gate_report.py`, `docs/PHASE1_EVIDENCE.md`).
 
 ## In Progress
 
 - Validate promoted replay artifacts against `pt-cli` replay mode in a Rust-enabled environment.
+- Capture at least three independent replay/paper evidence bundles and generate a Phase 1 gate report.
 - Wire hosted branch protection/manual approval settings in GitHub.
 
 ## Next Queue
 
 1. Run the full Rust validation ladder in an environment with `cargo` and network access.
-2. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
-3. Add mutation tests for risk and quote-critical logic.
-4. Configure hosted branch protections and required status checks.
+2. Populate `data/evidence/phase1/<bundle>/` with three independent runs and generate `report.json` plus `report.md`.
+3. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
+4. Add mutation tests for risk and quote-critical logic.
+5. Configure hosted branch protections and required status checks.
