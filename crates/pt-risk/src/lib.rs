@@ -199,32 +199,148 @@ fn deny(reason: &str, limit: Option<&str>) -> RiskDecision {
 mod tests {
     use super::*;
 
-    #[test]
-    fn blocks_when_stale() {
-        let cfg = RiskConfig {
+    fn risk_cfg() -> RiskConfig {
+        RiskConfig {
             daily_loss_limit_pct: 0.02,
             max_notional_per_market: 5.0,
-            max_total_open_notional: 20.0,
+            max_total_open_notional: 10.0,
             max_markets_quoted_simultaneously: 2,
             max_unhedged_delta: 10.0,
             max_order_age_secs: 20,
             stale_book_threshold_ms: 400,
             min_expected_net: 0.002,
-        };
+        }
+    }
 
-        let engine = RiskEngine::new(cfg, 50.0);
-        let q = QuoteIntent {
-            market_id: "m1".into(),
-            token_id: "t1".into(),
+    fn quote(market_id: &str, bid_sz: f64) -> QuoteIntent {
+        QuoteIntent {
+            market_id: market_id.into(),
+            token_id: format!("{market_id}-token"),
             bid_px: 0.49,
             ask_px: 0.51,
-            bid_sz: 5.0,
-            ask_sz: 5.0,
+            bid_sz,
+            ask_sz: bid_sz,
             ttl_ms: 20_000,
             expected_net: 0.003,
-        };
+        }
+    }
 
-        let d = engine.evaluate_quote(&q, 500);
-        assert!(!d.allow);
+    #[test]
+    fn blocks_when_stale() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        let decision = engine.evaluate_quote(&quote("m1", 5.0), 500);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "STALE_ORDERBOOK");
+    }
+
+    #[test]
+    fn manual_halt_blocks_quotes() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        engine.manual_halt();
+
+        let decision = engine.evaluate_quote(&quote("m1", 1.0), 100);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "KILLSWITCH_ACTIVE");
+    }
+
+    #[test]
+    fn daily_loss_limit_trips_auto_halt() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        engine.apply_realized_pnl(-1.0);
+
+        let decision = engine.evaluate_quote(&quote("m1", 1.0), 100);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "DAILY_LOSS_LIMIT");
+        assert_eq!(engine.snapshot().killswitch, "AutoHalt");
+    }
+
+    #[test]
+    fn max_total_open_notional_is_enforced() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+
+        let decision = engine.evaluate_quote(&quote("m1", 11.0), 100);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "MAX_TOTAL_OPEN_NOTIONAL");
+    }
+
+    #[test]
+    fn max_notional_per_market_is_enforced() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        engine.reserve_quote_exposure(&quote("m1", 3.0));
+
+        let decision = engine.evaluate_quote(&quote("m1", 3.0), 100);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "MAX_NOTIONAL_PER_MARKET");
+    }
+
+    #[test]
+    fn max_markets_quoted_is_enforced_for_new_market() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        engine.reserve_quote_exposure(&quote("m1", 1.0));
+        engine.reserve_quote_exposure(&quote("m2", 1.0));
+
+        let decision = engine.evaluate_quote(&quote("m3", 1.0), 100);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "MAX_MARKETS_QUOTED");
+    }
+
+    #[test]
+    fn unhedged_delta_enters_safe_mode() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        engine.update_unhedged_delta(11.0);
+
+        let decision = engine.evaluate_quote(&quote("m1", 1.0), 100);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "MAX_UNHEDGED_DELTA");
+        assert_eq!(engine.snapshot().killswitch, "SafeMode");
+    }
+
+    #[test]
+    fn reserve_and_release_update_open_exposure() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        engine.reserve_quote_exposure(&quote("m1", 3.0));
+        engine.reserve_quote_exposure(&quote("m1", 2.0));
+        engine.reserve_quote_exposure(&quote("m2", 4.0));
+
+        let snapshot = engine.snapshot();
+        assert_eq!(snapshot.open_notional, 9.0);
+        assert_eq!(snapshot.open_markets, 2);
+
+        engine.release_market_exposure("m1");
+        let snapshot = engine.snapshot();
+        assert_eq!(snapshot.open_notional, 4.0);
+        assert_eq!(snapshot.open_markets, 1);
+    }
+
+    #[test]
+    fn auto_halt_requires_force_reset_before_resume() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        engine.apply_realized_pnl(-1.0);
+
+        let denied = engine.evaluate_quote(&quote("m1", 1.0), 100);
+        assert!(!denied.allow);
+        assert!(engine.resume().is_err());
+
+        engine.force_reset();
+        let allowed = engine.evaluate_quote(&quote("m1", 1.0), 100);
+        assert!(allowed.allow);
+    }
+
+    #[test]
+    fn day_rollover_resets_daily_pnl_and_stale_books() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        {
+            let mut state = engine.state.write();
+            state.day_key = (2000, 1, 1);
+            state.daily_pnl = -5.0;
+            state.stale_books = 3;
+        }
+
+        let decision = engine.evaluate_quote(&quote("m1", 1.0), 100);
+        assert!(decision.allow);
+
+        let snapshot = engine.snapshot();
+        assert_eq!(snapshot.daily_pnl, 0.0);
+        assert_eq!(snapshot.stale_books, 0);
     }
 }
