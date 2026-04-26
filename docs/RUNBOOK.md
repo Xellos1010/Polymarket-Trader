@@ -67,6 +67,13 @@ Tiny live pilot guard:
 - `GET /ready`
 - `GET /metrics`
 
+## Operator Review Queue
+- `GET /api/v1/approval-queue`
+- This endpoint is informational and read-only.
+- It surfaces draft and cancel-requested workstation orders that still need human review.
+- It does not approve, place, or authorize live orders.
+- Durable queue persistence remains a separate follow-up; current queue visibility is derived from runtime state.
+
 ## Emergency Controls
 - Halt quoting: `POST /ops/halt`
 - Resume: `POST /ops/resume`
@@ -76,8 +83,9 @@ Tiny live pilot guard:
 1. Check kill-switch and risk state (`/state/risk`).
 2. Inspect recent executions (`/state/executions`).
 3. Verify market feed freshness (`/state/books`, `/state/history`).
-4. If exchange/hedge degraded, keep `halt` or `flatten` active.
-5. Preserve context snapshot:
+4. Inspect operator review state (`/api/v1/approval-queue`) for queued or cancel-requested orders.
+5. If exchange/hedge degraded, keep `halt` or `flatten` active.
+6. Preserve context snapshot:
    ```bash
    ./scripts/save_context.sh "incident note" docs/SESSION_CONTEXT.md config/config.toml
    ```
