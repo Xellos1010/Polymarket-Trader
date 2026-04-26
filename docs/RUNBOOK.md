@@ -15,6 +15,32 @@ Promote strategy-lab result to replay artifact:
 ./scripts/promote_strategy_lab.sh data/strategy_lab/<report>.json BTC-USD sma_baseline
 ```
 
+Replay acceptance check:
+```bash
+./scripts/replay_acceptance.sh data/replay/strategy_lab_promoted.ndjson data/tuning/strategy_lab_promoted.json data/output/pt.sqlite
+```
+
+Phase 1 evidence bundle:
+```bash
+./scripts/phase1_evidence_bundle.sh \
+  --bundle-dir data/evidence/phase1/20260426 \
+  --run-label run-001 \
+  --replay data/replay/strategy_lab_promoted.ndjson \
+  --promotion data/tuning/strategy_lab_promoted.json \
+  --sqlite data/output/pt.sqlite \
+  --paper-soak data/soak/paper-soak-20260426-010203.json \
+  --metrics data/evidence/run-001-metrics.json
+```
+
+Phase 1 gate report:
+```bash
+python3 tools/phase1_gate_report.py \
+  --bundle-dir data/evidence/phase1/20260426 \
+  --min-runs 3 \
+  --out-json data/evidence/phase1/20260426/report.json \
+  --out-md data/evidence/phase1/20260426/report.md
+```
+
 ## Live Readiness Gate
 ```bash
 cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000
