@@ -4,6 +4,7 @@ This workflow turns replay and paper artifacts into one operator-facing evidence
 
 It is intentionally strict:
 - a single profitable run is not enough
+- Phase 1 requires at least three independent runs
 - missing modeled-cost or risk-gate evidence is treated as incomplete
 - no live credentials or live mode are required
 
@@ -45,6 +46,8 @@ data/evidence/phase1/<bundle>/
 
 The bundle command always writes `manifest.json` and `replay_acceptance.json`. It copies `paper_soak.json` and `metrics.json` when those files are provided.
 
+The generated `manifest.json` includes `schema_version: 1`. The gate report treats a missing or mismatched manifest schema as incomplete evidence.
+
 ## Gate report command
 
 ```bash
@@ -56,9 +59,9 @@ python3 tools/phase1_gate_report.py \
 ```
 
 The report returns:
-- `pass` only when enough independent runs exist and every run clears replay, paper, modeled-cost, and risk-breach checks
-- `fail` when evidence shows a broken gate
-- `incomplete` when evidence is missing or the run count is below the required threshold
+- `pass` only when at least three independent runs exist, all run labels are unique, every run clears replay and paper checks, aggregate net PnL after costs is positive, and no hard risk breach is present
+- `fail` when any run shows a hard gate break such as negative net PnL after costs, a risk breach, replay failure, paper-soak failure, or unhedged-delta breach
+- `incomplete` when evidence is missing, malformed, uses the wrong manifest schema, or the run count is below the required threshold
 
 ## Expected metrics.json fields
 
@@ -86,9 +89,16 @@ These fields keep modeled-cost attribution and risk-gate evidence explicit. If t
 1. Promote a strategy-lab result into replay NDJSON.
 2. Run replay validation and optional SQLite evidence capture.
 3. Run a paper soak and keep its JSON report.
-4. Bundle each independent run under one dated bundle directory.
-5. Generate `report.json` and `report.md`.
-6. Update `docs/PROGRESS.md` and `docs/SESSION_CONTEXT.md` with the resulting status.
+4. Bundle each independent run under one dated bundle directory using unique run labels.
+5. Generate `report.json` and `report.md` from the full bundle directory.
+6. Treat any `incomplete` report as a blocker, not a soft pass.
+7. Update `docs/PROGRESS.md` and `docs/SESSION_CONTEXT.md` with the resulting status.
+
+## Deterministic test command
+
+```bash
+python3 -m unittest discover -s tests -p 'test_phase1_gate_report.py'
+```
 
 ## Safety
 
