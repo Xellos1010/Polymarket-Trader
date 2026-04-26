@@ -109,6 +109,97 @@ type StrategiesResponse = {
   imports: Array<{ import_id: string; path: string; markets: string[]; best_variants: string[] }>;
 };
 
+type ListingRadarRow = {
+  product_id: string;
+  asset_symbol: string;
+  base_currency: string;
+  quote_currency: string;
+  stage: string;
+  headline: string;
+  composite_score: number;
+  liquidity_score: number;
+  sentiment_score: number;
+  unlock_risk_score: number;
+  route_ready: boolean;
+  live_tradable: boolean;
+  scan_only: boolean;
+  priority_fill: boolean;
+  tags: string[];
+};
+
+type ProviderInsight = {
+  provider: string;
+  category: string;
+  summary: string;
+  freshness_label: string;
+  status: string;
+};
+
+type ListingVenueRoute = {
+  venue: string;
+  route_type: string;
+  readiness: string;
+  tradable: boolean;
+  notes: string;
+};
+
+type ListingRadarDetail = {
+  product: {
+    product_id: string;
+    base_currency: string;
+    quote_currency: string;
+    status: string;
+    live_tradable: boolean;
+    scan_only: boolean;
+  };
+  stage: string;
+  headline: string;
+  summary: string;
+  composite_score: number;
+  liquidity_score: number;
+  sentiment_score: number;
+  unlock_risk_score: number;
+  route_ready: boolean;
+  priority_fill: boolean;
+  catalysts: string[];
+  insights: ProviderInsight[];
+  routes: ListingVenueRoute[];
+  eligibility: TradingEligibility;
+  imports: Array<{ path: string; best_variants: string[] }>;
+};
+
+type RiskOverview = {
+  killswitch: string;
+  daily_pnl: number;
+  open_notional: number;
+  unhedged_delta: number;
+  blocked_markets: number;
+  live_eligible_markets: number;
+  queued_notional: number;
+  live_orders: number;
+  taker_orders: number;
+  policy_breaches: string[];
+};
+
+type AgentApprovalItem = {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  status: string;
+  product_id?: string | null;
+};
+
+type AgentConsoleView = {
+  autonomy_tier: string;
+  live_arm: LiveArmState;
+  next_action: string;
+  blocked_markets: number;
+  imports_loaded: number;
+  recommended_products: string[];
+  approvals: AgentApprovalItem[];
+};
+
 type WorkspaceTab = {
   id: WorkspaceId;
   label: string;
@@ -140,8 +231,12 @@ export default function App() {
   const [scanner, setScanner] = useState<ScannerRow[]>([]);
   const [orders, setOrders] = useState<WorkstationOrder[]>([]);
   const [strategies, setStrategies] = useState<StrategiesResponse | null>(null);
+  const [listingRows, setListingRows] = useState<ListingRadarRow[]>([]);
+  const [riskOverview, setRiskOverview] = useState<RiskOverview | null>(null);
+  const [agentConsole, setAgentConsole] = useState<AgentConsoleView | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<string>("");
   const [detail, setDetail] = useState<ProductDetail | null>(INITIAL_DETAIL);
+  const [listingDetail, setListingDetail] = useState<ListingRadarDetail | null>(null);
   const [modeDraft, setModeDraft] = useState("paper");
   const [importPath, setImportPath] = useState("");
   const [orderNotional, setOrderNotional] = useState("25");
@@ -156,20 +251,30 @@ export default function App() {
 
     async function tick() {
       try {
-        const [scannerRows, strategyState, orderRows] = await Promise.all([
-          getJson<ScannerRow[]>("/api/v1/scanner"),
-          getJson<StrategiesResponse>("/api/v1/strategies"),
-          getJson<WorkstationOrder[]>("/api/v1/orders"),
-        ]);
+        const [scannerRows, strategyState, orderRows, listingRadarRows, nextRiskOverview, nextAgentConsole] =
+          await Promise.all([
+            getJson<ScannerRow[]>("/api/v1/scanner"),
+            getJson<StrategiesResponse>("/api/v1/strategies"),
+            getJson<WorkstationOrder[]>("/api/v1/orders"),
+            getJson<ListingRadarRow[]>("/api/v1/listings"),
+            getJson<RiskOverview>("/api/v1/risk/overview"),
+            getJson<AgentConsoleView>("/api/v1/agent/console"),
+          ]);
         if (cancelled) {
           return;
         }
         setScanner(scannerRows);
         setStrategies(strategyState);
         setOrders(orderRows);
+        setListingRows(listingRadarRows);
+        setRiskOverview(nextRiskOverview);
+        setAgentConsole(nextAgentConsole);
         setModeDraft(strategyState.mode);
-        if (!selectedProduct && scannerRows.length > 0) {
-          setSelectedProduct(scannerRows[0].product_id);
+        if (!selectedProduct) {
+          const fallbackProduct = scannerRows[0]?.product_id ?? listingRadarRows[0]?.product_id;
+          if (fallbackProduct) {
+            setSelectedProduct(fallbackProduct);
+          }
         }
       } catch (nextError) {
         if (!cancelled) {
@@ -189,13 +294,18 @@ export default function App() {
   useEffect(() => {
     if (!selectedProduct) {
       setDetail(null);
+      setListingDetail(null);
       return;
     }
     let cancelled = false;
-    getJson<ProductDetail>(`/api/v1/products/${encodeURIComponent(selectedProduct)}`)
-      .then((payload) => {
+    Promise.all([
+      getJson<ProductDetail>(`/api/v1/products/${encodeURIComponent(selectedProduct)}`),
+      getJson<ListingRadarDetail>(`/api/v1/listings/${encodeURIComponent(selectedProduct)}`),
+    ])
+      .then(([productDetail, nextListingDetail]) => {
         if (!cancelled) {
-          setDetail(payload);
+          setDetail(productDetail);
+          setListingDetail(nextListingDetail);
         }
       })
       .catch((nextError) => {
@@ -216,26 +326,14 @@ export default function App() {
     return scanner.find((row) => row.product_id === selectedProduct) ?? null;
   }, [scanner, selectedProduct]);
 
-  const blockedCount = useMemo(
-    () => scanner.filter((row) => !row.current_risk_eligibility.eligible).length,
-    [scanner],
-  );
-  const liveEligibleCount = useMemo(
-    () =>
-      scanner.filter(
-        (row) => row.live_tradable && row.current_risk_eligibility.eligible && !row.scan_only,
-      ).length,
-    [scanner],
-  );
-  const takerOrders = useMemo(
-    () => orders.filter((order) => order.route === "taker").length,
-    [orders],
-  );
-  const liveOrders = useMemo(() => orders.filter((order) => order.live).length, [orders]);
-  const totalQueuedNotional = useMemo(
-    () => orders.reduce((sum, order) => sum + order.quote_notional, 0),
-    [orders],
-  );
+  const blockedCount = riskOverview?.blocked_markets ?? scanner.filter((row) => !row.current_risk_eligibility.eligible).length;
+  const liveEligibleCount =
+    riskOverview?.live_eligible_markets ??
+    scanner.filter((row) => row.live_tradable && row.current_risk_eligibility.eligible && !row.scan_only).length;
+  const takerOrders = riskOverview?.taker_orders ?? orders.filter((order) => order.route === "taker").length;
+  const liveOrders = riskOverview?.live_orders ?? orders.filter((order) => order.live).length;
+  const totalQueuedNotional =
+    riskOverview?.queued_notional ?? orders.reduce((sum, order) => sum + order.quote_notional, 0);
 
   async function postJson(path: string, body: object) {
     setBusy(path);
@@ -275,24 +373,25 @@ export default function App() {
           <div className="spotlight-band">
             <div>
               <p className="eyebrow">Primary catalyst</p>
-              <h2>{detail?.product.product_id ?? topRow?.product_id ?? "Awaiting catalyst"}</h2>
-              <p className="muted">
-                The listing radar blends scanner score, route readiness, strategy imports, and
-                policy eligibility into a single pre-launch research surface.
-              </p>
+              <h2>{listingDetail?.product.product_id ?? listingRows[0]?.product_id ?? "Awaiting catalyst"}</h2>
+              <p className="muted">{listingDetail?.summary ?? "Listing Radar is aggregating venue state, strategy evidence, and route readiness."}</p>
             </div>
             <div className="spotlight-stats">
               <div className="vector-card">
                 <span>Composite score</span>
-                <strong>{detail?.strategy.composite_score.toFixed(3) ?? "--"}</strong>
+                <strong>{listingDetail ? listingDetail.composite_score.toFixed(3) : "--"}</strong>
               </div>
               <div className="vector-card">
-                <span>Priority fill</span>
-                <strong>{detail?.strategy.priority_fill ? "Yes" : "No"}</strong>
+                <span>Liquidity score</span>
+                <strong>{listingDetail ? listingDetail.liquidity_score.toFixed(3) : "--"}</strong>
               </div>
               <div className="vector-card">
-                <span>Imports</span>
-                <strong>{detail?.imports.length ?? 0}</strong>
+                <span>Stage</span>
+                <strong>{listingDetail?.stage ?? "research"}</strong>
+              </div>
+              <div className="vector-card">
+                <span>Route ready</span>
+                <strong>{listingDetail?.route_ready ? "Yes" : "No"}</strong>
               </div>
             </div>
           </div>
@@ -301,26 +400,22 @@ export default function App() {
             <div className="panel">
               <div className="panel-title">
                 <h2>Listing Readiness Board</h2>
-                <span>{scanner.length} products watched</span>
+                <span>{listingRows.length} products watched</span>
               </div>
               <div className="candidate-grid">
-                {scanner.slice(0, 6).map((row) => (
+                {listingRows.slice(0, 6).map((row) => (
                   <article key={row.product_id} className="candidate-card">
                     <header>
                       <strong>{row.product_id}</strong>
-                      <span className={`score-pill ${scoreTone(row.score)}`}>
-                        {row.score.toFixed(3)}
+                      <span className={`score-pill ${scoreTone(row.composite_score)}`}>
+                        {row.composite_score.toFixed(3)}
                       </span>
                     </header>
-                    <p>
-                      {row.scan_only
-                        ? "Scan-only until venue trading state and policy gates advance."
-                        : "Tradable surface available once strategy and risk gates agree."}
-                    </p>
+                    <p>{row.headline}</p>
                     <div className="candidate-metrics">
-                      <span>{formatBps(row.spread_bps)} spread</span>
-                      <span>{formatPercent(row.fill_rate_estimate)} fill</span>
-                      <span>imb {row.imbalance.toFixed(2)}</span>
+                      <span>{row.stage}</span>
+                      <span>{formatPercent(row.liquidity_score)} liquidity</span>
+                      <span>{row.route_ready ? "route ready" : "research route"}</span>
                     </div>
                   </article>
                 ))}
@@ -330,18 +425,45 @@ export default function App() {
             <div className="panel">
               <div className="panel-title">
                 <h2>Provider Lanes</h2>
-                <span>Best-in-class targets</span>
+                <span>{listingDetail?.insights.length ?? 0} active</span>
               </div>
               <div className="provider-grid">
-                {[
-                  ["Coinbase/CDP", "listing states, custody-ready execution, wallet and agent primitives"],
-                  ["Dune + DeFiLlama", "onchain demand, TVL, fee and wallet growth context"],
-                  ["0x + Jupiter", "pre-listing route discovery and DEX execution simulation"],
-                  ["TradingView", "chart overlays, Pine alerts, operator-facing context"],
-                ].map(([name, detailLine]) => (
-                  <div key={name} className="provider-card">
-                    <strong>{name}</strong>
-                    <p>{detailLine}</p>
+                {(listingDetail?.insights ?? []).map((insight) => (
+                  <div key={`${insight.provider}-${insight.category}`} className="provider-card">
+                    <strong>{insight.provider}</strong>
+                    <p>{insight.summary}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="top-grid strategy-grid">
+            <div className="panel">
+              <div className="panel-title">
+                <h2>Catalysts</h2>
+                <span>{listingDetail?.catalysts.length ?? 0}</span>
+              </div>
+              <div className="reason-stack">
+                {(listingDetail?.catalysts ?? []).map((catalyst) => (
+                  <div key={catalyst} className="reason-card">
+                    <strong>Signal</strong>
+                    <p>{catalyst}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="panel">
+              <div className="panel-title">
+                <h2>Route Map</h2>
+                <span>{listingDetail?.routes.length ?? 0}</span>
+              </div>
+              <div className="reason-stack">
+                {(listingDetail?.routes ?? []).map((routeItem) => (
+                  <div key={`${routeItem.venue}-${routeItem.route_type}`} className="reason-card">
+                    <strong>{routeItem.venue}</strong>
+                    <p>{routeItem.notes}</p>
                   </div>
                 ))}
               </div>
@@ -358,7 +480,7 @@ export default function App() {
             <div className="panel">
               <div className="panel-title">
                 <h2>Guardrail Summary</h2>
-                <span>Always-on</span>
+                <span>{riskOverview?.killswitch ?? "Always-on"}</span>
               </div>
               <div className="metric-strip tall">
                 <div>
@@ -382,12 +504,12 @@ export default function App() {
 
             <div className="panel">
               <div className="panel-title">
-                <h2>Policy Reasons</h2>
-                <span>{selection?.product_id ?? "Scanner-driven"}</span>
+                <h2>Policy Breaches</h2>
+                <span>{selectedProduct || "Scanner-driven"}</span>
               </div>
               <div className="reason-stack">
-                {(detail?.eligibility.reasons.length ?? 0) > 0 ? (
-                  detail?.eligibility.reasons.map((reason) => (
+                {(riskOverview?.policy_breaches ?? detail?.eligibility.reasons ?? []).length > 0 ? (
+                  (riskOverview?.policy_breaches ?? detail?.eligibility.reasons ?? []).map((reason) => (
                     <div key={reason} className="reason-card">
                       <strong>Policy hold</strong>
                       <p>{reason}</p>
@@ -396,7 +518,7 @@ export default function App() {
                 ) : (
                   <div className="reason-card good">
                     <strong>Eligible</strong>
-                    <p>Current selection is clear for automated routing under the present policy.</p>
+                    <p>Current risk posture is clear for automated routing under the present policy.</p>
                   </div>
                 )}
               </div>
@@ -493,31 +615,28 @@ export default function App() {
           <div className="panel">
             <div className="panel-title">
               <h2>Agent Posture</h2>
-              <span>{strategies?.mode ?? "paper"}</span>
+              <span>{agentConsole?.autonomy_tier ?? strategies?.mode ?? "paper"}</span>
             </div>
             <div className="agent-grid">
               <div className="agent-card">
                 <span>Autonomy</span>
-                <strong>{liveArm?.armed ? "Bounded execute" : "Recommend only"}</strong>
+                <strong>{agentConsole?.autonomy_tier ?? (liveArm?.armed ? "bounded_execute" : "recommend_only")}</strong>
                 <p>
-                  Agent authority should remain capped by live arm state, strategy thresholds, and
-                  explicit route policy.
+                  Agent authority remains bounded by live arm state, strategy thresholds, approval queue,
+                  and explicit route policy.
                 </p>
               </div>
               <div className="agent-card">
                 <span>Next best action</span>
-                <strong>
-                  {blockedCount > 0 ? "Review blocked markets" : "Advance replay candidates"}
-                </strong>
+                <strong>{agentConsole?.next_action ?? "Waiting for operator context"}</strong>
                 <p>
-                  Use the scanner and strategy imports to choose what deserves replay promotion
-                  before any live escalation.
+                  Recommended products: {(agentConsole?.recommended_products ?? []).join(", ") || "none yet"}.
                 </p>
               </div>
               <div className="agent-card">
                 <span>Evidence set</span>
-                <strong>{strategies?.imports.length ?? 0} strategy imports</strong>
-                <p>Every agent recommendation should point back to replay, policy, or order evidence.</p>
+                <strong>{agentConsole?.imports_loaded ?? strategies?.imports.length ?? 0} strategy imports</strong>
+                <p>{agentConsole?.blocked_markets ?? blockedCount} blocked markets still require policy review.</p>
               </div>
             </div>
           </div>
@@ -525,17 +644,13 @@ export default function App() {
           <div className="panel">
             <div className="panel-title">
               <h2>Approval Queue</h2>
-              <span>Human in the loop</span>
+              <span>{agentConsole?.approvals.length ?? 0}</span>
             </div>
             <div className="reason-stack">
-              {[
-                "Enable taker routing for a specific strategy only after replay and paper evidence agree.",
-                "Approve new listing-radar provider adapters before they can influence live risk budgets.",
-                "Require human review before any capital moves onto a new chain or venue route.",
-              ].map((item) => (
-                <div key={item} className="reason-card">
-                  <strong>Approval required</strong>
-                  <p>{item}</p>
+              {(agentConsole?.approvals ?? []).map((item) => (
+                <div key={item.id} className="reason-card">
+                  <strong>{item.title}</strong>
+                  <p>{item.description}</p>
                 </div>
               ))}
             </div>
