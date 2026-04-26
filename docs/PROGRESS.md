@@ -21,6 +21,7 @@
 - Strategy-lab promotion tooling now converts selected market/variant into replay NDJSON for Rust replay mode.
 - Replay acceptance tooling now validates promoted replay NDJSON plus optional SQLite risk/execution evidence.
 - Phase 1 evidence bundle scaffolding now exists for dated run bundles plus a strict gate report (`scripts/phase1_evidence_bundle.sh`, `tools/phase1_gate_report.py`, `docs/PHASE1_EVIDENCE.md`).
+- The Phase 1 gate report now enforces a deterministic three-run repeatability standard with aggregate net-after-costs checks, manifest schema validation, and fixture-backed Python tests.
 
 ## In Progress
 
@@ -32,6 +33,7 @@
 
 1. Run the full Rust validation ladder in an environment with `cargo` and network access.
 2. Populate `data/evidence/phase1/<bundle>/` with three independent runs and generate `report.json` plus `report.md`.
-3. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
-4. Add mutation tests for risk and quote-critical logic.
-5. Configure hosted branch protections and required status checks.
+3. Persist dashboard approval queue state across restart/reload using `storage.sqlite_path`, keeping execution authority unchanged.
+4. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
+5. Add mutation tests for risk and quote-critical logic.
+6. Configure hosted branch protections and required status checks.
