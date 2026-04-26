@@ -8,14 +8,26 @@ use axum::{
 use chrono::Utc;
 use parking_lot::RwLock;
 use pt_core::{
-    Asset, ExecutionReport, KillSwitchState, LiveArmState, MarketHistoryPoint, MarketSnapshot,
-    MetricsRegistry, OrderRoute, ProductDetailView, ProductId, ProductStrategyConfigView,
+    AgentApprovalItem, AgentConsoleView, Asset, ExecutionReport, KillSwitchState,
+    ListingLifecycleStage, ListingRadarDetailView, ListingRadarRow, ListingVenueRoute,
+    LiveArmState, MarketHistoryPoint, MarketSnapshot, MetricsRegistry, OrderRoute,
+    ProductDetailView, ProductId, ProductStrategyConfigView, ProviderInsight, RiskOverviewView,
     RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
     WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+
+#[derive(Debug, Clone)]
+pub struct StoredPolicyEvent {
+    pub event_id: String,
+    pub event_type: String,
+    pub outcome: String,
+    pub summary: String,
+    pub product_id: Option<ProductId>,
+    pub created_at: chrono::DateTime<Utc>,
+}
 
 #[derive(Clone)]
 pub struct CoinbaseDashboardHandles {
@@ -27,6 +39,8 @@ pub struct CoinbaseDashboardHandles {
     pub orders: Arc<RwLock<Vec<WorkstationOrder>>>,
     pub strategies: Arc<RwLock<Vec<ProductStrategyConfigView>>>,
     pub imports: Arc<RwLock<Vec<StrategyLabImportSummary>>>,
+    pub policy_events: Arc<RwLock<Vec<StoredPolicyEvent>>>,
+    pub approval_queue: Arc<RwLock<Vec<AgentApprovalItem>>>,
 }
 
 impl Default for CoinbaseDashboardHandles {
@@ -40,6 +54,8 @@ impl Default for CoinbaseDashboardHandles {
             orders: Arc::new(RwLock::new(Vec::new())),
             strategies: Arc::new(RwLock::new(Vec::new())),
             imports: Arc::new(RwLock::new(Vec::new())),
+            policy_events: Arc::new(RwLock::new(Vec::new())),
+            approval_queue: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -83,6 +99,8 @@ pub struct CoinbaseDashboardState {
     pub orders: Arc<RwLock<Vec<WorkstationOrder>>>,
     pub strategies: Arc<RwLock<Vec<ProductStrategyConfigView>>>,
     pub imports: Arc<RwLock<Vec<StrategyLabImportSummary>>>,
+    pub policy_events: Arc<RwLock<Vec<StoredPolicyEvent>>>,
+    pub approval_queue: Arc<RwLock<Vec<AgentApprovalItem>>>,
 }
 
 #[derive(Clone)]
@@ -118,6 +136,8 @@ impl DashboardState {
                 orders: handles.coinbase.orders,
                 strategies: handles.coinbase.strategies,
                 imports: handles.coinbase.imports,
+                policy_events: handles.coinbase.policy_events,
+                approval_queue: handles.coinbase.approval_queue,
             },
         }
     }
@@ -234,6 +254,10 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/products", get(get_products))
         .route("/api/v1/scanner", get(get_scanner))
         .route("/api/v1/products/:product_id", get(get_product_detail))
+        .route("/api/v1/listings", get(get_listing_radar))
+        .route("/api/v1/listings/:product_id", get(get_listing_radar_detail))
+        .route("/api/v1/risk/overview", get(get_risk_overview))
+        .route("/api/v1/agent/console", get(get_agent_console))
         .route("/api/v1/orders", get(get_orders).post(post_order))
         .route("/api/v1/strategies", get(get_strategies))
         .route("/api/v1/mode", post(post_mode))
@@ -366,6 +390,13 @@ async fn get_inventory(State(state): State<DashboardState>) -> Json<InventoryVie
 
 async fn post_halt(State(state): State<DashboardState>) -> Json<Health> {
     *state.kill_switch.write() = KillSwitchState::ManualHalt;
+    record_policy_event(
+        &state,
+        "kill_switch",
+        "manual_halt",
+        "Operator placed the workstation into manual halt.",
+        None,
+    );
     Json(Health {
         status: "ok",
         kill_switch: "ManualHalt".to_string(),
@@ -374,6 +405,13 @@ async fn post_halt(State(state): State<DashboardState>) -> Json<Health> {
 
 async fn post_resume(State(state): State<DashboardState>) -> Json<Health> {
     *state.kill_switch.write() = KillSwitchState::Running;
+    record_policy_event(
+        &state,
+        "kill_switch",
+        "resume",
+        "Operator resumed the workstation from a halted posture.",
+        None,
+    );
     Json(Health {
         status: "ok",
         kill_switch: "Running".to_string(),
@@ -382,6 +420,13 @@ async fn post_resume(State(state): State<DashboardState>) -> Json<Health> {
 
 async fn post_flatten(State(state): State<DashboardState>) -> Json<Health> {
     *state.kill_switch.write() = KillSwitchState::SafeMode;
+    record_policy_event(
+        &state,
+        "kill_switch",
+        "safe_mode",
+        "Operator requested safe mode and flatten behavior.",
+        None,
+    );
     Json(Health {
         status: "ok",
         kill_switch: "SafeMode".to_string(),
@@ -475,6 +520,27 @@ async fn get_product_detail(
     Ok(Json(detail))
 }
 
+async fn get_listing_radar(State(state): State<DashboardState>) -> Json<Vec<ListingRadarRow>> {
+    Json(build_listing_radar_rows(&state))
+}
+
+async fn get_listing_radar_detail(
+    State(state): State<DashboardState>,
+    Path(product_id): Path<String>,
+) -> Result<Json<ListingRadarDetailView>, StatusCode> {
+    build_listing_radar_detail(&state, &product_id)
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+async fn get_risk_overview(State(state): State<DashboardState>) -> Json<RiskOverviewView> {
+    Json(build_risk_overview(&state))
+}
+
+async fn get_agent_console(State(state): State<DashboardState>) -> Json<AgentConsoleView> {
+    Json(build_agent_console(&state))
+}
+
 async fn get_orders(State(state): State<DashboardState>) -> Json<Vec<WorkstationOrder>> {
     let mut rows = state.coinbase.orders.read().clone();
     rows.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
@@ -509,9 +575,19 @@ async fn post_mode(
     let mut arm = state.coinbase.live_arm.write();
     arm.mode = Some(mode.clone());
     arm.updated_at = Some(Utc::now());
+    drop(arm);
+
+    record_policy_event(
+        &state,
+        "mode_change",
+        "accepted",
+        format!("Workstation mode changed to {mode} by the operator."),
+        None,
+    );
+
     let response = ModeResponse {
         mode,
-        live_arm: arm.clone(),
+        live_arm: state.coinbase.live_arm.read().clone(),
     };
     Ok(Json(response))
 }
@@ -529,11 +605,29 @@ async fn post_live_arm(
     arm.auto_disarm_reason = None;
     arm.armed_at = Some(now);
     arm.updated_at = Some(now);
+    drop(arm);
     *state.kill_switch.write() = KillSwitchState::Running;
+
+    set_approval_status(
+        &state.coinbase.approval_queue,
+        "approval-live-arm",
+        "approved",
+        Some("Operator explicitly armed live routing posture.".to_string()),
+    );
+    record_policy_event(
+        &state,
+        "live_arm",
+        "approved",
+        format!(
+            "Operator armed live routing while workstation mode was {}.",
+            mode
+        ),
+        None,
+    );
 
     Json(ModeResponse {
         mode,
-        live_arm: arm.clone(),
+        live_arm: state.coinbase.live_arm.read().clone(),
     })
 }
 
@@ -548,11 +642,20 @@ async fn post_live_disarm(
     arm.mode = Some(mode.clone());
     arm.reason = payload.reason.clone().or_else(|| Some("manual disarm".to_string()));
     arm.updated_at = Some(now);
+    drop(arm);
     *state.kill_switch.write() = KillSwitchState::ManualHalt;
+
+    record_policy_event(
+        &state,
+        "live_arm",
+        "disarmed",
+        format!("Operator disarmed live routing while workstation mode was {}.", mode),
+        None,
+    );
 
     Json(ModeResponse {
         mode,
-        live_arm: arm.clone(),
+        live_arm: state.coinbase.live_arm.read().clone(),
     })
 }
 
@@ -582,7 +685,7 @@ async fn post_order(
         product_id: ProductId::from(payload.product_id),
         instrument: None,
         side: Some(side),
-        route: Some(route),
+        route: Some(route.clone()),
         status: Some(status),
         live: state.coinbase.mode.read().as_str() == "live",
         post_only: payload.post_only.unwrap_or(true),
@@ -605,6 +708,51 @@ async fn post_order(
         updated_at: Some(now),
     };
     state.coinbase.orders.write().push(order.clone());
+
+    record_policy_event(
+        &state,
+        "order_queue",
+        if matches!(route, OrderRoute::Taker) {
+            "review_required"
+        } else {
+            "queued"
+        },
+        format!(
+            "Queued {} order for {} via {} routing.",
+            side_label(order.side.as_ref()),
+            order.product_id.as_str(),
+            route_label(Some(&route))
+        ),
+        Some(order.product_id.clone()),
+    );
+
+    if order.live || matches!(route, OrderRoute::Taker) {
+        upsert_approval_item(
+            &state.coinbase.approval_queue,
+            AgentApprovalItem {
+                id: format!("approval-order-{}", order.order_id),
+                title: if order.live {
+                    "Review live order escalation".to_string()
+                } else {
+                    "Review taker route escalation".to_string()
+                },
+                description: format!(
+                    "Order {} for {} was queued through {} routing and should be reviewed against replay and paper evidence.",
+                    order.order_id,
+                    order.product_id.as_str(),
+                    route_label(order.route.as_ref())
+                ),
+                severity: if order.live {
+                    "high".to_string()
+                } else {
+                    "medium".to_string()
+                },
+                status: "pending".to_string(),
+                product_id: Some(order.product_id.clone()),
+            },
+        );
+    }
+
     Ok(Json(order))
 }
 
@@ -629,6 +777,22 @@ async fn post_cancel_order(
     });
     order.reason = Some("cancel requested from dashboard".to_string());
     order.updated_at = Some(Utc::now());
+    let product_id = order.product_id.clone();
+    drop(orders);
+
+    set_approval_status(
+        &state.coinbase.approval_queue,
+        &format!("approval-order-{order_id}"),
+        "resolved",
+        Some("Order was canceled or marked for cancellation by the operator.".to_string()),
+    );
+    record_policy_event(
+        &state,
+        "order_cancel",
+        "operator_requested",
+        format!("Cancellation was requested for order {order_id} by the operator."),
+        Some(product_id),
+    );
 
     Ok(Json(ActionResponse {
         ok: true,
@@ -650,6 +814,25 @@ async fn post_strategy_lab_import(
         )
     })?;
     state.coinbase.imports.write().push(summary.clone());
+
+    set_approval_status(
+        &state.coinbase.approval_queue,
+        "approval-imports",
+        "approved",
+        Some("Strategy evidence is now attached to the workstation session.".to_string()),
+    );
+    record_policy_event(
+        &state,
+        "strategy_import",
+        "attached",
+        format!(
+            "Imported strategy-lab evidence from {} covering {} markets.",
+            summary.path,
+            summary.markets.len()
+        ),
+        None,
+    );
+
     Ok(Json(summary))
 }
 
@@ -711,6 +894,616 @@ fn strategy_view_to_vector(view: &ProductStrategyConfigView) -> pt_core::Strateg
         plugin_score: view.plugin_signal,
         action: Some(TradeAction::Hold),
         ..pt_core::StrategyVector::default()
+    }
+}
+
+fn listing_stage_for(product: &WorkstationProduct) -> ListingLifecycleStage {
+    let status = product.status.to_ascii_lowercase();
+    if product.live_tradable {
+        ListingLifecycleStage::FullTrading
+    } else if status.contains("auction") {
+        ListingLifecycleStage::Auction
+    } else if product.scan_only {
+        ListingLifecycleStage::TransferOnly
+    } else if product.trading_disabled {
+        ListingLifecycleStage::Monitoring
+    } else {
+        ListingLifecycleStage::Research
+    }
+}
+
+fn listing_stage_label(stage: &ListingLifecycleStage) -> &'static str {
+    match stage {
+        ListingLifecycleStage::Research => "research",
+        ListingLifecycleStage::Monitoring => "monitoring",
+        ListingLifecycleStage::TransferOnly => "transfer only",
+        ListingLifecycleStage::Auction => "auction",
+        ListingLifecycleStage::FullTrading => "full trading",
+    }
+}
+
+fn scanner_map(state: &DashboardState) -> HashMap<String, ScannerRow> {
+    state
+        .coinbase
+        .scanner
+        .read()
+        .iter()
+        .cloned()
+        .map(|row| (row.product_id.as_str().to_string(), row))
+        .collect()
+}
+
+fn imports_for_product(
+    imports: &[StrategyLabImportSummary],
+    product_id: &str,
+) -> Vec<StrategyLabImportSummary> {
+    imports
+        .iter()
+        .filter(|item| {
+            item.markets.iter().any(|market| market == product_id)
+                || item
+                    .best_variants
+                    .iter()
+                    .any(|variant| variant.starts_with(&format!("{product_id}:")))
+        })
+        .cloned()
+        .collect()
+}
+
+fn build_listing_radar_rows(state: &DashboardState) -> Vec<ListingRadarRow> {
+    let scanner = scanner_map(state);
+    let imports = state.coinbase.imports.read().clone();
+    let mut rows: Vec<ListingRadarRow> = state
+        .coinbase
+        .products
+        .read()
+        .iter()
+        .cloned()
+        .map(|product| {
+            let key = product.product_id.as_str().to_string();
+            let scanner_row = scanner.get(&key);
+            let stage = listing_stage_for(&product);
+            let composite_score = scanner_row.map(|row| row.score).unwrap_or_default();
+            let liquidity_score = scanner_row
+                .map(|row| ((row.fill_rate_estimate * 0.7) + (1.0 / (row.spread_bps + 1.0)) * 0.3).clamp(0.0, 1.0))
+                .unwrap_or(0.15);
+            let sentiment_score = scanner_row
+                .map(|row| ((row.tape_direction + row.imbalance) / 2.0).clamp(-1.0, 1.0))
+                .unwrap_or_default();
+            let unlock_risk_score = if product.scan_only { 0.72 } else { 0.28 };
+            let route_ready = product.live_tradable || !imports_for_product(&imports, &key).is_empty();
+            let priority_fill = scanner_row.map(|row| row.priority_fill).unwrap_or(false);
+            let headline = format!(
+                "{} is in {} with {} route posture",
+                product.product_id.as_str(),
+                listing_stage_label(&stage),
+                if route_ready { "ready" } else { "research" }
+            );
+            let mut tags = vec![product.base_currency.clone(), product.quote_currency.clone()];
+            tags.push(listing_stage_label(&stage).to_string());
+            if priority_fill {
+                tags.push("priority_fill".to_string());
+            }
+            if product.scan_only {
+                tags.push("scan_only".to_string());
+            }
+            if let Some(row) = scanner_row {
+                tags.push(row.active_strategy.clone());
+            }
+            ListingRadarRow {
+                product_id: product.product_id.clone(),
+                asset_symbol: product.base_currency.clone(),
+                base_currency: product.base_currency.clone(),
+                quote_currency: product.quote_currency.clone(),
+                stage,
+                headline,
+                composite_score,
+                liquidity_score,
+                sentiment_score,
+                unlock_risk_score,
+                route_ready,
+                live_tradable: product.live_tradable,
+                scan_only: product.scan_only,
+                priority_fill,
+                tags,
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        b.composite_score
+            .partial_cmp(&a.composite_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    rows
+}
+
+fn build_listing_radar_detail(
+    state: &DashboardState,
+    product_id: &str,
+) -> Option<ListingRadarDetailView> {
+    let product = state
+        .coinbase
+        .products
+        .read()
+        .iter()
+        .find(|product| product.product_id.as_str() == product_id)
+        .cloned()?;
+    let scanner = scanner_map(state);
+    let scanner_row = scanner.get(product_id).cloned();
+    let imports = imports_for_product(&state.coinbase.imports.read().clone(), product_id);
+    let stage = listing_stage_for(&product);
+    let composite_score = scanner_row.as_ref().map(|row| row.score).unwrap_or_default();
+    let liquidity_score = scanner_row
+        .as_ref()
+        .map(|row| ((row.fill_rate_estimate * 0.7) + (1.0 / (row.spread_bps + 1.0)) * 0.3).clamp(0.0, 1.0))
+        .unwrap_or(0.15);
+    let sentiment_score = scanner_row
+        .as_ref()
+        .map(|row| ((row.tape_direction + row.imbalance) / 2.0).clamp(-1.0, 1.0))
+        .unwrap_or_default();
+    let unlock_risk_score = if product.scan_only { 0.72 } else { 0.28 };
+    let route_ready = product.live_tradable || !imports.is_empty();
+    let priority_fill = scanner_row.as_ref().map(|row| row.priority_fill).unwrap_or(false);
+    let eligibility = scanner_row
+        .as_ref()
+        .map(|row| row.current_risk_eligibility.clone())
+        .unwrap_or_else(|| TradingEligibility {
+            product_id: product.product_id.clone(),
+            live_tradable: product.live_tradable,
+            scan_only: product.scan_only,
+            eligible: false,
+            reasons: vec!["listing radar item not yet scored by scanner".to_string()],
+        });
+    let headline = format!(
+        "{} is currently in {}",
+        product.product_id.as_str(),
+        listing_stage_label(&stage)
+    );
+    let summary = format!(
+        "{} routes through a {} execution posture with {} imports loaded.",
+        product.product_id.as_str(),
+        if route_ready { "ready" } else { "research" },
+        imports.len()
+    );
+    let mut catalysts = vec![format!(
+        "Current trading stage is {}.",
+        listing_stage_label(&stage)
+    )];
+    if priority_fill {
+        catalysts.push("Scanner currently flags this market for priority fill conditions.".to_string());
+    }
+    if product.scan_only {
+        catalysts.push("Market remains scan-only until venue state and route policy advance.".to_string());
+    }
+    if !imports.is_empty() {
+        catalysts.push(format!(
+            "{} strategy-lab imports already reference this market.",
+            imports.len()
+        ));
+    }
+    let insights = vec![
+        ProviderInsight {
+            provider: "Coinbase/CDP".to_string(),
+            category: "venue_state".to_string(),
+            summary: format!(
+                "Venue status is '{}' and live_tradable is {}.",
+                product.status,
+                product.live_tradable
+            ),
+            freshness_label: "realtime".to_string(),
+            status: if product.live_tradable {
+                "strong".to_string()
+            } else {
+                "watch".to_string()
+            },
+        },
+        ProviderInsight {
+            provider: "TradingView/Strategy Lab".to_string(),
+            category: "signal_context".to_string(),
+            summary: scanner_row
+                .as_ref()
+                .map(|row| format!(
+                    "Active strategy '{}' with score {:.3} and spread {:.2} bps.",
+                    row.active_strategy, row.score, row.spread_bps
+                ))
+                .unwrap_or_else(|| "No scanner vector has been attached yet.".to_string()),
+            freshness_label: "polling".to_string(),
+            status: if composite_score >= 0.35 {
+                "favorable".to_string()
+            } else {
+                "neutral".to_string()
+            },
+        },
+        ProviderInsight {
+            provider: "Dune/DeFiLlama".to_string(),
+            category: "research_lane".to_string(),
+            summary: "Research adapters are planned to contribute TVL, fee, and wallet growth context here.".to_string(),
+            freshness_label: "planned".to_string(),
+            status: "planned".to_string(),
+        },
+    ];
+    let routes = vec![
+        ListingVenueRoute {
+            venue: "Coinbase".to_string(),
+            route_type: "cex_primary".to_string(),
+            readiness: if product.live_tradable {
+                "ready".to_string()
+            } else {
+                "monitoring".to_string()
+            },
+            tradable: product.live_tradable,
+            notes: if product.live_tradable {
+                "Primary route available under current workstation policy.".to_string()
+            } else {
+                "Await full venue state before live execution.".to_string()
+            },
+        },
+        ListingVenueRoute {
+            venue: "DEX simulation".to_string(),
+            route_type: "pre_listing".to_string(),
+            readiness: if product.scan_only {
+                "research".to_string()
+            } else {
+                "watch".to_string()
+            },
+            tradable: false,
+            notes: "0x and Jupiter adapters should feed this lane in simulation before any multi-chain capital deployment.".to_string(),
+        },
+        ListingVenueRoute {
+            venue: "Strategy replay".to_string(),
+            route_type: "validation".to_string(),
+            readiness: if !imports.is_empty() {
+                "ready".to_string()
+            } else {
+                "missing_evidence".to_string()
+            },
+            tradable: false,
+            notes: "Replay promotion remains the approval gate before any route can escalate.".to_string(),
+        },
+    ];
+
+    Some(ListingRadarDetailView {
+        product,
+        stage,
+        headline,
+        summary,
+        composite_score,
+        liquidity_score,
+        sentiment_score,
+        unlock_risk_score,
+        route_ready,
+        priority_fill,
+        catalysts,
+        insights,
+        routes,
+        eligibility,
+        imports,
+    })
+}
+
+fn build_risk_overview(state: &DashboardState) -> RiskOverviewView {
+    ensure_policy_seed(state);
+    let approvals = sync_approval_queue(state);
+    let risk = state.risk_state.read().clone();
+    let scanner = state.coinbase.scanner.read().clone();
+    let orders = state.coinbase.orders.read().clone();
+    let blocked_markets = scanner
+        .iter()
+        .filter(|row| !row.current_risk_eligibility.eligible)
+        .count();
+    let live_eligible_markets = scanner
+        .iter()
+        .filter(|row| row.live_tradable && row.current_risk_eligibility.eligible && !row.scan_only)
+        .count();
+    let queued_notional = orders.iter().map(|order| order.quote_notional).sum::<f64>();
+    let live_orders = orders.iter().filter(|order| order.live).count();
+    let taker_orders = orders
+        .iter()
+        .filter(|order| matches!(order.route, Some(OrderRoute::Taker)))
+        .count();
+    let mut policy_breaches = Vec::new();
+    if blocked_markets > 0 {
+        policy_breaches.push(format!("{blocked_markets} markets are currently blocked by scanner policy."));
+    }
+    if risk.killswitch != "Running" {
+        policy_breaches.push(format!("Kill switch is currently {}.", risk.killswitch));
+    }
+    if !state.coinbase.live_arm.read().armed {
+        policy_breaches.push("Live arm is disarmed; only bounded recommendation flows should proceed.".to_string());
+    }
+    if taker_orders > 0 {
+        policy_breaches.push(format!("{taker_orders} taker orders are queued and should be reviewed against replay evidence."));
+    }
+    let pending_approvals = approvals.iter().filter(|item| item.status == "pending").count();
+    if pending_approvals > 0 {
+        policy_breaches.push(format!("{pending_approvals} approval queue items still need operator review."));
+    }
+    policy_breaches.extend(
+        state
+            .coinbase
+            .policy_events
+            .read()
+            .iter()
+            .rev()
+            .take(6)
+            .map(format_policy_event_summary),
+    );
+    RiskOverviewView {
+        killswitch: risk.killswitch,
+        daily_pnl: risk.daily_pnl,
+        open_notional: risk.open_notional,
+        unhedged_delta: risk.unhedged_delta,
+        blocked_markets,
+        live_eligible_markets,
+        queued_notional,
+        live_orders,
+        taker_orders,
+        policy_breaches,
+    }
+}
+
+fn build_agent_console(state: &DashboardState) -> AgentConsoleView {
+    ensure_policy_seed(state);
+    let live_arm = state.coinbase.live_arm.read().clone();
+    let scanner = state.coinbase.scanner.read().clone();
+    let imports = state.coinbase.imports.read().clone();
+    let approvals = sync_approval_queue(state);
+    let blocked_markets = scanner
+        .iter()
+        .filter(|row| !row.current_risk_eligibility.eligible)
+        .count();
+    let recommended_products = scanner
+        .iter()
+        .take(3)
+        .map(|row| row.product_id.clone())
+        .collect::<Vec<_>>();
+    let pending_approvals = approvals.iter().filter(|item| item.status == "pending").count();
+    let next_action = if pending_approvals > 0 {
+        format!(
+            "Work the approval queue first: {} item(s) still require explicit operator review.",
+            pending_approvals
+        )
+    } else if blocked_markets > 0 {
+        "Review blocked markets and route them back through replay or scanner policy adjustments.".to_string()
+    } else if imports.is_empty() {
+        "Import strategy-lab evidence and promote a replay candidate.".to_string()
+    } else if !live_arm.armed {
+        "Stay in recommend-only mode until a live-arm decision is explicitly recorded.".to_string()
+    } else {
+        "Monitor top-ranked markets and keep execution inside bounded policy.".to_string()
+    };
+    AgentConsoleView {
+        autonomy_tier: if live_arm.armed {
+            "bounded_execute".to_string()
+        } else {
+            "recommend_only".to_string()
+        },
+        live_arm,
+        next_action,
+        blocked_markets,
+        imports_loaded: imports.len(),
+        recommended_products,
+        approvals: approvals.into_iter().take(8).collect(),
+    }
+}
+
+fn ensure_policy_seed(state: &DashboardState) {
+    if !state.coinbase.policy_events.read().is_empty() {
+        return;
+    }
+    record_policy_event(
+        state,
+        "session_bootstrap",
+        "observed",
+        format!(
+            "Dashboard session initialized in {} mode with kill switch {:?}.",
+            state.coinbase.mode.read().clone(),
+            *state.kill_switch.read()
+        ),
+        None,
+    );
+}
+
+fn record_policy_event(
+    state: &DashboardState,
+    event_type: &str,
+    outcome: &str,
+    summary: impl Into<String>,
+    product_id: Option<ProductId>,
+) {
+    const MAX_POLICY_EVENTS: usize = 240;
+    let now = Utc::now();
+    let mut events = state.coinbase.policy_events.write();
+    events.push(StoredPolicyEvent {
+        event_id: format!("policy-{}", now.timestamp_millis()),
+        event_type: event_type.to_string(),
+        outcome: outcome.to_string(),
+        summary: summary.into(),
+        product_id,
+        created_at: now,
+    });
+    if events.len() > MAX_POLICY_EVENTS {
+        let overflow = events.len() - MAX_POLICY_EVENTS;
+        events.drain(0..overflow);
+    }
+}
+
+fn format_policy_event_summary(event: &StoredPolicyEvent) -> String {
+    let product = event
+        .product_id
+        .as_ref()
+        .map(|id| format!(" for {}", id.as_str()))
+        .unwrap_or_default();
+    format!(
+        "{} [{}:{}] {}{}",
+        event.created_at.format("%H:%M:%S"),
+        event.event_type,
+        event.outcome,
+        event.summary,
+        product
+    )
+}
+
+fn sync_approval_queue(state: &DashboardState) -> Vec<AgentApprovalItem> {
+    const MAX_APPROVAL_ITEMS: usize = 120;
+    let blocked_products = state
+        .coinbase
+        .scanner
+        .read()
+        .iter()
+        .filter(|row| !row.current_risk_eligibility.eligible)
+        .map(|row| row.product_id.clone())
+        .collect::<Vec<_>>();
+    let live_armed = state.coinbase.live_arm.read().armed;
+    let imports_loaded = !state.coinbase.imports.read().is_empty();
+
+    let mut queue = state.coinbase.approval_queue.write();
+
+    if !live_armed {
+        upsert_approval_locked(
+            &mut queue,
+            AgentApprovalItem {
+                id: "approval-live-arm".to_string(),
+                title: "Review live arming posture".to_string(),
+                description: "Keep autonomy in recommend-only mode until replay, paper, and route evidence are complete.".to_string(),
+                severity: "high".to_string(),
+                status: "pending".to_string(),
+                product_id: None,
+            },
+        );
+    } else {
+        set_approval_status_locked(
+            &mut queue,
+            "approval-live-arm",
+            "approved",
+            Some("Live-arm posture has already been explicitly approved in-session.".to_string()),
+        );
+    }
+
+    if !imports_loaded {
+        upsert_approval_locked(
+            &mut queue,
+            AgentApprovalItem {
+                id: "approval-imports".to_string(),
+                title: "Load strategy evidence".to_string(),
+                description: "Import strategy-lab outputs so agent recommendations can point to replayable evidence.".to_string(),
+                severity: "medium".to_string(),
+                status: "pending".to_string(),
+                product_id: None,
+            },
+        );
+    } else {
+        set_approval_status_locked(
+            &mut queue,
+            "approval-imports",
+            "approved",
+            Some("Strategy-lab evidence is now attached to this workstation session.".to_string()),
+        );
+    }
+
+    for product in &blocked_products {
+        let approval_id = format!("approval-policy-{}", product.as_str());
+        upsert_approval_locked(
+            &mut queue,
+            AgentApprovalItem {
+                id: approval_id,
+                title: "Resolve policy-blocked market".to_string(),
+                description: format!(
+                    "{} remains blocked by scanner policy and needs explicit review before any strategy escalation or route change.",
+                    product.as_str()
+                ),
+                severity: "medium".to_string(),
+                status: "pending".to_string(),
+                product_id: Some(product.clone()),
+            },
+        );
+    }
+
+    for item in queue.iter_mut() {
+        if item.id.starts_with("approval-policy-") {
+            let still_blocked = item
+                .product_id
+                .as_ref()
+                .map(|product| blocked_products.iter().any(|blocked| blocked == product))
+                .unwrap_or(false);
+            if !still_blocked && item.status == "pending" {
+                item.status = "resolved".to_string();
+                item.description = "Scanner no longer reports this market as policy-blocked.".to_string();
+            }
+        }
+    }
+
+    if queue.len() > MAX_APPROVAL_ITEMS {
+        let overflow = queue.len() - MAX_APPROVAL_ITEMS;
+        queue.drain(0..overflow);
+    }
+
+    let mut snapshot = queue.clone();
+    snapshot.sort_by_key(|item| approval_rank(&item.status));
+    snapshot
+}
+
+fn upsert_approval_item(store: &Arc<RwLock<Vec<AgentApprovalItem>>>, item: AgentApprovalItem) {
+    let mut queue = store.write();
+    upsert_approval_locked(&mut queue, item);
+}
+
+fn upsert_approval_locked(queue: &mut Vec<AgentApprovalItem>, item: AgentApprovalItem) {
+    if let Some(existing) = queue.iter_mut().find(|current| current.id == item.id) {
+        if existing.status == "pending" || item.status == "pending" {
+            *existing = item;
+        }
+    } else {
+        queue.push(item);
+    }
+}
+
+fn set_approval_status(
+    store: &Arc<RwLock<Vec<AgentApprovalItem>>>,
+    approval_id: &str,
+    status: &str,
+    description: Option<String>,
+) {
+    let mut queue = store.write();
+    set_approval_status_locked(&mut queue, approval_id, status, description);
+}
+
+fn set_approval_status_locked(
+    queue: &mut Vec<AgentApprovalItem>,
+    approval_id: &str,
+    status: &str,
+    description: Option<String>,
+) {
+    if let Some(existing) = queue.iter_mut().find(|current| current.id == approval_id) {
+        existing.status = status.to_string();
+        if let Some(next_description) = description {
+            existing.description = next_description;
+        }
+    }
+}
+
+fn approval_rank(status: &str) -> usize {
+    match status {
+        "pending" => 0,
+        "approved" => 1,
+        _ => 2,
+    }
+}
+
+fn side_label(side: Option<&Side>) -> &'static str {
+    match side {
+        Some(Side::Buy) => "buy",
+        Some(Side::Sell) => "sell",
+        None => "unknown",
+    }
+}
+
+fn route_label(route: Option<&OrderRoute>) -> &'static str {
+    match route {
+        Some(OrderRoute::Maker) => "maker",
+        Some(OrderRoute::Taker) => "taker",
+        Some(OrderRoute::ScanOnly) => "scan_only",
+        None => "unknown",
     }
 }
 
@@ -791,8 +1584,9 @@ const FRONTEND_FALLBACK_HTML: &str = r#"<!doctype html>
       <p>Core endpoints:</p>
       <p><a href="/api/v1/scanner">/api/v1/scanner</a></p>
       <p><a href="/api/v1/products">/api/v1/products</a></p>
-      <p><a href="/api/v1/orders">/api/v1/orders</a></p>
-      <p><a href="/api/v1/strategies">/api/v1/strategies</a></p>
+      <p><a href="/api/v1/listings">/api/v1/listings</a></p>
+      <p><a href="/api/v1/risk/overview">/api/v1/risk/overview</a></p>
+      <p><a href="/api/v1/agent/console">/api/v1/agent/console</a></p>
     </div>
   </main>
 </body>
