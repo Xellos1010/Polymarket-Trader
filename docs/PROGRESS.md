@@ -20,15 +20,18 @@
 - Persistent SQLite trade journal now records runs/trades and exposes per-market attribution summaries.
 - Strategy-lab promotion tooling now converts selected market/variant into replay NDJSON for Rust replay mode.
 - Replay acceptance tooling now validates promoted replay NDJSON plus optional SQLite risk/execution evidence.
+- Dashboard now exposes a read-only approval queue view for draft and cancel-requested workstation orders.
 
 ## In Progress
 
 - Validate promoted replay artifacts against `pt-cli` replay mode in a Rust-enabled environment.
 - Wire hosted branch protection/manual approval settings in GitHub.
+- Add durable approval-queue persistence behind the new read-only operator queue surface.
 
 ## Next Queue
 
 1. Run the full Rust validation ladder in an environment with `cargo` and network access.
-2. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
-3. Add mutation tests for risk and quote-critical logic.
-4. Configure hosted branch protections and required status checks.
+2. Add durable approval-queue persistence and restart recovery using `storage.sqlite_path`.
+3. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
+4. Add mutation tests for risk and quote-critical logic.
+5. Configure hosted branch protections and required status checks.
