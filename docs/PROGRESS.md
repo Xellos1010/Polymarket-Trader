@@ -25,6 +25,7 @@
 - Listing Radar is now backed by dashboard API endpoints with typed shared models and OpenAPI coverage.
 - Risk Cockpit and Agent Console now have backend summary endpoints instead of frontend-only placeholder content.
 - Sandbox optimization cycle tooling now exists in `tools/sandbox_optimizer_cycle.py` to run optimize -> backtest -> promote -> replay acceptance -> incumbent update.
+- Sandbox optimization daemon tooling now exists in `tools/sandbox_optimizer_daemon.py` to run the cycle repeatedly on a fixed interval for sandbox use.
 - Sandbox ROI roadmap now exists in `docs/product/SANDBOX_ROI_ROADMAP.md`.
 
 ## In Progress
@@ -32,12 +33,12 @@
 - Validate promoted replay artifacts against `pt-cli` replay mode in a Rust-enabled environment.
 - Wire hosted branch protection/manual approval settings in GitHub.
 - Run end-stage Rust/frontend validation for the expanded dashboard surface.
-- Turn the sandbox optimization cycle into a scheduled hourly workflow.
+- Turn the sandbox optimization cycle into a scheduled hourly workflow with operator-visible status.
 
 ## Next Queue
 
 1. Run the full Rust validation ladder in an environment with `cargo` and network access.
-2. Put the sandbox optimization cycle on an hourly schedule in sandbox mode only.
+2. Expose the sandbox optimizer daemon status, incumbent, latest candidate, and replay result in the dashboard.
 3. Add operator-visible incumbent/candidate/promotion evidence to the dashboard.
 4. Add fixture-driven frontend tests for workspace navigation and new listing/risk/agent API rendering.
 5. Add execution-policy and approval-queue persistence so the new workspaces move from derived summaries to durable audit history.
