@@ -32,6 +32,22 @@ Added local realtime homebase expansion:
 - Added config blocks: `ui`, `capital_plan`, `equities`.
 - Added SQLite runtime tables for capital/equity persistence.
 
+## 2026-04-26 Next Round Checkpoint
+- reviewed current `main`, open PRs #11, #12, #13, and #14, plus issues #9 and #10
+- confirmed the repo is still in Phase 1 and the next implementation blocker is restart-safe approval-queue persistence
+- queued the next focused coding slice in `docs/PHASE1_NEXT_ROUND_2026-04-26.md`
+- recommended merge/order sequence:
+  - PR #12 evidence gate
+  - PR #13 read-only approval queue API
+  - PR #11 frontend fixture safety net
+  - PR #14 close or supersede after implementation work is active
+  - next new code PR: issue #9 SQLite-backed workstation order persistence and startup hydration
+- parallel analysis results agreed on the narrowest safe path:
+  - persist workstation order lifecycle state using `storage.sqlite_path`
+  - hydrate persisted orders into runtime startup state
+  - keep execution authority unchanged and avoid new mutating approval APIs
+  - validate with create/update/reload coverage before any merge/deploy decision
+
 ## Runtime
 `rustc`: `rustc 1.93.1 (01f6ddf75 2026-02-11)`
 `cargo`: `cargo 1.93.1 (083ac5135 2025-12-15)`
