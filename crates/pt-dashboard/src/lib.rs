@@ -19,6 +19,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
+#[derive(Debug, Clone)]
+struct StoredPolicyEvent {
+    event_id: String,
+    event_type: String,
+    outcome: String,
+    summary: String,
+    product_id: Option<ProductId>,
+    created_at: chrono::DateTime<Utc>,
+}
+
 #[derive(Clone)]
 pub struct CoinbaseDashboardHandles {
     pub mode: Arc<RwLock<String>>,
@@ -29,6 +39,8 @@ pub struct CoinbaseDashboardHandles {
     pub orders: Arc<RwLock<Vec<WorkstationOrder>>>,
     pub strategies: Arc<RwLock<Vec<ProductStrategyConfigView>>>,
     pub imports: Arc<RwLock<Vec<StrategyLabImportSummary>>>,
+    pub policy_events: Arc<RwLock<Vec<StoredPolicyEvent>>>,
+    pub approval_queue: Arc<RwLock<Vec<AgentApprovalItem>>>,
 }
 
 impl Default for CoinbaseDashboardHandles {
@@ -42,6 +54,8 @@ impl Default for CoinbaseDashboardHandles {
             orders: Arc::new(RwLock::new(Vec::new())),
             strategies: Arc::new(RwLock::new(Vec::new())),
             imports: Arc::new(RwLock::new(Vec::new())),
+            policy_events: Arc::new(RwLock::new(Vec::new())),
+            approval_queue: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -85,6 +99,8 @@ pub struct CoinbaseDashboardState {
     pub orders: Arc<RwLock<Vec<WorkstationOrder>>>,
     pub strategies: Arc<RwLock<Vec<ProductStrategyConfigView>>>,
     pub imports: Arc<RwLock<Vec<StrategyLabImportSummary>>>,
+    pub policy_events: Arc<RwLock<Vec<StoredPolicyEvent>>>,
+    pub approval_queue: Arc<RwLock<Vec<AgentApprovalItem>>>,
 }
 
 #[derive(Clone)]
@@ -120,6 +136,8 @@ impl DashboardState {
                 orders: handles.coinbase.orders,
                 strategies: handles.coinbase.strategies,
                 imports: handles.coinbase.imports,
+                policy_events: handles.coinbase.policy_events,
+                approval_queue: handles.coinbase.approval_queue,
             },
         }
     }
@@ -372,6 +390,13 @@ async fn get_inventory(State(state): State<DashboardState>) -> Json<InventoryVie
 
 async fn post_halt(State(state): State<DashboardState>) -> Json<Health> {
     *state.kill_switch.write() = KillSwitchState::ManualHalt;
+    record_policy_event(
+        &state,
+        "kill_switch",
+        "manual_halt",
+        "Operator placed the workstation into manual halt.",
+        None,
+    );
     Json(Health {
         status: "ok",
         kill_switch: "ManualHalt".to_string(),
@@ -380,6 +405,13 @@ async fn post_halt(State(state): State<DashboardState>) -> Json<Health> {
 
 async fn post_resume(State(state): State<DashboardState>) -> Json<Health> {
     *state.kill_switch.write() = KillSwitchState::Running;
+    record_policy_event(
+        &state,
+        "kill_switch",
+        "resume",
+        "Operator resumed the workstation from a halted posture.",
+        None,
+    );
     Json(Health {
         status: "ok",
         kill_switch: "Running".to_string(),
@@ -388,6 +420,13 @@ async fn post_resume(State(state): State<DashboardState>) -> Json<Health> {
 
 async fn post_flatten(State(state): State<DashboardState>) -> Json<Health> {
     *state.kill_switch.write() = KillSwitchState::SafeMode;
+    record_policy_event(
+        &state,
+        "kill_switch",
+        "safe_mode",
+        "Operator requested safe mode and flatten behavior.",
+        None,
+    );
     Json(Health {
         status: "ok",
         kill_switch: "SafeMode".to_string(),
@@ -536,9 +575,19 @@ async fn post_mode(
     let mut arm = state.coinbase.live_arm.write();
     arm.mode = Some(mode.clone());
     arm.updated_at = Some(Utc::now());
+    drop(arm);
+
+    record_policy_event(
+        &state,
+        "mode_change",
+        "accepted",
+        format!("Workstation mode changed to {mode} by the operator."),
+        None,
+    );
+
     let response = ModeResponse {
         mode,
-        live_arm: arm.clone(),
+        live_arm: state.coinbase.live_arm.read().clone(),
     };
     Ok(Json(response))
 }
@@ -556,11 +605,29 @@ async fn post_live_arm(
     arm.auto_disarm_reason = None;
     arm.armed_at = Some(now);
     arm.updated_at = Some(now);
+    drop(arm);
     *state.kill_switch.write() = KillSwitchState::Running;
+
+    set_approval_status(
+        &state.coinbase.approval_queue,
+        "approval-live-arm",
+        "approved",
+        Some("Operator explicitly armed live routing posture.".to_string()),
+    );
+    record_policy_event(
+        &state,
+        "live_arm",
+        "approved",
+        format!(
+            "Operator armed live routing while workstation mode was {}.",
+            mode
+        ),
+        None,
+    );
 
     Json(ModeResponse {
         mode,
-        live_arm: arm.clone(),
+        live_arm: state.coinbase.live_arm.read().clone(),
     })
 }
 
@@ -575,11 +642,20 @@ async fn post_live_disarm(
     arm.mode = Some(mode.clone());
     arm.reason = payload.reason.clone().or_else(|| Some("manual disarm".to_string()));
     arm.updated_at = Some(now);
+    drop(arm);
     *state.kill_switch.write() = KillSwitchState::ManualHalt;
+
+    record_policy_event(
+        &state,
+        "live_arm",
+        "disarmed",
+        format!("Operator disarmed live routing while workstation mode was {}.", mode),
+        None,
+    );
 
     Json(ModeResponse {
         mode,
-        live_arm: arm.clone(),
+        live_arm: state.coinbase.live_arm.read().clone(),
     })
 }
 
@@ -609,7 +685,7 @@ async fn post_order(
         product_id: ProductId::from(payload.product_id),
         instrument: None,
         side: Some(side),
-        route: Some(route),
+        route: Some(route.clone()),
         status: Some(status),
         live: state.coinbase.mode.read().as_str() == "live",
         post_only: payload.post_only.unwrap_or(true),
@@ -632,6 +708,51 @@ async fn post_order(
         updated_at: Some(now),
     };
     state.coinbase.orders.write().push(order.clone());
+
+    record_policy_event(
+        &state,
+        "order_queue",
+        if matches!(route, OrderRoute::Taker) {
+            "review_required"
+        } else {
+            "queued"
+        },
+        format!(
+            "Queued {} order for {} via {} routing.",
+            side_label(order.side.as_ref()),
+            order.product_id.as_str(),
+            route_label(Some(&route))
+        ),
+        Some(order.product_id.clone()),
+    );
+
+    if order.live || matches!(route, OrderRoute::Taker) {
+        upsert_approval_item(
+            &state.coinbase.approval_queue,
+            AgentApprovalItem {
+                id: format!("approval-order-{}", order.order_id),
+                title: if order.live {
+                    "Review live order escalation".to_string()
+                } else {
+                    "Review taker route escalation".to_string()
+                },
+                description: format!(
+                    "Order {} for {} was queued through {} routing and should be reviewed against replay and paper evidence.",
+                    order.order_id,
+                    order.product_id.as_str(),
+                    route_label(order.route.as_ref())
+                ),
+                severity: if order.live {
+                    "high".to_string()
+                } else {
+                    "medium".to_string()
+                },
+                status: "pending".to_string(),
+                product_id: Some(order.product_id.clone()),
+            },
+        );
+    }
+
     Ok(Json(order))
 }
 
@@ -656,6 +777,22 @@ async fn post_cancel_order(
     });
     order.reason = Some("cancel requested from dashboard".to_string());
     order.updated_at = Some(Utc::now());
+    let product_id = order.product_id.clone();
+    drop(orders);
+
+    set_approval_status(
+        &state.coinbase.approval_queue,
+        &format!("approval-order-{order_id}"),
+        "resolved",
+        Some("Order was canceled or marked for cancellation by the operator.".to_string()),
+    );
+    record_policy_event(
+        &state,
+        "order_cancel",
+        "operator_requested",
+        format!("Cancellation was requested for order {order_id} by the operator."),
+        Some(product_id),
+    );
 
     Ok(Json(ActionResponse {
         ok: true,
@@ -677,6 +814,25 @@ async fn post_strategy_lab_import(
         )
     })?;
     state.coinbase.imports.write().push(summary.clone());
+
+    set_approval_status(
+        &state.coinbase.approval_queue,
+        "approval-imports",
+        "approved",
+        Some("Strategy evidence is now attached to the workstation session.".to_string()),
+    );
+    record_policy_event(
+        &state,
+        "strategy_import",
+        "attached",
+        format!(
+            "Imported strategy-lab evidence from {} covering {} markets.",
+            summary.path,
+            summary.markets.len()
+        ),
+        None,
+    );
+
     Ok(Json(summary))
 }
 
@@ -1026,6 +1182,8 @@ fn build_listing_radar_detail(
 }
 
 fn build_risk_overview(state: &DashboardState) -> RiskOverviewView {
+    ensure_policy_seed(state);
+    let approvals = sync_approval_queue(state);
     let risk = state.risk_state.read().clone();
     let scanner = state.coinbase.scanner.read().clone();
     let orders = state.coinbase.orders.read().clone();
@@ -1050,12 +1208,26 @@ fn build_risk_overview(state: &DashboardState) -> RiskOverviewView {
     if risk.killswitch != "Running" {
         policy_breaches.push(format!("Kill switch is currently {}.", risk.killswitch));
     }
-    if state.coinbase.live_arm.read().armed == false {
+    if !state.coinbase.live_arm.read().armed {
         policy_breaches.push("Live arm is disarmed; only bounded recommendation flows should proceed.".to_string());
     }
     if taker_orders > 0 {
         policy_breaches.push(format!("{taker_orders} taker orders are queued and should be reviewed against replay evidence."));
     }
+    let pending_approvals = approvals.iter().filter(|item| item.status == "pending").count();
+    if pending_approvals > 0 {
+        policy_breaches.push(format!("{pending_approvals} approval queue items still need operator review."));
+    }
+    policy_breaches.extend(
+        state
+            .coinbase
+            .policy_events
+            .read()
+            .iter()
+            .rev()
+            .take(6)
+            .map(format_policy_event_summary),
+    );
     RiskOverviewView {
         killswitch: risk.killswitch,
         daily_pnl: risk.daily_pnl,
@@ -1071,9 +1243,11 @@ fn build_risk_overview(state: &DashboardState) -> RiskOverviewView {
 }
 
 fn build_agent_console(state: &DashboardState) -> AgentConsoleView {
+    ensure_policy_seed(state);
     let live_arm = state.coinbase.live_arm.read().clone();
     let scanner = state.coinbase.scanner.read().clone();
     let imports = state.coinbase.imports.read().clone();
+    let approvals = sync_approval_queue(state);
     let blocked_markets = scanner
         .iter()
         .filter(|row| !row.current_risk_eligibility.eligible)
@@ -1083,47 +1257,18 @@ fn build_agent_console(state: &DashboardState) -> AgentConsoleView {
         .take(3)
         .map(|row| row.product_id.clone())
         .collect::<Vec<_>>();
-    let mut approvals = Vec::new();
-    if !live_arm.armed {
-        approvals.push(AgentApprovalItem {
-            id: "approval-live-arm".to_string(),
-            title: "Review live arming posture".to_string(),
-            description: "Keep autonomy in recommend-only mode until replay, paper, and route evidence are complete.".to_string(),
-            severity: "high".to_string(),
-            status: "pending".to_string(),
-            product_id: None,
-        });
-    }
-    if let Some(product) = scanner
-        .iter()
-        .find(|row| !row.current_risk_eligibility.eligible)
-        .map(|row| row.product_id.clone())
-    {
-        approvals.push(AgentApprovalItem {
-            id: format!("approval-policy-{}", product.as_str()),
-            title: "Resolve policy-blocked market".to_string(),
-            description: "Review blocked market conditions before any strategy escalation or route change.".to_string(),
-            severity: "medium".to_string(),
-            status: "pending".to_string(),
-            product_id: Some(product),
-        });
-    }
-    if imports.is_empty() {
-        approvals.push(AgentApprovalItem {
-            id: "approval-imports".to_string(),
-            title: "Load strategy evidence".to_string(),
-            description: "Import strategy-lab outputs so agent recommendations can point to replayable evidence.".to_string(),
-            severity: "medium".to_string(),
-            status: "pending".to_string(),
-            product_id: None,
-        });
-    }
-    let next_action = if blocked_markets > 0 {
+    let pending_approvals = approvals.iter().filter(|item| item.status == "pending").count();
+    let next_action = if pending_approvals > 0 {
+        format!(
+            "Work the approval queue first: {} item(s) still require explicit operator review.",
+            pending_approvals
+        )
+    } else if blocked_markets > 0 {
         "Review blocked markets and route them back through replay or scanner policy adjustments.".to_string()
     } else if imports.is_empty() {
         "Import strategy-lab evidence and promote a replay candidate.".to_string()
     } else if !live_arm.armed {
-        "Stay in recommend-only mode until the approval queue is cleared.".to_string()
+        "Stay in recommend-only mode until a live-arm decision is explicitly recorded.".to_string()
     } else {
         "Monitor top-ranked markets and keep execution inside bounded policy.".to_string()
     };
@@ -1138,7 +1283,227 @@ fn build_agent_console(state: &DashboardState) -> AgentConsoleView {
         blocked_markets,
         imports_loaded: imports.len(),
         recommended_products,
-        approvals,
+        approvals: approvals.into_iter().take(8).collect(),
+    }
+}
+
+fn ensure_policy_seed(state: &DashboardState) {
+    if !state.coinbase.policy_events.read().is_empty() {
+        return;
+    }
+    record_policy_event(
+        state,
+        "session_bootstrap",
+        "observed",
+        format!(
+            "Dashboard session initialized in {} mode with kill switch {:?}.",
+            state.coinbase.mode.read().clone(),
+            *state.kill_switch.read()
+        ),
+        None,
+    );
+}
+
+fn record_policy_event(
+    state: &DashboardState,
+    event_type: &str,
+    outcome: &str,
+    summary: impl Into<String>,
+    product_id: Option<ProductId>,
+) {
+    const MAX_POLICY_EVENTS: usize = 240;
+    let now = Utc::now();
+    let mut events = state.coinbase.policy_events.write();
+    events.push(StoredPolicyEvent {
+        event_id: format!("policy-{}", now.timestamp_millis()),
+        event_type: event_type.to_string(),
+        outcome: outcome.to_string(),
+        summary: summary.into(),
+        product_id,
+        created_at: now,
+    });
+    if events.len() > MAX_POLICY_EVENTS {
+        let overflow = events.len() - MAX_POLICY_EVENTS;
+        events.drain(0..overflow);
+    }
+}
+
+fn format_policy_event_summary(event: &StoredPolicyEvent) -> String {
+    let product = event
+        .product_id
+        .as_ref()
+        .map(|id| format!(" for {}", id.as_str()))
+        .unwrap_or_default();
+    format!(
+        "{} [{}:{}] {}{}",
+        event.created_at.format("%H:%M:%S"),
+        event.event_type,
+        event.outcome,
+        event.summary,
+        product
+    )
+}
+
+fn sync_approval_queue(state: &DashboardState) -> Vec<AgentApprovalItem> {
+    const MAX_APPROVAL_ITEMS: usize = 120;
+    let blocked_products = state
+        .coinbase
+        .scanner
+        .read()
+        .iter()
+        .filter(|row| !row.current_risk_eligibility.eligible)
+        .map(|row| row.product_id.clone())
+        .collect::<Vec<_>>();
+    let live_armed = state.coinbase.live_arm.read().armed;
+    let imports_loaded = !state.coinbase.imports.read().is_empty();
+
+    let mut queue = state.coinbase.approval_queue.write();
+
+    if !live_armed {
+        upsert_approval_locked(
+            &mut queue,
+            AgentApprovalItem {
+                id: "approval-live-arm".to_string(),
+                title: "Review live arming posture".to_string(),
+                description: "Keep autonomy in recommend-only mode until replay, paper, and route evidence are complete.".to_string(),
+                severity: "high".to_string(),
+                status: "pending".to_string(),
+                product_id: None,
+            },
+        );
+    } else {
+        set_approval_status_locked(
+            &mut queue,
+            "approval-live-arm",
+            "approved",
+            Some("Live-arm posture has already been explicitly approved in-session.".to_string()),
+        );
+    }
+
+    if !imports_loaded {
+        upsert_approval_locked(
+            &mut queue,
+            AgentApprovalItem {
+                id: "approval-imports".to_string(),
+                title: "Load strategy evidence".to_string(),
+                description: "Import strategy-lab outputs so agent recommendations can point to replayable evidence.".to_string(),
+                severity: "medium".to_string(),
+                status: "pending".to_string(),
+                product_id: None,
+            },
+        );
+    } else {
+        set_approval_status_locked(
+            &mut queue,
+            "approval-imports",
+            "approved",
+            Some("Strategy-lab evidence is now attached to this workstation session.".to_string()),
+        );
+    }
+
+    for product in &blocked_products {
+        let approval_id = format!("approval-policy-{}", product.as_str());
+        upsert_approval_locked(
+            &mut queue,
+            AgentApprovalItem {
+                id: approval_id,
+                title: "Resolve policy-blocked market".to_string(),
+                description: format!(
+                    "{} remains blocked by scanner policy and needs explicit review before any strategy escalation or route change.",
+                    product.as_str()
+                ),
+                severity: "medium".to_string(),
+                status: "pending".to_string(),
+                product_id: Some(product.clone()),
+            },
+        );
+    }
+
+    for item in queue.iter_mut() {
+        if item.id.starts_with("approval-policy-") {
+            let still_blocked = item
+                .product_id
+                .as_ref()
+                .map(|product| blocked_products.iter().any(|blocked| blocked == product))
+                .unwrap_or(false);
+            if !still_blocked && item.status == "pending" {
+                item.status = "resolved".to_string();
+                item.description = "Scanner no longer reports this market as policy-blocked.".to_string();
+            }
+        }
+    }
+
+    if queue.len() > MAX_APPROVAL_ITEMS {
+        let overflow = queue.len() - MAX_APPROVAL_ITEMS;
+        queue.drain(0..overflow);
+    }
+
+    let mut snapshot = queue.clone();
+    snapshot.sort_by_key(|item| approval_rank(&item.status));
+    snapshot
+}
+
+fn upsert_approval_item(store: &Arc<RwLock<Vec<AgentApprovalItem>>>, item: AgentApprovalItem) {
+    let mut queue = store.write();
+    upsert_approval_locked(&mut queue, item);
+}
+
+fn upsert_approval_locked(queue: &mut Vec<AgentApprovalItem>, item: AgentApprovalItem) {
+    if let Some(existing) = queue.iter_mut().find(|current| current.id == item.id) {
+        if existing.status == "pending" || item.status == "pending" {
+            *existing = item;
+        }
+    } else {
+        queue.push(item);
+    }
+}
+
+fn set_approval_status(
+    store: &Arc<RwLock<Vec<AgentApprovalItem>>>,
+    approval_id: &str,
+    status: &str,
+    description: Option<String>,
+) {
+    let mut queue = store.write();
+    set_approval_status_locked(&mut queue, approval_id, status, description);
+}
+
+fn set_approval_status_locked(
+    queue: &mut Vec<AgentApprovalItem>,
+    approval_id: &str,
+    status: &str,
+    description: Option<String>,
+) {
+    if let Some(existing) = queue.iter_mut().find(|current| current.id == approval_id) {
+        existing.status = status.to_string();
+        if let Some(next_description) = description {
+            existing.description = next_description;
+        }
+    }
+}
+
+fn approval_rank(status: &str) -> usize {
+    match status {
+        "pending" => 0,
+        "approved" => 1,
+        _ => 2,
+    }
+}
+
+fn side_label(side: Option<&Side>) -> &'static str {
+    match side {
+        Some(Side::Buy) => "buy",
+        Some(Side::Sell) => "sell",
+        None => "unknown",
+    }
+}
+
+fn route_label(route: Option<&OrderRoute>) -> &'static str {
+    match route {
+        Some(OrderRoute::Maker) => "maker",
+        Some(OrderRoute::Taker) => "taker",
+        Some(OrderRoute::ScanOnly) => "scan_only",
+        None => "unknown",
     }
 }
 
