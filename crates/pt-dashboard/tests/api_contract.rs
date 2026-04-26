@@ -103,24 +103,44 @@ fn fixture_state() -> DashboardState {
         one_way_persistence: 4,
         ts: Some(now),
     }];
-    *coinbase.orders.write() = vec![WorkstationOrder {
-        order_id: "cb-order-1".to_string(),
-        client_order_id: Some("client-1".to_string()),
-        product_id: ProductId::from("BTC-USD"),
-        instrument: Some(pt_core::Instrument::Spot),
-        side: Some(Side::Buy),
-        route: Some(pt_core::OrderRoute::Maker),
-        status: Some(WorkstationOrderStatus::Open),
-        live: false,
-        post_only: true,
-        limit_price: Some(59_990.0),
-        base_size: 0.01,
-        quote_notional: 250.0,
-        expected_net_bps: 12.0,
-        reason: Some("fixture".to_string()),
-        created_at: Some(now),
-        updated_at: Some(now),
-    }];
+    *coinbase.orders.write() = vec![
+        WorkstationOrder {
+            order_id: "cb-order-1".to_string(),
+            client_order_id: Some("client-1".to_string()),
+            product_id: ProductId::from("BTC-USD"),
+            instrument: Some(pt_core::Instrument::Spot),
+            side: Some(Side::Buy),
+            route: Some(pt_core::OrderRoute::Maker),
+            status: Some(WorkstationOrderStatus::Open),
+            live: false,
+            post_only: true,
+            limit_price: Some(59_990.0),
+            base_size: 0.01,
+            quote_notional: 250.0,
+            expected_net_bps: 12.0,
+            reason: Some("fixture".to_string()),
+            created_at: Some(now),
+            updated_at: Some(now),
+        },
+        WorkstationOrder {
+            order_id: "manual-order-1".to_string(),
+            client_order_id: Some("manual-client-1".to_string()),
+            product_id: ProductId::from("BTC-USD"),
+            instrument: Some(pt_core::Instrument::Spot),
+            side: Some(Side::Sell),
+            route: Some(pt_core::OrderRoute::Maker),
+            status: Some(WorkstationOrderStatus::Draft),
+            live: false,
+            post_only: true,
+            limit_price: Some(60_020.0),
+            base_size: 0.01,
+            quote_notional: 150.0,
+            expected_net_bps: 8.0,
+            reason: Some("manual review".to_string()),
+            created_at: Some(now),
+            updated_at: Some(now),
+        },
+    ];
     *coinbase.strategies.write() = vec![ProductStrategyConfigView {
         product_id: ProductId::from("BTC-USD"),
         strategy_name: "coinbase_microstructure".to_string(),
@@ -365,6 +385,7 @@ async fn state_endpoints_match_openapi_contract() {
             None,
         ),
         ("GET", "/api/v1/orders", "/api/v1/orders", None),
+        ("GET", "/api/v1/approval-queue", "/api/v1/approval-queue", None),
         ("GET", "/api/v1/strategies", "/api/v1/strategies", None),
         (
             "POST",
@@ -401,6 +422,66 @@ async fn state_endpoints_match_openapi_contract() {
     for (method, path, uri, body) in checks {
         assert_json_contract(app.clone(), &doc, method, path, uri, body).await;
     }
+}
+
+#[tokio::test]
+async fn approval_queue_endpoint_filters_to_operator_review_statuses() {
+    let app = router(fixture_state());
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/approval-queue")
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("bytes");
+    let rows: Value = serde_json::from_slice(&body).expect("json body");
+    let queue = rows.as_array().expect("queue array");
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue[0]["order_id"], "manual-order-1");
+    assert_eq!(queue[0]["queue_state"], "pending_review");
+    assert_eq!(queue[0]["requires_operator_action"], true);
+    assert_eq!(queue[0]["auto_execute"], false);
+
+    let cancel_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/orders/cb-order-1/cancel")
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    assert_eq!(cancel_response.status(), StatusCode::OK);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/approval-queue")
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("bytes");
+    let rows: Value = serde_json::from_slice(&body).expect("json body");
+    let queue = rows.as_array().expect("queue array");
+    assert_eq!(queue.len(), 2);
+    assert!(queue.iter().any(|row| row["queue_state"] == "cancel_requested"));
 }
 
 #[tokio::test]
@@ -448,6 +529,7 @@ fn openapi_contains_all_runtime_paths() {
         "/api/v1/scanner",
         "/api/v1/products/{product_id}",
         "/api/v1/orders",
+        "/api/v1/approval-queue",
         "/api/v1/strategies",
         "/api/v1/mode",
         "/api/v1/live/arm",
