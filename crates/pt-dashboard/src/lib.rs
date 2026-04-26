@@ -521,8 +521,8 @@ async fn get_approval_queue(State(state): State<DashboardState>) -> Json<Vec<App
                 queue_state: queue_state.to_string(),
                 requires_operator_action: true,
                 auto_execute: false,
-                created_at: order.created_at.map(|ts| ts.to_rfc3339()),
-                updated_at: order.updated_at.map(|ts| ts.to_rfc3339()),
+                created_at: order.created_at.as_ref().map(|ts| ts.to_rfc3339()),
+                updated_at: order.updated_at.as_ref().map(|ts| ts.to_rfc3339()),
             })
         })
         .collect::<Vec<_>>();
