@@ -21,6 +21,7 @@
 - Strategy-lab promotion tooling now converts selected market/variant into replay NDJSON for Rust replay mode.
 - Replay acceptance tooling now validates promoted replay NDJSON plus optional SQLite risk/execution evidence.
 - Dashboard now exposes a read-only approval queue view for draft and cancel-requested workstation orders.
+- Dashboard frontend now includes a read-only Approval Queue panel with fixture-backed UI tests on the stacked approval-queue branch.
 
 ## In Progress
 
