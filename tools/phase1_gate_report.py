@@ -3,8 +3,8 @@
 
 This report is intentionally conservative. It only returns a Phase 1 pass when
 there are enough independent runs and each run includes explicit modeled-cost
-and risk-gate evidence. Missing evidence is reported as incomplete rather than
-silently treated as success.
+and risk-gate evidence. Missing or malformed evidence is reported as
+incomplete rather than silently treated as success.
 """
 
 from __future__ import annotations
@@ -13,9 +13,11 @@ import argparse
 import datetime as dt
 import json
 import pathlib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 UTC = dt.timezone.utc
+MANIFEST_SCHEMA_VERSION = 1
+REQUIRED_MANIFEST_FIELDS = {"run_label", "generated_at", "schema_version", "artifacts"}
 REQUIRED_METRIC_FIELDS = {
     "net_pnl_after_costs",
     "fees",
@@ -40,14 +42,21 @@ RISK_BOOL_FIELDS = [
 ]
 
 
-def load_json(path: pathlib.Path) -> Dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def load_json_file(path: pathlib.Path) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    if not path.exists():
+        return None, f"missing {path.name}"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return None, f"{path.name} is invalid JSON: {exc}"
     if not isinstance(payload, dict):
-        raise ValueError(f"{path}: expected JSON object")
-    return payload
+        return None, f"{path.name} must contain a JSON object"
+    return payload, None
 
 
 def discover_run_dirs(bundle_dir: pathlib.Path) -> List[pathlib.Path]:
+    if not bundle_dir.exists():
+        return []
     run_dirs = []
     for child in sorted(bundle_dir.iterdir()):
         if child.is_dir() and (child / "manifest.json").exists():
@@ -67,8 +76,10 @@ def coerce_float(value: Any) -> Optional[float]:
     return None
 
 
-def run_status(run: Dict[str, Any], max_unhedged_delta: float) -> str:
+def run_status(run: Dict[str, Any]) -> str:
     checks = run["checks"]
+    if checks["manifest_valid"] is False:
+        return "incomplete"
     if checks["replay_acceptance"] is False:
         return "fail"
     if checks["paper_soak"] is False:
@@ -81,29 +92,57 @@ def run_status(run: Dict[str, Any], max_unhedged_delta: float) -> str:
         return "fail"
     if checks["risk_breaches_clear"] is False:
         return "fail"
-    if checks["replay_acceptance"] is None:
-        return "incomplete"
-    if checks["paper_soak"] is None:
-        return "incomplete"
-    if checks["max_abs_unhedged_delta_ok"] is None:
-        return "incomplete"
-    if checks["metrics_complete"] is None:
-        return "incomplete"
-    if checks["modeled_cost_roi_positive"] is None:
-        return "incomplete"
-    if checks["risk_breaches_clear"] is None:
+    if any(value is None for value in checks.values()):
         return "incomplete"
     return "pass"
 
 
+def validate_manifest(manifest: Optional[Dict[str, Any]]) -> Tuple[Optional[bool], List[str]]:
+    notes: List[str] = []
+    if manifest is None:
+        return None, notes
+
+    missing_fields = sorted(REQUIRED_MANIFEST_FIELDS - set(manifest))
+    if missing_fields:
+        notes.append("manifest.json missing fields: " + ", ".join(missing_fields))
+        return False, notes
+
+    if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
+        notes.append(
+            "manifest.json schema_version must equal "
+            f"{MANIFEST_SCHEMA_VERSION}, got {manifest.get('schema_version')!r}"
+        )
+        return False, notes
+
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, dict):
+        notes.append("manifest.json artifacts must be an object")
+        return False, notes
+
+    return True, notes
+
+
 def evaluate_run(run_dir: pathlib.Path, max_unhedged_delta: float) -> Dict[str, Any]:
-    manifest = load_json(run_dir / "manifest.json")
-    replay = load_json(run_dir / "replay_acceptance.json") if (run_dir / "replay_acceptance.json").exists() else None
-    paper = load_json(run_dir / "paper_soak.json") if (run_dir / "paper_soak.json").exists() else None
-    metrics = load_json(run_dir / "metrics.json") if (run_dir / "metrics.json").exists() else None
+    manifest, manifest_error = load_json_file(run_dir / "manifest.json")
+    replay, replay_error = load_json_file(run_dir / "replay_acceptance.json")
+    paper, paper_error = load_json_file(run_dir / "paper_soak.json")
+    metrics, metrics_error = load_json_file(run_dir / "metrics.json")
 
     notes: List[str] = []
+    if manifest_error:
+        notes.append(manifest_error)
+    if replay_error:
+        notes.append(replay_error)
+    if paper_error:
+        notes.append(paper_error)
+    if metrics_error:
+        notes.append(metrics_error)
+
+    manifest_valid, manifest_notes = validate_manifest(manifest)
+    notes.extend(manifest_notes)
+
     checks: Dict[str, Optional[bool]] = {
+        "manifest_valid": manifest_valid,
         "replay_acceptance": None,
         "paper_soak": None,
         "max_abs_unhedged_delta_ok": None,
@@ -111,13 +150,13 @@ def evaluate_run(run_dir: pathlib.Path, max_unhedged_delta: float) -> Dict[str, 
         "modeled_cost_roi_positive": None,
         "risk_breaches_clear": None,
     }
+    risk_breaches: List[str] = []
+    net_pnl_after_costs: Optional[float] = None
 
     if replay is not None:
         checks["replay_acceptance"] = replay.get("status") == "pass"
         if checks["replay_acceptance"] is False:
             notes.extend(str(item) for item in replay.get("failures", []))
-    else:
-        notes.append("missing replay_acceptance.json")
 
     if paper is not None:
         checks["paper_soak"] = coerce_bool(paper.get("pass"))
@@ -132,37 +171,45 @@ def evaluate_run(run_dir: pathlib.Path, max_unhedged_delta: float) -> Dict[str, 
                 )
         if checks["paper_soak"] is False:
             notes.append(f"paper_soak failed: {paper.get('reason', 'unknown')}")
-    else:
-        notes.append("missing paper_soak.json")
 
     if metrics is not None:
         missing_fields = sorted(REQUIRED_METRIC_FIELDS - set(metrics))
         checks["metrics_complete"] = not missing_fields
         if missing_fields:
             notes.append("metrics.json missing fields: " + ", ".join(missing_fields))
-        net_pnl = coerce_float(metrics.get("net_pnl_after_costs"))
-        checks["modeled_cost_roi_positive"] = None if net_pnl is None else net_pnl > 0
-        if net_pnl is not None and net_pnl <= 0:
-            notes.append(f"net_pnl_after_costs {net_pnl} <= 0")
-        risk_flags = [coerce_bool(metrics.get(field)) for field in RISK_BOOL_FIELDS]
-        if any(flag is None for flag in risk_flags):
+
+        net_pnl_after_costs = coerce_float(metrics.get("net_pnl_after_costs"))
+        checks["modeled_cost_roi_positive"] = (
+            None if net_pnl_after_costs is None else net_pnl_after_costs > 0
+        )
+        if net_pnl_after_costs is not None and net_pnl_after_costs <= 0:
+            notes.append(f"net_pnl_after_costs {net_pnl_after_costs} <= 0")
+
+        risk_flags = {field: coerce_bool(metrics.get(field)) for field in RISK_BOOL_FIELDS}
+        if any(flag is None for flag in risk_flags.values()):
             checks["risk_breaches_clear"] = None
         else:
-            checks["risk_breaches_clear"] = not any(risk_flags)
-            if any(risk_flags):
-                breached = [field for field in RISK_BOOL_FIELDS if metrics.get(field)]
-                notes.append("risk breaches flagged: " + ", ".join(breached))
-    else:
-        notes.append("missing metrics.json")
+            risk_breaches = [field for field, value in risk_flags.items() if value]
+            checks["risk_breaches_clear"] = not risk_breaches
+            if risk_breaches:
+                notes.append("risk breaches flagged: " + ", ".join(risk_breaches))
+
+    run_label = run_dir.name
+    generated_at = None
+    if manifest is not None:
+        run_label = str(manifest.get("run_label") or run_dir.name)
+        generated_at = manifest.get("generated_at")
 
     result = {
-        "run_label": manifest.get("run_label", run_dir.name),
-        "generated_at": manifest.get("generated_at"),
+        "run_label": run_label,
+        "generated_at": generated_at,
         "manifest": manifest,
         "checks": checks,
+        "net_pnl_after_costs": net_pnl_after_costs,
+        "risk_breaches": risk_breaches,
         "notes": notes,
     }
-    result["status"] = run_status(result, max_unhedged_delta=max_unhedged_delta)
+    result["status"] = run_status(result)
     return result
 
 
@@ -171,12 +218,28 @@ def summarize_runs(runs: List[Dict[str, Any]], min_runs: int) -> Dict[str, Any]:
     for run in runs:
         status_counts[run["status"]] = status_counts.get(run["status"], 0) + 1
 
+    run_labels = [run["run_label"] for run in runs]
+    unique_run_labels = len(set(run_labels)) == len(run_labels)
+    aggregate_net_pnl_after_costs = sum(
+        run["net_pnl_after_costs"] or 0.0 for run in runs if run["net_pnl_after_costs"] is not None
+    )
+
+    summary_notes: List[str] = []
     if len(runs) < min_runs:
-        gate = "incomplete"
-    elif status_counts.get("fail", 0) > 0:
+        summary_notes.append(f"run_count {len(runs)} < required_independent_runs {min_runs}")
+    if not unique_run_labels:
+        summary_notes.append("run labels must be unique to count as independent runs")
+    if aggregate_net_pnl_after_costs <= 0:
+        summary_notes.append(
+            f"aggregate_net_pnl_after_costs {aggregate_net_pnl_after_costs} <= 0"
+        )
+
+    if status_counts.get("fail", 0) > 0:
         gate = "fail"
-    elif status_counts.get("incomplete", 0) > 0:
+    elif len(runs) < min_runs or not unique_run_labels or status_counts.get("incomplete", 0) > 0:
         gate = "incomplete"
+    elif aggregate_net_pnl_after_costs <= 0:
+        gate = "fail"
     else:
         gate = "pass"
 
@@ -185,8 +248,11 @@ def summarize_runs(runs: List[Dict[str, Any]], min_runs: int) -> Dict[str, Any]:
         "generated_at": dt.datetime.now(tz=UTC).isoformat(),
         "required_independent_runs": min_runs,
         "run_count": len(runs),
+        "independence_ok": len(runs) >= min_runs and unique_run_labels,
+        "aggregate_net_pnl_after_costs": aggregate_net_pnl_after_costs,
         "status": gate,
         "status_counts": status_counts,
+        "notes": summary_notes,
     }
 
 
@@ -197,11 +263,20 @@ def render_markdown(summary: Dict[str, Any], runs: List[Dict[str, Any]]) -> str:
         f"- Status: `{summary['status']}`",
         f"- Required independent runs: `{summary['required_independent_runs']}`",
         f"- Run count: `{summary['run_count']}`",
+        f"- Independence ok: `{summary['independence_ok']}`",
+        f"- Aggregate net PnL after costs: `{summary['aggregate_net_pnl_after_costs']}`",
         f"- Generated at: `{summary['generated_at']}`",
         "",
-        "## Run Summary",
+        "## Summary Notes",
         "",
     ]
+    if summary["notes"]:
+        for note in summary["notes"]:
+            lines.append(f"- {note}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Run Summary", ""])
+
     for run in runs:
         lines.append(f"### {run['run_label']}")
         lines.append(f"- Status: `{run['status']}`")
@@ -210,11 +285,13 @@ def render_markdown(summary: Dict[str, Any], runs: List[Dict[str, Any]]) -> str:
         lines.append(
             f"- Max abs unhedged delta ok: `{run['checks']['max_abs_unhedged_delta_ok']}`"
         )
+        lines.append(f"- Manifest valid: `{run['checks']['manifest_valid']}`")
         lines.append(f"- Metrics complete: `{run['checks']['metrics_complete']}`")
         lines.append(
             f"- Net modeled-cost PnL positive: `{run['checks']['modeled_cost_roi_positive']}`"
         )
         lines.append(f"- Risk breaches clear: `{run['checks']['risk_breaches_clear']}`")
+        lines.append(f"- Net PnL after costs: `{run['net_pnl_after_costs']}`")
         if run["notes"]:
             lines.append("- Notes:")
             for note in run["notes"]:
