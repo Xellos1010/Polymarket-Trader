@@ -1,0 +1,63 @@
+[engine]
+mode = "paper"
+loop_ms = 500
+portfolio_id = "local_paper_guarded"
+
+[execution]
+mode = "maker_first"
+allow_taker_on_unwind_only = true
+post_only = true
+cancel_replace_cooldown_ms = 250
+min_rest_ms = 400
+stale_book_ms = 400
+
+[wallet]
+enabled = true
+mode = "assist"
+sync_secs = 10
+
+[risk]
+daily_loss_limit_pct = 0.01
+max_notional_per_market = 2.5
+max_total_open_notional = 10.0
+max_markets_quoted_simultaneously = 1
+max_unhedged_delta = 10.0
+max_order_age_secs = 20
+stale_book_threshold_ms = 400
+min_expected_net = 0.002
+
+[venues.kraken]
+enabled = true
+api_base = "https://api.kraken.com"
+ws_url = "wss://ws.kraken.com/v2"
+products = ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"]
+api_key = ""
+api_secret = ""
+passphrase = ""
+
+[venues.gemini]
+enabled = true
+api_base = "https://api.gemini.com"
+ws_url = "wss://api.gemini.com/v2/marketdata"
+products = ["BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD"]
+api_key = ""
+api_secret = ""
+passphrase = ""
+
+[ui]
+mode_default = "basic"
+
+[capital_plan]
+enabled = true
+daily_contribution_usd = 10.0
+tiers = [
+  { min_equity_usd = 0.0, reserve_pct = 0.0 },
+  { min_equity_usd = 250.0, reserve_pct = 0.20 },
+  { min_equity_usd = 500.0, reserve_pct = 0.30 },
+]
+
+[equities.paper]
+enabled = true
+
+[equities.live]
+enabled = false

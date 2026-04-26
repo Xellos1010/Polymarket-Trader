@@ -1,9 +1,10 @@
-# Coinbase Strategy Lab
+# Strategy Lab (Rust-First)
 
-Local-first visualization, strategy modification, and backtesting for Coinbase markets.
+Primary implementation is now Rust (`crates/pt-strategy-lab`) with Axum dashboard and CLI integration.
 
-## Files
+## Rust Commands
 
+Serve dashboard/API:
 - Tool: `tools/coinbase_strategy_lab.py`
 - Promotion tool: `tools/promote_strategy_lab.py`
 - Replay acceptance tool: `tools/replay_acceptance.py`
@@ -17,47 +18,93 @@ Local-first visualization, strategy modification, and backtesting for Coinbase m
 ## Setup
 
 ```bash
-cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json
+cargo run -p pt-cli -- strategy-lab-serve --bind 127.0.0.1:9090 --db data/strategy_lab/strategy_lab.sqlite
 ```
 
-## Modes
-
-### 1) Backtest
+Run backtest (next-bar fill model):
 
 ```bash
-python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json
+cargo run -p pt-cli -- strategy-backtest \
+  --product BTC-USD \
+  --granularity-sec 300 \
+  --limit 600 \
+  --out data/output/strategy_backtest_report.json
 ```
 
-### 2) Listing overlap (candle aligned)
+Run optimizer (random search + walk-forward):
 
 ```bash
-python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json
+cargo run -p pt-cli -- strategy-optimize \
+  --product BTC-USD \
+  --granularity-sec 300 \
+  --limit 600 \
+  --iterations 200 \
+  --walk-forward-splits 4 \
+  --out data/output/strategy_optimize_report.json
 ```
 
-The overlap chart aligns each asset series at its anchor candle (`anchor_time`) and compares forward candle movement (`+1`, `+3`, `+10`) independent of wall-clock timestamps.
-
-### 3) Optimization
+Load/save strategy profile versions:
 
 ```bash
-python3 tools/coinbase_strategy_lab.py optimize --config config/coinbase_strategy_lab.json
+cargo run -p pt-cli -- strategy-profile-load --profile-id default --out data/output/strategy_profile_default.json
+cargo run -p pt-cli -- strategy-profile-save --path data/output/strategy_profile_default.json --note "manual tuning"
 ```
 
-Objective:
+## Indicator Stack
 
-`score = avg_return - drawdown_penalty*avg_drawdown - turnover_penalty*trade_rate`
+Implemented indicator modules:
+- MA regime (`EMA/SMA/WMA/HMA/DEMA/TEMA/VWMA/RMA/ZLEMA`)
+- RSI
+- Fibonacci BB (VWMA basis + fib multiplier)
+- Ichimoku (conversion/base/span B + displacement)
+- MACD
+- ADX
+- ATR
+- Volume pressure/spike
+- VWAP deviation
+- StochRSI
 
-### 4) Unified dashboard
+Fusion model:
+- weighted confidence score in `[-1,1]`
+- buy threshold default `+0.60`
+- sell threshold default `-0.60`
+- minimum confluence default `2`
+- bull/bear/neutral regime gating
 
-```bash
-python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json
-```
+## Rust API Endpoints
 
-Serve locally:
+- `GET /lab/state/profile`
+- `POST /lab/profile/save`
+- `POST /lab/profile/load`
+- `POST /lab/backtest/run`
+- `POST /lab/optimize/run`
+- `GET /lab/state/indicators`
+- `GET /lab/state/signals`
+- `GET /lab/state/regime`
+- `GET /lab/state/runs`
+
+## SQLite Store
+
+Default: `data/strategy_lab/strategy_lab.sqlite`
+
+Key tables:
+- `strategy_profiles`
+- `strategy_profile_versions`
+- `strategy_runs`
+- `indicator_series`
+- `signal_series`
+- `regime_series`
+- `paper_endpoint_reports`
+
+## Python Fallback
+
+Legacy Python lab remains available for overlap experiments and cross-checking:
 
 ```bash
 python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090
 ```
 
+## Promotion Flow
 ## Strategy Variants and Plugins
 
 Backtest variants support baseline and plugin-driven comparisons side-by-side:
@@ -172,4 +219,8 @@ Use strategy-lab for market-level verification and the Pine pipeline for paramet
 4. Feed bias series into `external_bias_file` plugin
 5. Compare variant performance in dashboard/backtest
 
-Reference: `docs/PINE_TUNING.md`
+1. Tune in Rust strategy lab.
+2. Save best profile/version.
+3. Produce promoted candidate and replay artifacts.
+4. Verify with `pt-cli verify-promoted`.
+5. Run paper soak before tiny live.

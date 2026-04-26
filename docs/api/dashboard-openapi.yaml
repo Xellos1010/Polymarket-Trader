@@ -1,5 +1,8 @@
 openapi: 3.0.3
 info:
+  title: Polymarket Trader Operator API
+  version: 0.2.0
+  description: Operator and dashboard endpoints exposed by pt-dashboard.
   title: Coinbase Workstation Operator API
   version: 0.3.0
   description: Legacy operator endpoints plus Coinbase-native workstation APIs exposed by pt-dashboard.
@@ -115,6 +118,40 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ExecutionReport'
+  /state/execution/orders:
+    get:
+      summary: Execution lifecycle events
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExecutionEvent'
+  /state/execution/costs:
+    get:
+      summary: Execution cost attribution rows
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExecutionCostAttribution'
+  /state/execution/vectors:
+    get:
+      summary: Current execution vector policy
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionVectors'
   /state/bias:
     get:
       summary: Current fused asset bias
@@ -137,6 +174,344 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InventoryView'
+  /state/coinbase/wallet:
+    get:
+      summary: Coinbase wallet balances
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WalletBalance'
+  /state/coinbase/allocations:
+    get:
+      summary: Allocation drift rows
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AllocationDrift'
+  /state/coinbase/rebalance-plan:
+    get:
+      summary: Current rebalance plan and approval metadata
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RebalancePlanView'
+  /state/coinbase/orders:
+    get:
+      summary: Current Coinbase open orders snapshot
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CoinbaseOrderSummary'
+  /state/coinbase/orderbook:
+    get:
+      summary: Coinbase L2 in-memory orderbook snapshots
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CoinbaseOrderBookState'
+  /state/coinbase/auth:
+    get:
+      summary: Coinbase auth profile status (redacted)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinbaseAuthStatus'
+  /state/routes/opportunities:
+    get:
+      summary: Ranked conversion/route opportunities
+      parameters:
+        - in: query
+          name: venue_set
+          required: false
+          schema:
+            type: string
+          description: Comma-separated venue filter, e.g. `coinbase,kraken,gemini`.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RouteOpportunity'
+  /state/routes/executions:
+    get:
+      summary: Route execution plans (approved or assist-mode candidates)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RouteExecutionPlan'
+  /state/fees/summary:
+    get:
+      summary: Current Coinbase fee tier summary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinbaseTransactionSummary'
+  /state/listings/candidates:
+    get:
+      summary: Auto-discovered recently listed market candidates
+      parameters:
+        - in: query
+          name: window
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: granularity_sec
+          required: false
+          schema:
+            type: integer
+        - in: query
+          name: max_scan
+          required: false
+          schema:
+            type: integer
+        - in: query
+          name: max_results
+          required: false
+          schema:
+            type: integer
+        - in: query
+          name: min_candles
+          required: false
+          schema:
+            type: integer
+        - in: query
+          name: min_gap_candles
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingCandidatesResponse'
+  /state/listings/overlay:
+    post:
+      summary: Overlay and normalize listing cohorts for visual comparison
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingOverlayRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingOverlayResponse'
+  /state/listings/l2-archive:
+    get:
+      summary: In-memory Coinbase L2 archive summary for listing analysis
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/L2ArchiveResponse'
+  /state/feed/health:
+    get:
+      summary: Coinbase feed integrity and lifecycle counters
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedHealthResponse'
+  /state/feed/diagnostics:
+    get:
+      summary: Detailed Coinbase feed diagnostics and rolling reject/cancel rates
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedDiagnosticsResponse'
+  /state/parity/monitor:
+    get:
+      summary: Route parity monitor with strategy gate pass/fail reasons
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParityMonitorResponse'
+  /state/parity/export-csv:
+    post:
+      summary: Export parity monitor rows to server-side CSV artifact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParityCsvExportRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParityCsvExportResponse'
+  /state/venues/latency:
+    get:
+      summary: Venue lifecycle latency percentiles derived from execution events
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VenueLatencyStats'
+  /state/venues/capabilities:
+    get:
+      summary: Venue capability registry used by execution policy branching
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VenueCapability'
+  /state/venues/fill-quality:
+    get:
+      summary: Venue fill and reject quality rollups
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VenueFillQualityStats'
+  /state/venues/rejects:
+    get:
+      summary: Alias of venue fill-quality focused on reject/cancel stats
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VenueFillQualityStats'
+  /state/routes/export-csv:
+    post:
+      summary: Export route opportunities to server-side CSV artifact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteCsvExportRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteCsvExportResponse'
+  /state/wallet-intel/coinbase:
+    get:
+      summary: Wallet intel snapshots from authenticated Coinbase balances/drifts
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WalletIntelSnapshot'
+  /state/wallet-intel/polymarket:
+    get:
+      summary: Wallet intel snapshots derived from Polymarket universe and fused bias
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WalletIntelSnapshot'
+  /state/wallet-intel/leaderboard:
+    get:
+      summary: Wallet/route leaderboard-style snapshots for ranking and drift checks
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WalletIntelSnapshot'
+  /state/wallet-intel/export-csv:
+    post:
+      summary: Export wallet intel snapshots to server-side CSV artifact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletIntelExportRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletIntelExportResponse'
   /ops/halt:
     post:
       summary: Set manual halt
@@ -167,6 +542,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+  /ops/profile/pilot-ultra-tight:
+    post:
+      summary: Apply pilot ultra-tight execution profile
   /api/v1/products:
     get:
       summary: Coinbase product catalog in scope for the workstation
@@ -234,6 +612,16 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/Health'
+  /ops/coinbase/rebalance/approve:
+    post:
+      summary: Approve current rebalance plan with approval token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RebalanceApprovalRequest'
                 $ref: '#/components/schemas/ListingRadarDetailView'
   /api/v1/risk/overview:
     get:
@@ -285,6 +673,10 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/RebalanceApprovalResponse'
+  /ops/coinbase/rebalance/reject:
+    post:
+      summary: Reject current rebalance plan
                 $ref: '#/components/schemas/StrategiesResponse'
   /api/v1/mode:
     post:
@@ -295,6 +687,10 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/RebalanceApprovalResponse'
+  /ops/coinbase/auth/reload:
+    post:
+      summary: Reload active Coinbase auth profile
                 $ref: '#/components/schemas/ModeResponse'
   /api/v1/live/arm:
     post:
@@ -305,6 +701,16 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/AuthReloadResult'
+  /ops/coinbase/auth/switch-profile:
+    post:
+      summary: Switch Coinbase auth profile and reload credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoinbaseAuthSwitchRequest'
                 $ref: '#/components/schemas/ModeResponse'
   /api/v1/live/disarm:
     post:
@@ -315,6 +721,10 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/AuthReloadResult'
+  /ops/execution/unwind:
+    post:
+      summary: Guarded emergency unwind trigger
                 $ref: '#/components/schemas/ModeResponse'
   /api/v1/orders/{order_id}/cancel:
     post:
@@ -331,6 +741,10 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/Health'
+  /ops/unwind/now:
+    post:
+      summary: Alias for guarded emergency unwind trigger
                 $ref: '#/components/schemas/ActionResponse'
   /api/v1/strategy-lab/import:
     post:
@@ -341,6 +755,7 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/Health'
                 $ref: '#/components/schemas/StrategyLabImportSummary'
 components:
   schemas:
@@ -367,6 +782,7 @@ components:
       required: [market_id, token_id, bid, ask, spread, liquidity, ts]
       properties:
         market_id: { type: string }
+      
         token_id: { type: string }
         bid: { type: number }
         ask: { type: number }
@@ -430,6 +846,269 @@ components:
         details:
           type: string
           nullable: true
+    ExecutionEvent:
+      type: object
+      required: [order_id, venue, side, state, qty, price, ts]
+      properties:
+        order_id: { type: string }
+        venue: { type: string }
+        market_id:
+          type: string
+          nullable: true
+        product_id:
+          type: string
+          nullable: true
+        side: { type: string }
+        state: { type: string }
+        qty: { type: number }
+        price: { type: number }
+        ts:
+          type: string
+          format: date-time
+        details:
+          type: string
+          nullable: true
+        reason_code:
+          type: string
+          nullable: true
+        unwind_flag:
+          type: boolean
+    ExecutionCostAttribution:
+      type: object
+      required: [execution_id, venue, side, qty, avg_px, reference_px, fee_bps, fee_est, slippage_bps, slippage_est, rebate_bps_est, rebate_est, effective_edge, ts]
+      properties:
+        execution_id: { type: string }
+        venue: { type: string }
+        market_id:
+          type: string
+          nullable: true
+        side: { type: string }
+        qty: { type: number }
+        avg_px: { type: number }
+        reference_px: { type: number }
+        fee_bps: { type: number }
+        fee_est: { type: number }
+        slippage_bps: { type: number }
+        slippage_est: { type: number }
+        rebate_bps_est: { type: number }
+        rebate_est: { type: number }
+        effective_edge: { type: number }
+        ts:
+          type: string
+          format: date-time
+        strategy_class:
+          type: string
+          nullable: true
+        route_id:
+          type: string
+          nullable: true
+    ExecutionVectors:
+      type: object
+      required: [entry_max_slippage_bps, exit_max_slippage_bps, entry_offset_bps, exit_offset_bps, max_cross_bps_unwind]
+      properties:
+        entry_max_slippage_bps: { type: number }
+        exit_max_slippage_bps: { type: number }
+        entry_offset_bps: { type: number }
+        exit_offset_bps: { type: number }
+        max_cross_bps_unwind: { type: number }
+    WalletBalance:
+      type: object
+      required: [venue, account_id, asset, available, hold, usd_value, ts]
+      properties:
+        venue: { type: string }
+        account_id: { type: string }
+        asset: { type: string }
+        available: { type: number }
+        hold: { type: number }
+        usd_value: { type: number }
+        ts:
+          type: string
+          format: date-time
+    AllocationDrift:
+      type: object
+      required: [asset, current_weight, target_weight, drift_weight, current_usd, target_usd, drift_usd]
+      properties:
+        asset: { type: string }
+        current_weight: { type: number }
+        target_weight: { type: number }
+        drift_weight: { type: number }
+        current_usd: { type: number }
+        target_usd: { type: number }
+        drift_usd: { type: number }
+    RebalancePlanView:
+      type: object
+      required: [plan_id, status, intent_count, total_drift_abs_usd, created_ts, expires_ts, approval_required]
+      properties:
+        plan_id: { type: string }
+        status: { type: string }
+        intent_count: { type: integer }
+        total_drift_abs_usd: { type: number }
+        created_ts:
+          type: string
+          format: date-time
+        expires_ts:
+          type: string
+          format: date-time
+        approval_token_id:
+          type: string
+          nullable: true
+        approval_required: { type: boolean }
+        approval_expires_ts:
+          type: string
+          nullable: true
+          format: date-time
+    RebalanceApprovalRequest:
+      type: object
+      required: [token_id]
+      properties:
+        token_id: { type: string }
+    RebalanceApprovalResponse:
+      type: object
+      required: [ok, status]
+      properties:
+        ok: { type: boolean }
+        plan_id:
+          type: string
+          nullable: true
+        token_id:
+          type: string
+          nullable: true
+        status: { type: string }
+    CoinbaseOrderSummary:
+      type: object
+      required: [order_id, product_id, side, status, order_type, average_filled_price, filled_size]
+      properties:
+        order_id: { type: string }
+        product_id: { type: string }
+        side: { type: string }
+        status: { type: string }
+        order_type: { type: string }
+        average_filled_price: { type: string }
+        filled_size: { type: string }
+    CoinbaseOrderBookState:
+      type: object
+      required: [product_id, sequence_num, bids, asks]
+      properties:
+        product_id: { type: string }
+        sequence_num: { type: integer }
+        bids:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceLevelTuple'
+        asks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceLevelTuple'
+        last_event_ts:
+          type: string
+          format: date-time
+          nullable: true
+    CoinbaseAuthStatus:
+      type: object
+      required: [ok, reason, allow_hot_reload]
+      properties:
+        ok: { type: boolean }
+        profile_id:
+          type: string
+          nullable: true
+        key_id_suffix:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+        loaded_at:
+          type: string
+          format: date-time
+          nullable: true
+        reason: { type: string }
+        allow_hot_reload: { type: boolean }
+    CoinbaseAuthSwitchRequest:
+      type: object
+      required: [profile_id]
+      properties:
+        profile_id: { type: string }
+    AuthReloadResult:
+      type: object
+      required: [ok, reason, ts]
+      properties:
+        ok: { type: boolean }
+        profile_id:
+          type: string
+          nullable: true
+        key_id_suffix:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+        reason: { type: string }
+        ts:
+          type: string
+          format: date-time
+    PriceLevelTuple:
+      type: array
+      minItems: 2
+      maxItems: 2
+      items:
+        type: number
+    RouteLeg:
+      type: object
+      required: [product_id, side, input_asset, output_asset, price, size]
+      properties:
+        product_id: { type: string }
+        side: { type: string }
+        input_asset: { type: string }
+        output_asset: { type: string }
+        price: { type: number }
+        size: { type: number }
+    RouteOpportunity:
+      type: object
+      required: [route_id, legs, gross_edge_bps, expected_net_bps, expected_usd_profit, capital_required_usd, strategy_class, ts]
+      properties:
+        route_id: { type: string }
+        legs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteLeg'
+        gross_edge_bps: { type: number }
+        expected_net_bps: { type: number }
+        expected_usd_profit: { type: number }
+        capital_required_usd: { type: number }
+        strategy_class: { type: string }
+        ts:
+          type: string
+          format: date-time
+    RouteExecutionPlan:
+      type: object
+      required: [route_id, legs, approved, ts]
+      properties:
+        route_id: { type: string }
+        legs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteLeg'
+        approved: { type: boolean }
+        reason:
+          type: string
+          nullable: true
+        ts:
+          type: string
+          format: date-time
+    CoinbaseTransactionSummary:
+      type: object
+      nullable: true
+      required: [total_fees, raw]
+      properties:
+        total_fees: { type: number }
+        maker_fee_rate:
+          type: string
+          nullable: true
+        taker_fee_rate:
+          type: string
+          nullable: true
+        raw:
+          type: object
     BiasView:
       type: object
       required: [asset, bias]
@@ -441,6 +1120,348 @@ components:
       required: [inventory_usd]
       properties:
         inventory_usd: { type: number }
+    ListingCandidateView:
+      type: object
+      required: [product_id, label, quote_currency, source, anchor_time, first_window_volume, confidence_score]
+      properties:
+        product_id: { type: string }
+        label: { type: string }
+        quote_currency: { type: string }
+        source: { type: string }
+        anchor_time:
+          type: string
+          format: date-time
+        first_window_volume: { type: number }
+        confidence_score: { type: number }
+    ListingCandidatesResponse:
+      type: object
+      required: [window_preset, granularity_sec, candidates, diagnostics, fetched_ts]
+      properties:
+        window_preset: { type: string }
+        granularity_sec: { type: integer }
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingCandidateView'
+        diagnostics:
+          type: array
+          items:
+            type: string
+        fetched_ts:
+          type: string
+          format: date-time
+    ListingManualAnchor:
+      type: object
+      required: [product_id, anchor_time]
+      properties:
+        product_id: { type: string }
+        anchor_time:
+          type: string
+          format: date-time
+        label:
+          type: string
+          nullable: true
+    ListingOverlayRequest:
+      type: object
+      properties:
+        window_preset:
+          type: string
+          nullable: true
+        granularity_sec:
+          type: integer
+          nullable: true
+        alignment_mode:
+          type: string
+          nullable: true
+        normalization:
+          type: string
+          nullable: true
+        product_ids:
+          type: array
+          nullable: true
+          items:
+            type: string
+        max_scan:
+          type: integer
+          nullable: true
+        min_candles:
+          type: integer
+          nullable: true
+        min_gap_candles:
+          type: integer
+          nullable: true
+        manual_anchors:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/ListingManualAnchor'
+    ListingOverlaySeries:
+      type: object
+      required: [product_id, label, source, values, ts]
+      properties:
+        product_id: { type: string }
+        label: { type: string }
+        source: { type: string }
+        anchor_time:
+          type: string
+          nullable: true
+          format: date-time
+        values:
+          type: array
+          items:
+            type: number
+        ts:
+          type: array
+          items:
+            type: string
+            format: date-time
+    ListingSummaryRow:
+      type: object
+      required: [product_id, label, source, ret_1, ret_3, ret_10]
+      properties:
+        product_id: { type: string }
+        label: { type: string }
+        source: { type: string }
+        anchor_time:
+          type: string
+          nullable: true
+          format: date-time
+        ret_1: { type: number }
+        ret_3: { type: number }
+        ret_10: { type: number }
+    ListingOverlayResponse:
+      type: object
+      required: [ok, window_preset, granularity_sec, alignment_mode, normalization, x_axis, series, summary_rows, diagnostics, errors]
+      properties:
+        ok: { type: boolean }
+        window_preset: { type: string }
+        granularity_sec: { type: integer }
+        alignment_mode: { type: string }
+        normalization: { type: string }
+        x_axis:
+          type: array
+          items:
+            type: string
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingOverlaySeries'
+        summary_rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingSummaryRow'
+        diagnostics:
+          type: array
+          items:
+            type: string
+        errors:
+          type: array
+          items:
+            type: string
+    L2ArchiveRow:
+      type: object
+      required: [product_id, sequence_num, bid_levels, ask_levels]
+      properties:
+        product_id: { type: string }
+        sequence_num: { type: integer }
+        bid_levels: { type: integer }
+        ask_levels: { type: integer }
+        last_event_ts:
+          type: string
+          nullable: true
+          format: date-time
+    L2ArchiveResponse:
+      type: object
+      required: [rows, l2_update_count, sequence_gap_count]
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/L2ArchiveRow'
+        l2_update_count: { type: number }
+        sequence_gap_count: { type: number }
+    FeedHealthResponse:
+      type: object
+      required: [ws_healthy, heartbeat_seq, l2_updates, user_updates, reconnects, sequence_gaps, errors, timeout_streak, read_timeouts, ping_failures, heartbeat_timeouts, remote_closes, read_errors, connect_failures, reject_events_10m, cancel_events_10m]
+      properties:
+        ws_healthy: { type: boolean }
+        heartbeat_seq: { type: number }
+        heartbeat_age_ms:
+          type: integer
+          nullable: true
+        l2_updates: { type: number }
+        user_updates: { type: number }
+        reconnects: { type: number }
+        sequence_gaps: { type: number }
+        errors: { type: number }
+        timeout_streak: { type: number }
+        read_timeouts: { type: number }
+        ping_failures: { type: number }
+        heartbeat_timeouts: { type: number }
+        remote_closes: { type: number }
+        read_errors: { type: number }
+        connect_failures: { type: number }
+        reject_events_10m: { type: integer }
+        cancel_events_10m: { type: integer }
+    FeedDiagnosticsResponse:
+      type: object
+      required: [ws_healthy, stale_threshold_ms, heartbeat_seq, l2_updates, user_updates, reconnects, sequence_gaps, errors, timeout_streak, read_timeouts, ping_failures, heartbeat_timeouts, remote_closes, read_errors, connect_failures, reject_events_10m, cancel_events_10m, reject_rate_10m, cancel_rate_10m]
+      properties:
+        ws_healthy: { type: boolean }
+        stale_threshold_ms: { type: integer }
+        heartbeat_age_ms:
+          type: integer
+          nullable: true
+        heartbeat_seq: { type: number }
+        l2_updates: { type: number }
+        user_updates: { type: number }
+        reconnects: { type: number }
+        sequence_gaps: { type: number }
+        errors: { type: number }
+        timeout_streak: { type: number }
+        read_timeouts: { type: number }
+        ping_failures: { type: number }
+        heartbeat_timeouts: { type: number }
+        remote_closes: { type: number }
+        read_errors: { type: number }
+        connect_failures: { type: number }
+        reject_events_10m: { type: integer }
+        cancel_events_10m: { type: integer }
+        reject_rate_10m: { type: number }
+        cancel_rate_10m: { type: number }
+    VenueCapability:
+      type: object
+      required: [venue, supports_post_only, supports_amend, supports_fix, min_tick, min_size, fee_model]
+      properties:
+        venue: { type: string }
+        supports_post_only: { type: boolean }
+        supports_amend: { type: boolean }
+        supports_fix: { type: boolean }
+        min_tick: { type: number }
+        min_size: { type: number }
+        fee_model: { type: string }
+    VenueLatencyStats:
+      type: object
+      required: [venue, p50_ms, p95_ms, p99_ms, samples, ts]
+      properties:
+        venue: { type: string }
+        p50_ms: { type: number }
+        p95_ms: { type: number }
+        p99_ms: { type: number }
+        samples: { type: integer }
+        ts:
+          type: string
+          format: date-time
+    VenueFillQualityStats:
+      type: object
+      required: [venue, fills, rejects, cancels, reject_ratio, avg_slippage_bps, avg_effective_edge, ts]
+      properties:
+        venue: { type: string }
+        fills: { type: integer }
+        rejects: { type: integer }
+        cancels: { type: integer }
+        reject_ratio: { type: number }
+        avg_slippage_bps: { type: number }
+        avg_effective_edge: { type: number }
+        ts:
+          type: string
+          format: date-time
+    WalletIntelSnapshot:
+      type: object
+      required: [source, subject, metric, value, ts]
+      properties:
+        source: { type: string }
+        subject: { type: string }
+        metric: { type: string }
+        value: { type: number }
+        ts:
+          type: string
+          format: date-time
+    ParityMonitorRow:
+      type: object
+      required: [route_id, path, strategy_class, gross_edge_bps, expected_net_bps, min_required_bps, pass, reasons, expected_usd_profit, capital_required_usd, ts]
+      properties:
+        route_id: { type: string }
+        path: { type: string }
+        strategy_class: { type: string }
+        gross_edge_bps: { type: number }
+        expected_net_bps: { type: number }
+        min_required_bps: { type: number }
+        pass: { type: boolean }
+        reasons:
+          type: array
+          items:
+            type: string
+        expected_usd_profit: { type: number }
+        capital_required_usd: { type: number }
+        ts:
+          type: string
+          format: date-time
+    ParityMonitorResponse:
+      type: object
+      required: [feed_stale, rows]
+      properties:
+        feed_stale: { type: boolean }
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParityMonitorRow'
+    ParityCsvExportRequest:
+      type: object
+      properties:
+        limit:
+          type: integer
+          nullable: true
+        include_failures:
+          type: boolean
+          nullable: true
+    ParityCsvExportResponse:
+      type: object
+      required: [ok, row_count, message]
+      properties:
+        ok: { type: boolean }
+        row_count: { type: integer }
+        file_path:
+          type: string
+          nullable: true
+        message: { type: string }
+    RouteCsvExportRequest:
+      type: object
+      properties:
+        limit:
+          type: integer
+          nullable: true
+        min_expected_net_bps:
+          type: number
+          nullable: true
+    RouteCsvExportResponse:
+      type: object
+      required: [ok, row_count, message]
+      properties:
+        ok: { type: boolean }
+        row_count: { type: integer }
+        file_path:
+          type: string
+          nullable: true
+        message: { type: string }
+    WalletIntelExportRequest:
+      type: object
+      properties:
+        source:
+          type: string
+          nullable: true
+        limit:
+          type: integer
+          nullable: true
+    WalletIntelExportResponse:
+      type: object
+      required: [ok, row_count, message]
+      properties:
+        ok: { type: boolean }
+        row_count: { type: integer }
+        file_path:
+          type: string
+          nullable: true
     LiveArmState:
       type: object
       required: [armed]
