@@ -1,0 +1,30 @@
+{
+  "strategy_lab_config": "config/coinbase_strategy_lab.json",
+  "strategy_lab_out_dir": "data/strategy_lab",
+  "cycle_state_path": "data/strategy_lab/hourly_optimizer_state.json",
+  "cycle_history_dir": "data/strategy_lab/hourly_optimizer_runs",
+  "commands": {
+    "python": "python3"
+  },
+  "optimize": {
+    "disable_journal": false
+  },
+  "backtest": {
+    "disable_journal": false
+  },
+  "promotion": {
+    "replay_path": "data/replay/strategy_lab_promoted.ndjson",
+    "promotion_path": "data/tuning/strategy_lab_promoted.json",
+    "spread_bps": 2.0,
+    "liquidity": 10000.0,
+    "market_id_prefix": "coinbase-sim",
+    "token_id_prefix": "sim"
+  },
+  "replay_acceptance": {
+    "min_frames": 3
+  },
+  "promotion_gate": {
+    "require_acceptance_pass": true,
+    "min_score_delta": 0.0
+  }
+}

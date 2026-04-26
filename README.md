@@ -1,6 +1,6 @@
 # Polymarket Trader (Rust)
 
-Rust-first autonomous trading workspace for Polymarket crypto markets with Coinbase spot hedge support, hard risk controls, replay/paper/live modes, and operator dashboard.
+Rust-first trading workspace with a Coinbase-native workstation, replay/paper/live modes, legacy Polymarket support, hard risk controls, and operator tooling.
 
 ## Workspace crates
 
@@ -21,7 +21,7 @@ Rust-first autonomous trading workspace for Polymarket crypto markets with Coinb
 
 ```bash
 cp config/config.example.toml config/config.toml
-cargo run -p pt-cli -- run --config config/config.toml
+cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper
 ```
 
 Open dashboard:
@@ -82,6 +82,10 @@ Use `.env.example` as the baseline for local/dev shells.
 
 ## CLI utilities
 
+- Coinbase workstation:
+  - `cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper`
+  - `cargo run -p pt-cli -- coinbase up --config config/config.toml --mode replay`
+  - `cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000`
 - Live preflight gate:
   - `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
 - Wallet/execution operator shortcuts:
@@ -93,6 +97,9 @@ Use `.env.example` as the baseline for local/dev shells.
   - `cargo run -p pt-cli -- verify-promoted --artifact data/tuning/promoted_candidate.json --out data/output/replay_acceptance_report.json`
 - Journal comparative export:
   - `cargo run -p pt-cli -- report-variants --journal data/strategy_lab/trade_journal.sqlite --out-csv data/output/variant_report.csv --out-md data/output/variant_report.md`
+- Maker opportunity scan (live orderbook spread/entry ranking):
+  - `cargo run -p pt-cli -- scan-markets --config config/config.toml --limit 60 --top 15`
+  - tune assumptions: `cargo run -p pt-cli -- scan-markets --config config/config.toml --adverse-sel-est 0.0025 --hedge-cost-est 0.0008 --gas-amortized-est 0.0003`
 - Extract Pine parameters:
   - `cargo run -p pt-cli -- pine-params --path pine-scripts/<script> --out data/tuning/pine_params.json`
 - Generate/tune Pine candidates:

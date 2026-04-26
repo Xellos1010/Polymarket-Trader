@@ -1,0 +1,9 @@
+source,subject,metric,value,ts
+polymarket,BTC,wallet_bias,0.2000000000,2026-03-01T01:44:56.180120+00:00
+polymarket,market_universe,active_markets,0.0000000000,2026-03-01T01:44:56.180120+00:00
+coinbase,BTC,drift_usd,800.0000000000,2026-03-01T01:44:56.180119+00:00
+leaderboard,#1:acc-1:BTC,usd_value,5000.0000000000,2026-03-01T01:44:56.152562+00:00
+leaderboard,#1:route:route-1,expected_usd_profit,0.2000000000,2026-03-01T01:44:56.152562+00:00
+coinbase,acc-1:BTC,available,0.1000000000,2026-03-01T01:44:56.152562+00:00
+coinbase,acc-1:BTC,hold,0.0000000000,2026-03-01T01:44:56.152562+00:00
+coinbase,acc-1:BTC,usd_value,5000.0000000000,2026-03-01T01:44:56.152562+00:00

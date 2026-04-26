@@ -46,6 +46,21 @@ sudo systemctl restart pt-engine
 sudo journalctl -u pt-engine -f
 ```
 
+## 6A. Maker-first market selection (before enabling live)
+Use the scanner to evaluate spread-rich markets and generate maker-biased entry levels from real-time orderbook tops:
+
+```bash
+cargo run -p pt-cli -- scan-markets --config config/config.toml --limit 60 --top 15
+```
+
+Tune assumptions to match your EC2/live environment and hedge friction:
+
+```bash
+cargo run -p pt-cli -- scan-markets --config config/config.toml   --adverse-sel-est 0.0025 --hedge-cost-est 0.0008 --gas-amortized-est 0.0003
+```
+
+The live Polymarket executor already enforces `post_only=true`, which keeps entries maker-side when the venue accepts the quote.
+
 ## 6. Verify
 
 ```bash

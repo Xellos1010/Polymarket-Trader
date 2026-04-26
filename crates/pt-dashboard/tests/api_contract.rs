@@ -13,6 +13,13 @@ use pt_core::{
 };
 use pt_dashboard::{router, DashboardState};
 use serde_json::{json, Value};
+    Asset, ExecutionReport, ExecutionStatus, KillSwitchState, LiveArmState, MarketHistoryPoint,
+    MarketSnapshot, MetricsRegistry, ProductDetailView, ProductId, ProductStrategyConfigView,
+    RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
+    WorkstationOrder, WorkstationOrderStatus, WorkstationProduct, Venue,
+};
+use pt_dashboard::{router, CoinbaseDashboardHandles, DashboardHandles, DashboardState};
+use serde_json::Value;
 use std::{collections::HashMap, fs, sync::Arc};
 use tower::util::ServiceExt;
 
@@ -241,9 +248,130 @@ fn fixture_state() -> DashboardState {
     let mut bias = HashMap::new();
     bias.insert(Asset::Btc, 0.2);
 
-    DashboardState::new(
-        Arc::new(MetricsRegistry::default()),
-        Arc::new(RwLock::new(RiskState {
+    let coinbase = CoinbaseDashboardHandles::default();
+    *coinbase.mode.write() = "paper".to_string();
+    *coinbase.live_arm.write() = LiveArmState {
+        armed: false,
+        mode: Some("paper".to_string()),
+        ..LiveArmState::default()
+    };
+    *coinbase.products.write() = vec![WorkstationProduct {
+        product_id: ProductId::from("BTC-USD"),
+        instrument: Some(pt_core::Instrument::Spot),
+        base_currency: "BTC".to_string(),
+        quote_currency: "USD".to_string(),
+        status: "online".to_string(),
+        price: 60_000.0,
+        volume_24h: 1_000_000.0,
+        live_tradable: true,
+        scan_only: false,
+        trading_disabled: false,
+    }];
+    *coinbase.scanner.write() = vec![ScannerRow {
+        product_id: ProductId::from("BTC-USD"),
+        instrument: Some(pt_core::Instrument::Spot),
+        live_tradable: true,
+        scan_only: false,
+        spread_bps: 4.0,
+        imbalance: 0.42,
+        tape_direction: 0.35,
+        realized_volatility: 0.12,
+        fill_rate_estimate: 0.67,
+        active_strategy: "coinbase_microstructure".to_string(),
+        score: 0.88,
+        current_risk_eligibility: TradingEligibility {
+            product_id: ProductId::from("BTC-USD"),
+            live_tradable: true,
+            scan_only: false,
+            eligible: true,
+            reasons: Vec::new(),
+        },
+        best_bid: 59_990.0,
+        best_ask: 60_010.0,
+        mid_price: 60_000.0,
+        action: Some(TradeAction::Buy),
+        priority_fill: true,
+        one_way_persistence: 4,
+        ts: Some(now),
+    }];
+    *coinbase.orders.write() = vec![WorkstationOrder {
+        order_id: "cb-order-1".to_string(),
+        client_order_id: Some("client-1".to_string()),
+        product_id: ProductId::from("BTC-USD"),
+        instrument: Some(pt_core::Instrument::Spot),
+        side: Some(Side::Buy),
+        route: Some(pt_core::OrderRoute::Maker),
+        status: Some(WorkstationOrderStatus::Open),
+        live: false,
+        post_only: true,
+        limit_price: Some(59_990.0),
+        base_size: 0.01,
+        quote_notional: 250.0,
+        expected_net_bps: 12.0,
+        reason: Some("fixture".to_string()),
+        created_at: Some(now),
+        updated_at: Some(now),
+    }];
+    *coinbase.strategies.write() = vec![ProductStrategyConfigView {
+        product_id: ProductId::from("BTC-USD"),
+        strategy_name: "coinbase_microstructure".to_string(),
+        enabled: true,
+        live_enabled: true,
+        score_threshold: 0.35,
+        quote_size_usd: 25.0,
+        plugin_signal: 0.1,
+    }];
+    *coinbase.imports.write() = vec![StrategyLabImportSummary {
+        import_id: "import-1".to_string(),
+        path: "data/strategy_lab/sample.json".to_string(),
+        imported_at: Some(now),
+        markets: vec!["BTC-USD".to_string()],
+        best_variants: vec!["BTC-USD:sma_baseline".to_string()],
+    }];
+    *coinbase.product_details.write() = HashMap::from([(
+        "BTC-USD".to_string(),
+        ProductDetailView {
+            product: coinbase.products.read()[0].clone(),
+            microstructure: pt_core::MarketMicrostructureSnapshot {
+                product_id: ProductId::from("BTC-USD"),
+                instrument: Some(pt_core::Instrument::Spot),
+                best_bid: 59_990.0,
+                best_ask: 60_010.0,
+                mid_price: 60_000.0,
+                spread_bps: 4.0,
+                imbalance: 0.42,
+                tape_direction: 0.35,
+                realized_volatility: 0.12,
+                fill_rate_estimate: 0.67,
+                one_way_persistence: 4,
+                ts: Some(now),
+            },
+            strategy: pt_core::StrategyVector {
+                product_id: ProductId::from("BTC-USD"),
+                strategy_name: "coinbase_microstructure".to_string(),
+                microstructure_score: 0.42,
+                momentum_score: 0.35,
+                volatility_score: -0.12,
+                plugin_score: 0.1,
+                composite_score: 0.88,
+                action: Some(TradeAction::Buy),
+                priority_fill: true,
+            },
+            eligibility: TradingEligibility {
+                product_id: ProductId::from("BTC-USD"),
+                live_tradable: true,
+                scan_only: false,
+                eligible: true,
+                reasons: Vec::new(),
+            },
+            orders: coinbase.orders.read().clone(),
+            imports: coinbase.imports.read().clone(),
+        },
+    )]);
+
+    DashboardState::new(DashboardHandles {
+        metrics: Arc::new(MetricsRegistry::default()),
+        risk_state: Arc::new(RwLock::new(RiskState {
             killswitch: "Running".to_string(),
             daily_pnl: 1.25,
             max_daily_loss: 1.0,
@@ -319,6 +447,14 @@ fn fixture_state() -> DashboardState {
         Arc::new(RwLock::new(Vec::<EquityProductSnapshot>::new())),
         Arc::new(RwLock::new(Vec::<EquityPaperRun>::new())),
     )
+        kill_switch: Arc::new(RwLock::new(KillSwitchState::Running)),
+        latest_books: Arc::new(RwLock::new(latest_books)),
+        market_history: Arc::new(RwLock::new(history)),
+        recent_executions: Arc::new(RwLock::new(executions)),
+        fused_bias: Arc::new(RwLock::new(bias)),
+        inventory_usd: Arc::new(RwLock::new(5.0)),
+        coinbase,
+    })
 }
 
 fn load_openapi_doc() -> Value {
@@ -430,6 +566,18 @@ async fn assert_json_contract(
     } else {
         builder.body(Body::empty()).expect("build request")
     };
+    request_body: Option<&str>,
+) {
+    let mut builder = Request::builder().method(method).uri(request_uri);
+    if request_body.is_some() {
+        builder = builder.header("content-type", "application/json");
+    }
+    let req = builder
+        .body(match request_body {
+            Some(body) => Body::from(body.to_string()),
+            None => Body::empty(),
+        })
+        .expect("build request");
 
     let resp = app.oneshot(req).await.expect("response");
     assert_eq!(resp.status(), StatusCode::OK, "{} {} status", method, path);
@@ -447,6 +595,13 @@ async fn assert_json_contract(
 async fn state_endpoints_match_openapi_contract() {
     let app = router(fixture_state());
     let doc = load_openapi_doc();
+    let import_fixture = std::env::temp_dir().join("pt-dashboard-import.json");
+    fs::write(
+        &import_fixture,
+        r#"{"markets":{"BTC-USD":{"default_variant":"sma_baseline"}}}"#,
+    )
+    .expect("write import fixture");
+    let import_body = format!(r#"{{"path":"{}"}}"#, import_fixture.display());
 
     let checks = [
         ("GET", "/health", "/health", None),
@@ -644,6 +799,59 @@ async fn state_endpoints_match_openapi_contract() {
             "/ops/coinbase/rebalance/approve",
             "/ops/coinbase/rebalance/approve",
             Some(json!({ "token_id": "token-1" })),
+        ("GET", "/state/bias", "/state/bias", None),
+        ("GET", "/state/inventory", "/state/inventory", None),
+        ("POST", "/ops/halt", "/ops/halt", None),
+        ("POST", "/ops/resume", "/ops/resume", None),
+        ("POST", "/ops/flatten", "/ops/flatten", None),
+        ("GET", "/api/v1/products", "/api/v1/products", None),
+        ("GET", "/api/v1/scanner", "/api/v1/scanner", None),
+        (
+            "GET",
+            "/api/v1/products/{product_id}",
+            "/api/v1/products/BTC-USD",
+            None,
+        ),
+        ("GET", "/api/v1/listings", "/api/v1/listings", None),
+        (
+            "GET",
+            "/api/v1/listings/{product_id}",
+            "/api/v1/listings/BTC-USD",
+            None,
+        ),
+        ("GET", "/api/v1/risk/overview", "/api/v1/risk/overview", None),
+        ("GET", "/api/v1/agent/console", "/api/v1/agent/console", None),
+        ("GET", "/api/v1/orders", "/api/v1/orders", None),
+        ("GET", "/api/v1/strategies", "/api/v1/strategies", None),
+        (
+            "POST",
+            "/api/v1/mode",
+            "/api/v1/mode",
+            Some("{\"mode\":\"paper\"}"),
+        ),
+        (
+            "POST",
+            "/api/v1/live/arm",
+            "/api/v1/live/arm",
+            Some("{\"reason\":\"test\"}"),
+        ),
+        (
+            "POST",
+            "/api/v1/live/disarm",
+            "/api/v1/live/disarm",
+            Some("{\"reason\":\"test\"}"),
+        ),
+        (
+            "POST",
+            "/api/v1/orders/{order_id}/cancel",
+            "/api/v1/orders/cb-order-1/cancel",
+            None,
+        ),
+        (
+            "POST",
+            "/api/v1/strategy-lab/import",
+            "/api/v1/strategy-lab/import",
+            Some(import_body.as_str()),
         ),
     ];
 
@@ -726,6 +934,20 @@ fn openapi_contains_all_runtime_paths() {
         "/ops/coinbase/auth/reload",
         "/ops/coinbase/auth/switch-profile",
         "/ops/execution/unwind",
+        "/api/v1/products",
+        "/api/v1/scanner",
+        "/api/v1/products/{product_id}",
+        "/api/v1/listings",
+        "/api/v1/listings/{product_id}",
+        "/api/v1/risk/overview",
+        "/api/v1/agent/console",
+        "/api/v1/orders",
+        "/api/v1/strategies",
+        "/api/v1/mode",
+        "/api/v1/live/arm",
+        "/api/v1/live/disarm",
+        "/api/v1/orders/{order_id}/cancel",
+        "/api/v1/strategy-lab/import",
     ];
 
     for p in required_paths {

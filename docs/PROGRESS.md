@@ -292,9 +292,12 @@
   - overlap (candle-aligned listing analysis)
   - optimize
   - unified dashboard
+  - comparative CSV/Markdown report export
 - Listing overlap now supports **auto-discovery** of likely recent Coinbase listings.
+- Listing overlap now ranks **post-anchor cohorts** by impulse and volatility buckets.
 - Strategy variants now support a **plugin interface**:
   - `external_bias_file` (Pine/AI bias series input)
+  - `tradingview_webhook_file` (direct TradingView webhook snapshot replay input)
   - `momentum_bias`
   - `rsi_bias`
 - Persistent SQLite trade journal now records runs/trades and exposes per-market attribution summaries.
@@ -321,3 +324,29 @@
 3. Add guarded operator approval workflow for route execution promotion beyond candidate plans.
 4. Run `pt-cli verify-promoted` on current promoted artifact and persist replay acceptance evidence.
 5. Run `pt-cli report-variants` and publish comparative variant report artifacts.
+- Replay acceptance tooling now validates promoted replay NDJSON plus optional SQLite risk/execution evidence.
+- Product expansion workspace now exists under `docs/product/` with a master feature tracker, provider matrix, UX plan, work orders, and machine-readable tracker.
+- Dashboard frontend shell now supports multi-workspace operator views for command, listing, risk, strategy, and agent supervision.
+- Listing Radar is now backed by dashboard API endpoints with typed shared models and OpenAPI coverage.
+- Risk Cockpit and Agent Console now have backend summary endpoints instead of frontend-only placeholder content.
+- Sandbox optimization cycle tooling now exists in `tools/sandbox_optimizer_cycle.py` to run optimize -> backtest -> promote -> replay acceptance -> incumbent update.
+- Sandbox optimization daemon tooling now exists in `tools/sandbox_optimizer_daemon.py` to run the cycle repeatedly on a fixed interval for sandbox use.
+- Sandbox ROI roadmap now exists in `docs/product/SANDBOX_ROI_ROADMAP.md`.
+
+## In Progress
+
+- Validate promoted replay artifacts against `pt-cli` replay mode in a Rust-enabled environment.
+- Wire hosted branch protection/manual approval settings in GitHub.
+- Run end-stage Rust/frontend validation for the expanded dashboard surface.
+- Turn the sandbox optimization cycle into a scheduled hourly workflow with operator-visible status.
+
+## Next Queue
+
+1. Run the full Rust validation ladder in an environment with `cargo` and network access.
+2. Expose the sandbox optimizer daemon status, incumbent, latest candidate, and replay result in the dashboard.
+3. Add operator-visible incumbent/candidate/promotion evidence to the dashboard.
+4. Add fixture-driven frontend tests for workspace navigation and new listing/risk/agent API rendering.
+5. Add execution-policy and approval-queue persistence so the new workspaces move from derived summaries to durable audit history.
+6. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
+7. Add mutation tests for risk and quote-critical logic.
+8. Configure hosted branch protections and required status checks.

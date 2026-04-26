@@ -21,6 +21,7 @@ use pt_core::{
 use pt_dashboard::{router as dashboard_router, CoinbaseAuthController, DashboardState};
 use pt_gemini::GeminiClient;
 use pt_kraken::KrakenClient;
+use pt_dashboard::{router as dashboard_router, DashboardHandles, DashboardState};
 use pt_market_discovery::MarketDiscoveryClient;
 use pt_order_manager::{
     OrderManager, OrderManagerConfig as RepriceManagerConfig, RestingOrder, TopOfBook,
@@ -1578,6 +1579,17 @@ impl TradingEngine {
             self.state.equities_universe.clone(),
             self.state.equity_paper_runs.clone(),
         );
+        let state = DashboardState::new(DashboardHandles {
+            metrics: self.metrics.clone(),
+            risk_state: self.state.risk_state.clone(),
+            kill_switch: self.state.kill_switch.clone(),
+            latest_books: self.state.latest_books.clone(),
+            market_history: self.state.market_history.clone(),
+            recent_executions: self.state.recent_executions.clone(),
+            fused_bias: self.state.fused_bias.clone(),
+            inventory_usd: self.state.inventory_usd.clone(),
+            coinbase: Default::default(),
+        });
 
         tokio::spawn(async move {
             let app = dashboard_router(state);

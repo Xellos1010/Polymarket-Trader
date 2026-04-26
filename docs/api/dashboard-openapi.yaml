@@ -3,6 +3,9 @@ info:
   title: Polymarket Trader Operator API
   version: 0.2.0
   description: Operator and dashboard endpoints exposed by pt-dashboard.
+  title: Coinbase Workstation Operator API
+  version: 0.3.0
+  description: Legacy operator endpoints plus Coinbase-native workstation APIs exposed by pt-dashboard.
 servers:
   - url: http://127.0.0.1:8080
 paths:
@@ -70,7 +73,7 @@ paths:
                   $ref: '#/components/schemas/MarketSnapshot'
   /state/markets:
     get:
-      summary: Market summary rows for UI selector
+      summary: Market summary rows for legacy UI selector
       responses:
         '200':
           description: OK
@@ -542,6 +545,67 @@ paths:
   /ops/profile/pilot-ultra-tight:
     post:
       summary: Apply pilot ultra-tight execution profile
+  /api/v1/products:
+    get:
+      summary: Coinbase product catalog in scope for the workstation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkstationProduct'
+  /api/v1/scanner:
+    get:
+      summary: Ranked scanner output across Coinbase products
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScannerRow'
+  /api/v1/products/{product_id}:
+    get:
+      summary: Detailed view for a specific Coinbase product
+      parameters:
+        - in: path
+          name: product_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetailView'
+  /api/v1/listings:
+    get:
+      summary: Ranked Listing Radar rows for Coinbase-first research and pre-launch preparation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ListingRadarRow'
+  /api/v1/listings/{product_id}:
+    get:
+      summary: Detailed Listing Radar view for a product
+      parameters:
+        - in: path
+          name: product_id
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
@@ -558,6 +622,51 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RebalanceApprovalRequest'
+                $ref: '#/components/schemas/ListingRadarDetailView'
+  /api/v1/risk/overview:
+    get:
+      summary: Risk Cockpit summary for the current workstation posture
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskOverviewView'
+  /api/v1/agent/console:
+    get:
+      summary: Agent Console posture, approvals, and next action summary
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentConsoleView'
+  /api/v1/orders:
+    get:
+      summary: Manual and automatic workstation orders
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkstationOrder'
+    post:
+      summary: Queue a manual workstation order
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkstationOrder'
+  /api/v1/strategies:
+    get:
+      summary: Strategy config, imports, and live-arm state
       responses:
         '200':
           description: OK
@@ -568,6 +677,10 @@ paths:
   /ops/coinbase/rebalance/reject:
     post:
       summary: Reject current rebalance plan
+                $ref: '#/components/schemas/StrategiesResponse'
+  /api/v1/mode:
+    post:
+      summary: Change workstation mode
       responses:
         '200':
           description: OK
@@ -578,6 +691,10 @@ paths:
   /ops/coinbase/auth/reload:
     post:
       summary: Reload active Coinbase auth profile
+                $ref: '#/components/schemas/ModeResponse'
+  /api/v1/live/arm:
+    post:
+      summary: Arm live routing
       responses:
         '200':
           description: OK
@@ -594,6 +711,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CoinbaseAuthSwitchRequest'
+                $ref: '#/components/schemas/ModeResponse'
+  /api/v1/live/disarm:
+    post:
+      summary: Disarm live routing
       responses:
         '200':
           description: OK
@@ -604,6 +725,16 @@ paths:
   /ops/execution/unwind:
     post:
       summary: Guarded emergency unwind trigger
+                $ref: '#/components/schemas/ModeResponse'
+  /api/v1/orders/{order_id}/cancel:
+    post:
+      summary: Request cancellation for a queued or open order
+      parameters:
+        - in: path
+          name: order_id
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
@@ -614,6 +745,10 @@ paths:
   /ops/unwind/now:
     post:
       summary: Alias for guarded emergency unwind trigger
+                $ref: '#/components/schemas/ActionResponse'
+  /api/v1/strategy-lab/import:
+    post:
+      summary: Import a strategy-lab JSON output
       responses:
         '200':
           description: OK
@@ -621,16 +756,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+                $ref: '#/components/schemas/StrategyLabImportSummary'
 components:
   schemas:
     Health:
       type: object
       required: [status, kill_switch]
       properties:
-        status:
-          type: string
-        kill_switch:
-          type: string
+        status: { type: string }
+        kill_switch: { type: string }
     RiskState:
       type: object
       required: [killswitch, daily_pnl, max_daily_loss, open_notional, unhedged_delta, open_markets, stale_books, last_update_ms]
@@ -1328,4 +1462,355 @@ components:
         file_path:
           type: string
           nullable: true
+    LiveArmState:
+      type: object
+      required: [armed]
+      properties:
+        armed: { type: boolean }
+        mode:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        auto_disarm_reason:
+          type: string
+          nullable: true
+        armed_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    TradingEligibility:
+      type: object
+      required: [product_id, live_tradable, scan_only, eligible, reasons]
+      properties:
+        product_id: { type: string }
+        live_tradable: { type: boolean }
+        scan_only: { type: boolean }
+        eligible: { type: boolean }
+        reasons:
+          type: array
+          items: { type: string }
+    WorkstationProduct:
+      type: object
+      required: [product_id, base_currency, quote_currency, status, price, volume_24h, live_tradable, scan_only, trading_disabled]
+      properties:
+        product_id: { type: string }
+        instrument:
+          type: string
+          nullable: true
+        base_currency: { type: string }
+        quote_currency: { type: string }
+        status: { type: string }
+        price: { type: number }
+        volume_24h: { type: number }
+        live_tradable: { type: boolean }
+        scan_only: { type: boolean }
+        trading_disabled: { type: boolean }
+    ScannerRow:
+      type: object
+      required: [product_id, live_tradable, scan_only, spread_bps, imbalance, tape_direction, realized_volatility, fill_rate_estimate, active_strategy, score, current_risk_eligibility, best_bid, best_ask, mid_price, priority_fill, one_way_persistence]
+      properties:
+        product_id: { type: string }
+        instrument:
+          type: string
+          nullable: true
+        live_tradable: { type: boolean }
+        scan_only: { type: boolean }
+        spread_bps: { type: number }
+        imbalance: { type: number }
+        tape_direction: { type: number }
+        realized_volatility: { type: number }
+        fill_rate_estimate: { type: number }
+        active_strategy: { type: string }
+        score: { type: number }
+        current_risk_eligibility:
+          $ref: '#/components/schemas/TradingEligibility'
+        best_bid: { type: number }
+        best_ask: { type: number }
+        mid_price: { type: number }
+        action:
+          type: string
+          nullable: true
+        priority_fill: { type: boolean }
+        one_way_persistence: { type: integer }
+        ts:
+          type: string
+          format: date-time
+          nullable: true
+    MarketMicrostructureSnapshot:
+      type: object
+      required: [product_id, best_bid, best_ask, mid_price, spread_bps, imbalance, tape_direction, realized_volatility, fill_rate_estimate, one_way_persistence]
+      properties:
+        product_id: { type: string }
+        instrument:
+          type: string
+          nullable: true
+        best_bid: { type: number }
+        best_ask: { type: number }
+        mid_price: { type: number }
+        spread_bps: { type: number }
+        imbalance: { type: number }
+        tape_direction: { type: number }
+        realized_volatility: { type: number }
+        fill_rate_estimate: { type: number }
+        one_way_persistence: { type: integer }
+        ts:
+          type: string
+          format: date-time
+          nullable: true
+    StrategyVector:
+      type: object
+      required: [product_id, strategy_name, microstructure_score, momentum_score, volatility_score, plugin_score, composite_score, priority_fill]
+      properties:
+        product_id: { type: string }
+        strategy_name: { type: string }
+        microstructure_score: { type: number }
+        momentum_score: { type: number }
+        volatility_score: { type: number }
+        plugin_score: { type: number }
+        composite_score: { type: number }
+        action:
+          type: string
+          nullable: true
+        priority_fill: { type: boolean }
+    WorkstationOrder:
+      type: object
+      required: [order_id, product_id, live, post_only, base_size, quote_notional, expected_net_bps]
+      properties:
+        order_id: { type: string }
+        client_order_id:
+          type: string
+          nullable: true
+        product_id: { type: string }
+        instrument:
+          type: string
+          nullable: true
+        side:
+          type: string
+          nullable: true
+        route:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        live: { type: boolean }
+        post_only: { type: boolean }
+        limit_price:
+          type: number
+          nullable: true
+        base_size: { type: number }
+        quote_notional: { type: number }
+        expected_net_bps: { type: number }
+        reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    ProductStrategyConfigView:
+      type: object
+      required: [product_id, strategy_name, enabled, live_enabled, score_threshold, quote_size_usd, plugin_signal]
+      properties:
+        product_id: { type: string }
+        strategy_name: { type: string }
+        enabled: { type: boolean }
+        live_enabled: { type: boolean }
+        score_threshold: { type: number }
+        quote_size_usd: { type: number }
+        plugin_signal: { type: number }
+    StrategyLabImportSummary:
+      type: object
+      required: [import_id, path, markets, best_variants]
+      properties:
+        import_id: { type: string }
+        path: { type: string }
+        imported_at:
+          type: string
+          format: date-time
+          nullable: true
+        markets:
+          type: array
+          items: { type: string }
+        best_variants:
+          type: array
+          items: { type: string }
+    ProductDetailView:
+      type: object
+      required: [product, microstructure, strategy, eligibility, orders, imports]
+      properties:
+        product:
+          $ref: '#/components/schemas/WorkstationProduct'
+        microstructure:
+          $ref: '#/components/schemas/MarketMicrostructureSnapshot'
+        strategy:
+          $ref: '#/components/schemas/StrategyVector'
+        eligibility:
+          $ref: '#/components/schemas/TradingEligibility'
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationOrder'
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyLabImportSummary'
+    ListingLifecycleStage:
+      type: string
+      enum: [research, monitoring, transfer_only, auction, full_trading]
+    ProviderInsight:
+      type: object
+      required: [provider, category, summary, freshness_label, status]
+      properties:
+        provider: { type: string }
+        category: { type: string }
+        summary: { type: string }
+        freshness_label: { type: string }
+        status: { type: string }
+    ListingVenueRoute:
+      type: object
+      required: [venue, route_type, readiness, tradable, notes]
+      properties:
+        venue: { type: string }
+        route_type: { type: string }
+        readiness: { type: string }
+        tradable: { type: boolean }
+        notes: { type: string }
+    ListingRadarRow:
+      type: object
+      required: [product_id, asset_symbol, base_currency, quote_currency, stage, headline, composite_score, liquidity_score, sentiment_score, unlock_risk_score, route_ready, live_tradable, scan_only, priority_fill, tags]
+      properties:
+        product_id: { type: string }
+        asset_symbol: { type: string }
+        base_currency: { type: string }
+        quote_currency: { type: string }
+        stage:
+          $ref: '#/components/schemas/ListingLifecycleStage'
+        headline: { type: string }
+        composite_score: { type: number }
+        liquidity_score: { type: number }
+        sentiment_score: { type: number }
+        unlock_risk_score: { type: number }
+        route_ready: { type: boolean }
+        live_tradable: { type: boolean }
+        scan_only: { type: boolean }
+        priority_fill: { type: boolean }
+        tags:
+          type: array
+          items: { type: string }
+    ListingRadarDetailView:
+      type: object
+      required: [product, stage, headline, summary, composite_score, liquidity_score, sentiment_score, unlock_risk_score, route_ready, priority_fill, catalysts, insights, routes, eligibility, imports]
+      properties:
+        product:
+          $ref: '#/components/schemas/WorkstationProduct'
+        stage:
+          $ref: '#/components/schemas/ListingLifecycleStage'
+        headline: { type: string }
+        summary: { type: string }
+        composite_score: { type: number }
+        liquidity_score: { type: number }
+        sentiment_score: { type: number }
+        unlock_risk_score: { type: number }
+        route_ready: { type: boolean }
+        priority_fill: { type: boolean }
+        catalysts:
+          type: array
+          items: { type: string }
+        insights:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderInsight'
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingVenueRoute'
+        eligibility:
+          $ref: '#/components/schemas/TradingEligibility'
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyLabImportSummary'
+    RiskOverviewView:
+      type: object
+      required: [killswitch, daily_pnl, open_notional, unhedged_delta, blocked_markets, live_eligible_markets, queued_notional, live_orders, taker_orders, policy_breaches]
+      properties:
+        killswitch: { type: string }
+        daily_pnl: { type: number }
+        open_notional: { type: number }
+        unhedged_delta: { type: number }
+        blocked_markets: { type: integer }
+        live_eligible_markets: { type: integer }
+        queued_notional: { type: number }
+        live_orders: { type: integer }
+        taker_orders: { type: integer }
+        policy_breaches:
+          type: array
+          items: { type: string }
+    AgentApprovalItem:
+      type: object
+      required: [id, title, description, severity, status]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        severity: { type: string }
+        status: { type: string }
+        product_id:
+          type: string
+          nullable: true
+    AgentConsoleView:
+      type: object
+      required: [autonomy_tier, live_arm, next_action, blocked_markets, imports_loaded, recommended_products, approvals]
+      properties:
+        autonomy_tier: { type: string }
+        live_arm:
+          $ref: '#/components/schemas/LiveArmState'
+        next_action: { type: string }
+        blocked_markets: { type: integer }
+        imports_loaded: { type: integer }
+        recommended_products:
+          type: array
+          items: { type: string }
+        approvals:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentApprovalItem'
+    ModeResponse:
+      type: object
+      required: [mode, live_arm]
+      properties:
+        mode: { type: string }
+        live_arm:
+          $ref: '#/components/schemas/LiveArmState'
+    StrategiesResponse:
+      type: object
+      required: [mode, live_arm, strategies, imports]
+      properties:
+        mode: { type: string }
+        live_arm:
+          $ref: '#/components/schemas/LiveArmState'
+        strategies:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductStrategyConfigView'
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyLabImportSummary'
+    ActionResponse:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
         message: { type: string }

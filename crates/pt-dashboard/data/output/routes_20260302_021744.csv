@@ -1,0 +1,2 @@
+route_id,strategy_class,gross_edge_bps,expected_net_bps,expected_usd_profit,capital_required_usd,legs,ts
+route-1,ConversionCycle,110.000000,101.000000,0.200000,2.500000,,2026-03-02T02:17:44.323434+00:00
