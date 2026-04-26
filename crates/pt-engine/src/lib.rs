@@ -498,6 +498,7 @@ impl TradingEngine {
             recent_executions: self.state.recent_executions.clone(),
             fused_bias: self.state.fused_bias.clone(),
             inventory_usd: self.state.inventory_usd.clone(),
+            coinbase: Default::default(),
         });
 
         tokio::spawn(async move {

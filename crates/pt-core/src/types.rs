@@ -204,3 +204,232 @@ pub struct MarketSelection {
     pub min_order_size: f64,
     pub end_date: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
+#[serde(transparent)]
+pub struct ProductId(pub String);
+
+impl ProductId {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.trim().is_empty()
+    }
+}
+
+impl From<&str> for ProductId {
+    fn from(value: &str) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<String> for ProductId {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Instrument {
+    Spot,
+    Derivative,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TradeAction {
+    Buy,
+    Sell,
+    Hold,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OrderRoute {
+    Maker,
+    Taker,
+    ScanOnly,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkstationOrderStatus {
+    Draft,
+    CancelRequested,
+    Open,
+    Filled,
+    Canceled,
+    Rejected,
+    AutoCanceled,
+    ScanOnly,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TradingEligibility {
+    pub product_id: ProductId,
+    pub live_tradable: bool,
+    pub scan_only: bool,
+    pub eligible: bool,
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MarketMicrostructureSnapshot {
+    pub product_id: ProductId,
+    pub instrument: Option<Instrument>,
+    pub best_bid: f64,
+    pub best_ask: f64,
+    pub mid_price: f64,
+    pub spread_bps: f64,
+    pub imbalance: f64,
+    pub tape_direction: f64,
+    pub realized_volatility: f64,
+    pub fill_rate_estimate: f64,
+    pub one_way_persistence: u64,
+    pub ts: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrategyVector {
+    pub product_id: ProductId,
+    pub strategy_name: String,
+    pub microstructure_score: f64,
+    pub momentum_score: f64,
+    pub volatility_score: f64,
+    pub plugin_score: f64,
+    pub composite_score: f64,
+    pub action: Option<TradeAction>,
+    pub priority_fill: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OrderIntent {
+    pub product_id: ProductId,
+    pub instrument: Option<Instrument>,
+    pub side: Option<Side>,
+    pub route: Option<OrderRoute>,
+    pub limit_price: Option<f64>,
+    pub base_size: f64,
+    pub quote_notional: f64,
+    pub post_only: bool,
+    pub reduce_only: bool,
+    pub priority_fill: bool,
+    pub strategy_name: String,
+    pub expected_net_bps: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OrderDecision {
+    pub product_id: ProductId,
+    pub action: Option<TradeAction>,
+    pub allow: bool,
+    pub reason: String,
+    pub route: Option<OrderRoute>,
+    pub expected_net_bps: f64,
+    pub taker_fallback_allowed: bool,
+    pub intent: Option<OrderIntent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LiveArmState {
+    pub armed: bool,
+    pub mode: Option<String>,
+    pub reason: Option<String>,
+    pub auto_disarm_reason: Option<String>,
+    pub armed_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WorkstationProduct {
+    pub product_id: ProductId,
+    pub instrument: Option<Instrument>,
+    pub base_currency: String,
+    pub quote_currency: String,
+    pub status: String,
+    pub price: f64,
+    pub volume_24h: f64,
+    pub live_tradable: bool,
+    pub scan_only: bool,
+    pub trading_disabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScannerRow {
+    pub product_id: ProductId,
+    pub instrument: Option<Instrument>,
+    pub live_tradable: bool,
+    pub scan_only: bool,
+    pub spread_bps: f64,
+    pub imbalance: f64,
+    pub tape_direction: f64,
+    pub realized_volatility: f64,
+    pub fill_rate_estimate: f64,
+    pub active_strategy: String,
+    pub score: f64,
+    pub current_risk_eligibility: TradingEligibility,
+    pub best_bid: f64,
+    pub best_ask: f64,
+    pub mid_price: f64,
+    pub action: Option<TradeAction>,
+    pub priority_fill: bool,
+    pub one_way_persistence: u64,
+    pub ts: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WorkstationOrder {
+    pub order_id: String,
+    pub client_order_id: Option<String>,
+    pub product_id: ProductId,
+    pub instrument: Option<Instrument>,
+    pub side: Option<Side>,
+    pub route: Option<OrderRoute>,
+    pub status: Option<WorkstationOrderStatus>,
+    pub live: bool,
+    pub post_only: bool,
+    pub limit_price: Option<f64>,
+    pub base_size: f64,
+    pub quote_notional: f64,
+    pub expected_net_bps: f64,
+    pub reason: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProductStrategyConfigView {
+    pub product_id: ProductId,
+    pub strategy_name: String,
+    pub enabled: bool,
+    pub live_enabled: bool,
+    pub score_threshold: f64,
+    pub quote_size_usd: f64,
+    pub plugin_signal: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrategyLabImportSummary {
+    pub import_id: String,
+    pub path: String,
+    pub imported_at: Option<DateTime<Utc>>,
+    pub markets: Vec<String>,
+    pub best_variants: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProductDetailView {
+    pub product: WorkstationProduct,
+    pub microstructure: MarketMicrostructureSnapshot,
+    pub strategy: StrategyVector,
+    pub eligibility: TradingEligibility,
+    pub orders: Vec<WorkstationOrder>,
+    pub imports: Vec<StrategyLabImportSummary>,
+}

@@ -2,7 +2,7 @@
 
 ## Startup
 ```bash
-cargo run -p pt-cli -- run --config config/config.toml
+cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper
 ```
 
 Strategy lab dashboard (Coinbase local workflow):
@@ -17,7 +17,7 @@ Promote strategy-lab result to replay artifact:
 
 ## Live Readiness Gate
 ```bash
-cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000
+cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000
 ```
 
 Tiny live pilot guard:

@@ -1,3 +1,5 @@
+mod coinbase;
+
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use pt_core::{AppConfig, EngineMode, MarketSnapshot};
@@ -41,6 +43,10 @@ enum Commands {
         #[arg(long, default_value_t = 3000)]
         timeout_ms: u64,
     },
+    Coinbase {
+        #[command(subcommand)]
+        command: CoinbaseCommands,
+    },
     PineParams {
         #[arg(long)]
         path: String,
@@ -78,6 +84,20 @@ enum Commands {
         hedge_cost_est: f64,
         #[arg(long, default_value_t = 0.0005)]
         gas_amortized_est: f64,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CoinbaseCommands {
+    Up {
+        #[arg(long)]
+        mode: Option<String>,
+    },
+    Preflight {
+        #[arg(long)]
+        mode: Option<String>,
+        #[arg(long, default_value_t = 3000)]
+        timeout_ms: u64,
     },
 }
 
@@ -151,6 +171,22 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Commands::Coinbase { command } => match command {
+            CoinbaseCommands::Up { mode } => {
+                if let Err(e) = coinbase::coinbase_up(&config_path, mode.as_deref()).await {
+                    error!(%e, "coinbase workstation failed");
+                    std::process::exit(1);
+                }
+            }
+            CoinbaseCommands::Preflight { mode, timeout_ms } => {
+                if let Err(e) =
+                    coinbase::coinbase_preflight(&config_path, mode.as_deref(), timeout_ms).await
+                {
+                    error!(%e, "coinbase preflight failed");
+                    std::process::exit(1);
+                }
+            }
+        },
         Commands::PineParams { path, out } => {
             if let Err(e) = pine_params(&path, &out) {
                 error!(%e, "pine params extraction failed");
@@ -903,9 +939,16 @@ fn now_unix() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::resolve_config_path;
+    use lazy_static::lazy_static;
+    use parking_lot::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
 
     #[test]
     fn resolve_config_uses_env_when_default_is_passed() {
+        let _guard = TEST_MUTEX.lock();
         std::env::set_var("PT_CONFIG_PATH", "config/alt.toml");
         let path = resolve_config_path("config/config.toml");
         assert_eq!(path, "config/alt.toml");
@@ -914,6 +957,7 @@ mod tests {
 
     #[test]
     fn resolve_config_keeps_explicit_cli_path() {
+        let _guard = TEST_MUTEX.lock();
         std::env::set_var("PT_CONFIG_PATH", "config/alt.toml");
         let path = resolve_config_path("config/custom.toml");
         assert_eq!(path, "config/custom.toml");

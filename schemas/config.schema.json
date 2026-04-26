@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://polymarket-trader.local/schemas/config.schema.json",
   "title": "AppConfig",
-  "description": "Logical schema for config/config.toml (represented as JSON)",
+  "description": "Logical schema for config/config.toml (represented as JSON). This schema covers the active Coinbase workstation shape and remains permissive for legacy local-only sections.",
   "type": "object",
   "required": ["engine", "venues", "signals", "risk", "storage", "ops"],
   "properties": {
@@ -12,9 +12,10 @@
       "properties": {
         "mode": { "type": "string", "enum": ["replay", "paper", "live"] },
         "loop_ms": { "type": "integer", "minimum": 50 },
+        "portfolio_id": { "type": ["string", "null"] },
         "replay_path": { "type": ["string", "null"] }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "venues": {
       "type": "object",
@@ -44,10 +45,10 @@
                 "allowed_slugs": { "type": "array", "minItems": 1, "items": { "type": "string" } },
                 "assets": { "type": "array", "minItems": 1, "items": { "type": "string" } }
               },
-              "additionalProperties": false
+              "additionalProperties": true
             }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         },
         "coinbase": {
           "type": "object",
@@ -59,12 +60,44 @@
             "passphrase": { "type": ["string", "null"] },
             "products": { "type": "array", "minItems": 1, "items": { "type": "string" } },
             "hedge_threshold_usd": { "type": "number", "exclusiveMinimum": 0 },
-            "hedge_max_slippage_bps": { "type": "number", "minimum": 0 }
+            "hedge_max_slippage_bps": { "type": "number", "minimum": 0 },
+            "auth": {
+              "type": "object",
+              "properties": {
+                "active_profile": { "type": "string" },
+                "allow_hot_reload": { "type": "boolean" },
+                "strict_live_auth": { "type": "boolean" },
+                "profiles": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "cdp_key_file": { "type": ["string", "null"] },
+                      "cdp_secret_id": { "type": ["string", "null"] },
+                      "expected_key_id": { "type": ["string", "null"] },
+                      "strategy_tags": { "type": "array", "items": { "type": "string" } }
+                    },
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "additionalProperties": true
+            },
+            "ws": {
+              "type": "object",
+              "properties": {
+                "url": { "type": "string", "pattern": "^wss?://" },
+                "channels": { "type": "array", "items": { "type": "string" } },
+                "heartbeat_timeout_ms": { "type": "integer", "minimum": 1 },
+                "resync_on_gap": { "type": "boolean" }
+              },
+              "additionalProperties": true
+            }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "signals": {
       "type": "object",
@@ -79,7 +112,7 @@
             "allowlist_path": { "type": "string" },
             "enforce_allowlist": { "type": "boolean" }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         },
         "tradingview": {
           "type": "object",
@@ -91,10 +124,10 @@
             "k_wallet": { "type": "number" },
             "k_tv": { "type": "number" }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "risk": {
       "type": "object",
@@ -109,7 +142,86 @@
         "stale_book_threshold_ms": { "type": "integer", "minimum": 1 },
         "min_expected_net": { "type": "number", "minimum": 0 }
       },
-      "additionalProperties": false
+      "additionalProperties": true
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string" },
+        "allow_taker_on_unwind_only": { "type": "boolean" },
+        "post_only": { "type": "boolean" },
+        "cancel_replace_cooldown_ms": { "type": "integer", "minimum": 1 },
+        "min_rest_ms": { "type": "integer", "minimum": 1 },
+        "stale_book_ms": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "strategy": {
+      "type": "object",
+      "properties": {
+        "default_strategy_name": { "type": "string" },
+        "imbalance_weight": { "type": "number" },
+        "momentum_weight": { "type": "number" },
+        "volatility_weight": { "type": "number" },
+        "plugin_weight": { "type": "number" },
+        "score_threshold": { "type": "number" },
+        "priority_fill_threshold": { "type": "number" },
+        "momentum_window": { "type": "integer", "minimum": 1 },
+        "realized_vol_window": { "type": "integer", "minimum": 1 },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["product_id"],
+            "properties": {
+              "product_id": { "type": "string" },
+              "enabled": { "type": "boolean" },
+              "live_enabled": { "type": "boolean" },
+              "strategy_name": { "type": "string" },
+              "quote_size_usd": { "type": "number", "minimum": 0 },
+              "score_threshold": { "type": "number" },
+              "plugin_signal": { "type": "number" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "scanner": {
+      "type": "object",
+      "properties": {
+        "max_products": { "type": "integer", "minimum": 1 },
+        "top_n": { "type": "integer", "minimum": 1 },
+        "quote_currencies": { "type": "array", "items": { "type": "string" } },
+        "include_derivatives": { "type": "boolean" },
+        "refresh_ms": { "type": "integer", "minimum": 250 },
+        "product_refresh_secs": { "type": "integer", "minimum": 1 },
+        "candle_granularity_sec": { "type": "integer", "minimum": 1 },
+        "candle_limit": { "type": "integer", "minimum": 1 },
+        "trade_limit": { "type": "integer", "minimum": 1 },
+        "book_levels": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "ui": {
+      "type": "object",
+      "properties": {
+        "mode_default": { "type": "string" },
+        "scanner_limit": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "live_arming": {
+      "type": "object",
+      "properties": {
+        "require_manual_arm": { "type": "boolean" },
+        "taker_budget_usd": { "type": "number", "minimum": 0 },
+        "one_way_confirmation_ticks": { "type": "integer", "minimum": 1 },
+        "auto_disarm_reject_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "auto_disarm_stale_data_ms": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
     },
     "storage": {
       "type": "object",
@@ -119,7 +231,7 @@
         "parquet_dir": { "type": "string" },
         "snapshot_roll_secs": { "type": "integer", "minimum": 1 }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "ops": {
       "type": "object",
@@ -132,8 +244,8 @@
         "wallet_refresh_secs": { "type": "integer", "minimum": 1 },
         "risk_watchdog_ms": { "type": "integer", "minimum": 1 }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     }
   },
-  "additionalProperties": false
+  "additionalProperties": true
 }

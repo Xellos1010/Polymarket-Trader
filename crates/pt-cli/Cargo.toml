@@ -6,7 +6,9 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+axum.workspace = true
 clap.workspace = true
+parking_lot.workspace = true
 rand = "0.9"
 reqwest.workspace = true
 serde.workspace = true
@@ -15,8 +17,14 @@ tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 chrono.workspace = true
+pt-coinbase = { path = "../pt-coinbase" }
 pt-core = { path = "../pt-core" }
+pt-dashboard = { path = "../pt-dashboard" }
 pt-engine = { path = "../pt-engine" }
 pt-market-discovery = { path = "../pt-market-discovery" }
 pt-polymarket = { path = "../pt-polymarket" }
 pt-quote = { path = "../pt-quote" }
+
+[dev-dependencies]
+lazy_static = "1.4.0"
+parking_lot = "0.12.3"
