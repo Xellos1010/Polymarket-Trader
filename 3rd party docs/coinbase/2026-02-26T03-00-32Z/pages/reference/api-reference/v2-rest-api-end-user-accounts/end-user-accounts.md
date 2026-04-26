@@ -1,0 +1,3 @@
+# end user accounts
+
+The End User Accounts APIs enable developers to manage the accounts belonging to their end users. End User Accounts are typically created by end users themselves when they sign in to the developer’s application via the CDP Web SDK. However, developers also have the option of creating End User Accounts on behalf of their end users. Critically, developers do not have the ability to sign transactions or messages on behalf of the end user; only end users can do this. End User Accounts APIs are accessed by the developer’s servers and authenticated by the developer’s CDP API key.

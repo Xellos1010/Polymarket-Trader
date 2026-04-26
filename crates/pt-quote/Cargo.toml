@@ -6,4 +6,5 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+chrono.workspace = true
 pt-core = { path = "../pt-core" }

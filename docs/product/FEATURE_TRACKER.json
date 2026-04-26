@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "last_updated": "2026-04-26",
+  "phase": "phase1-sandbox-roi",
+  "program": "phase1-product-bootstrap",
+  "workstreams": [
+    {
+      "id": "ws-local-validation",
+      "name": "Local Validation Ladder",
+      "priority": "P0",
+      "status": "planned",
+      "success_criteria": [
+        "cargo fmt/check/clippy/test/build pass",
+        "cargo audit runs",
+        "sbom artifacts generated"
+      ]
+    },
+    {
+      "id": "ws-replay-verification",
+      "name": "Replay Verification",
+      "priority": "P1",
+      "status": "in_progress",
+      "success_criteria": [
+        "promoted strategy artifact replays in pt-cli",
+        "replay acceptance checks pass",
+        "risk and execution evidence captured"
+      ]
+    },
+    {
+      "id": "ws-paper-repeatability",
+      "name": "Paper Repeatability",
+      "priority": "P1",
+      "status": "planned",
+      "success_criteria": [
+        "three independent paper runs complete",
+        "net simulated pnl positive after modeled costs",
+        "no hard risk-limit breach"
+      ]
+    },
+    {
+      "id": "ws-operator-visibility",
+      "name": "Operator Visibility",
+      "priority": "P1",
+      "status": "planned",
+      "success_criteria": [
+        "dashboard coverage stays current-api or fixture-backed",
+        "risk counters and replay or paper evidence are visible",
+        "frontend work stays in a separate PR when code changes are required"
+      ]
+  "program": "coinbase-first-ai-trading-terminal",
+  "workstreams": [
+    {
+      "id": "ws-command-center",
+      "name": "Command Center",
+      "priority": "P1",
+      "status": "in_progress",
+      "features": ["UX-001", "EX-001", "EX-003", "DEV-006"]
+    },
+    {
+      "id": "ws-listing-radar",
+      "name": "Listing Radar",
+      "priority": "P2",
+      "status": "planned",
+      "features": ["LR-001", "LR-002", "LR-003", "LR-011", "UX-002"]
+    },
+    {
+      "id": "ws-risk-cockpit",
+      "name": "Risk Cockpit",
+      "priority": "P1",
+      "status": "planned",
+      "features": ["PR-002", "PR-006", "PR-007", "UX-005"]
+    },
+    {
+      "id": "ws-agent-console",
+      "name": "Agent Console",
+      "priority": "P3",
+      "status": "planned",
+      "features": ["AI-001", "AI-002", "AI-009", "UX-006"]
+    }
+  ]
+}
