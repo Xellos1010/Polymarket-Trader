@@ -2,6 +2,11 @@
 set -euo pipefail
 
 RUN_FRONTEND="${RUN_FRONTEND:-0}"
+RUN_PAPER_SOAK="${RUN_PAPER_SOAK:-0}"
+SMOKE_DURATION_SECS="${SMOKE_DURATION_SECS:-180}"
+SMOKE_INTERVAL_SECS="${SMOKE_INTERVAL_SECS:-10}"
+PAPER_SOAK_DURATION_SECS="${PAPER_SOAK_DURATION_SECS:-86400}"
+PAPER_SOAK_INTERVAL_SECS="${PAPER_SOAK_INTERVAL_SECS:-30}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -49,7 +54,12 @@ if [[ "$RUN_FRONTEND" == "1" ]]; then
   popd >/dev/null
 fi
 
-run_stage "runtime smoke" cargo run -p pt-cli -- run --config config/config.toml
-run_stage "paper soak" ./scripts/paper_soak.sh 86400 30 config/config.toml
+run_stage "runtime smoke" ./scripts/paper_soak.sh "$SMOKE_DURATION_SECS" "$SMOKE_INTERVAL_SECS" config/config.toml data/soak/smoke 60
+
+if [[ "$RUN_PAPER_SOAK" == "1" ]]; then
+  run_stage "paper soak" ./scripts/paper_soak.sh "$PAPER_SOAK_DURATION_SECS" "$PAPER_SOAK_INTERVAL_SECS" config/config.toml
+else
+  log_stage "paper soak skipped (set RUN_PAPER_SOAK=1 for extended Phase 1 evidence)"
+fi
 
 log_stage "completed"
