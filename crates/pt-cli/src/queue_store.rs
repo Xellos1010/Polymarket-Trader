@@ -1,7 +1,7 @@
 use chrono::Utc;
 use pt_core::{WorkstationOrder, WorkstationOrderStatus};
 use rusqlite::{params, Connection};
-use std::{fs, path::Path};
+use std::{collections::HashSet, fs, path::Path};
 
 pub struct ApprovalQueueStore {
     conn: Connection,
@@ -78,6 +78,42 @@ impl ApprovalQueueStore {
     pub fn sync_orders(&self, orders: &[WorkstationOrder]) -> Result<(), String> {
         for order in orders {
             self.sync_order(order)?;
+        }
+        Ok(())
+    }
+
+    pub fn replace_orders(&self, orders: &[WorkstationOrder]) -> Result<(), String> {
+        let queue_orders = orders
+            .iter()
+            .filter(|order| queue_status_label(order.status.as_ref()).is_some())
+            .collect::<Vec<_>>();
+        let active_ids = queue_orders
+            .iter()
+            .map(|order| order.order_id.clone())
+            .collect::<HashSet<_>>();
+
+        for order in queue_orders {
+            self.sync_order(order)?;
+        }
+
+        let mut stmt = self
+            .conn
+            .prepare("SELECT order_id FROM approval_queue_orders")
+            .map_err(|e| e.to_string())?;
+        let existing_ids = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+
+        for row in existing_ids {
+            let order_id = row.map_err(|e| e.to_string())?;
+            if !active_ids.contains(&order_id) {
+                self.conn
+                    .execute(
+                        "DELETE FROM approval_queue_orders WHERE order_id = ?1",
+                        params![order_id],
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
         }
         Ok(())
     }
@@ -226,6 +262,28 @@ mod tests {
             loaded[0].reason.as_deref(),
             Some("cancel requested from dashboard")
         );
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn replace_orders_prunes_stale_rows_when_snapshot_changes_identity() {
+        let path = temp_sqlite_path("replace");
+        let store = ApprovalQueueStore::open(path.to_str().expect("path")).expect("open store");
+
+        let initial = sample_order("draft-local", WorkstationOrderStatus::Draft);
+        store.sync_order(&initial).expect("persist initial draft order");
+        assert_eq!(store.load_orders().expect("load orders").len(), 1);
+
+        let mut submitted = initial.clone();
+        submitted.order_id = "remote-123".to_string();
+        submitted.status = Some(WorkstationOrderStatus::Open);
+        submitted.updated_at = Some(Utc::now());
+
+        store
+            .replace_orders(&[submitted])
+            .expect("replace queue snapshot after submit");
+        assert!(store.load_orders().expect("load orders").is_empty());
 
         let _ = fs::remove_file(path);
     }
