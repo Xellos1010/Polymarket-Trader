@@ -41,6 +41,16 @@ python3 tools/phase1_gate_report.py \
   --out-md data/evidence/phase1/20260426/report.md
 ```
 
+Phase 1 evidence self-check:
+```bash
+python3 -m unittest discover -s tests -p 'test_phase1_gate_report.py'
+```
+
+Interpretation:
+- `pass` means at least three independent runs were present, aggregate net PnL after costs stayed positive, and no hard risk breach was detected.
+- `fail` means a hard gate was violated.
+- `incomplete` means evidence is missing, malformed, or not yet repeatable across three runs.
+
 ## Live Readiness Gate
 ```bash
 cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000
