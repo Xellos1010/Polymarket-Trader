@@ -30,3 +30,7 @@ pt-risk = { path = "../pt-risk" }
 pt-replay = { path = "../pt-replay" }
 pt-coinbase = { path = "../pt-coinbase" }
 pt-dashboard = { path = "../pt-dashboard" }
+pt-order-manager = { path = "../pt-order-manager" }
+pt-route = { path = "../pt-route" }
+pt-kraken = { path = "../pt-kraken" }
+pt-gemini = { path = "../pt-gemini" }

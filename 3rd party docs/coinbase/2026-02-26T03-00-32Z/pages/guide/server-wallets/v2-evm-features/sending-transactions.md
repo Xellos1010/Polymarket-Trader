@@ -1,0 +1,5 @@
+# sending transactions
+
+The [CDP SDK’s](https://github.com/coinbase/cdp-sdk) `sendTransaction` method handles **gas estimation**, **nonce management**, **transaction signing**, and **broadcasting** for EVM accounts. This means that you don’t need to specify these details when you submit a transaction onchain. CDP’s nonce management system ensures that the nonce is set correctly for each transaction, and the gas price is estimated to ensure that the transaction is sent at a reasonable price. You can read more about the `sendTransaction` API in the [API Reference](https://developer.chrome.com/api-reference/v2/rest-api/evm-accounts/send-a-transaction).
+
+The following code snippet demonstrates how to send a transaction using the `sendTransaction` method. You can also refer to our example code in [Typescript](https://github.com/coinbase/cdp-sdk/blob/main/examples/typescript/evm/sendManyTransactions.ts) and [Python](https://github.com/coinbase/cdp-sdk/blob/main/examples/python/evm/send_transaction.py).
