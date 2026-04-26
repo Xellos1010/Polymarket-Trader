@@ -45,9 +45,9 @@ cp config/prompt_bundle.example.json config/prompt_bundle.json
 
 Do not put live credentials in these files for local validation.
 
-## Canonical ladder
+## Core pre-merge ladder
 
-Run in this order:
+Run in this order for normal PR validation:
 
 ```bash
 cargo fmt --all
@@ -60,8 +60,23 @@ cargo audit
 python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json
 python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery
 python3 tools/coinbase_strategy_lab.py optimize --config config/coinbase_strategy_lab.json
-cargo run -p pt-cli -- run --config config/config.toml
+./scripts/paper_soak.sh 180 10 config/config.toml data/soak/smoke 60
+```
+
+The final step is a bounded sandbox smoke using the existing paper-soak probe path. It verifies that the runtime can boot, become healthy, serve probes, and shut down cleanly without turning every routine PR check into a 24-hour soak.
+
+## Extended Phase 1 evidence ladder
+
+For replay or paper readiness claims, run the longer paper-soak step explicitly in addition to the core ladder:
+
+```bash
 ./scripts/paper_soak.sh 86400 30 config/config.toml
+```
+
+Or through the wrapper:
+
+```bash
+RUN_PAPER_SOAK=1 PAPER_SOAK_DURATION_SECS=86400 ./scripts/local_validation_ladder.sh
 ```
 
 ## Frontend checks
@@ -90,7 +105,7 @@ cargo audit
 ./scripts/generate_sbom.sh artifacts
 ```
 
-GitHub Actions does not replace the local replay, strategy-lab, runtime, paper-soak, or optional frontend checks.
+GitHub Actions does not replace the local replay, strategy-lab, bounded runtime smoke, extended paper-soak, or optional frontend checks.
 
 ## Expected artifacts
 
@@ -114,7 +129,7 @@ Useful outputs to keep when a run fails or when Phase 1 evidence is being review
 
 ## One-command runner
 
-Use the wrapper script when you want stage-labeled, fail-fast execution:
+Use the wrapper script when you want stage-labeled, fail-fast execution of the core ladder:
 
 ```bash
 ./scripts/local_validation_ladder.sh
@@ -126,9 +141,22 @@ Optional frontend stage:
 RUN_FRONTEND=1 ./scripts/local_validation_ladder.sh
 ```
 
+Optional extended paper soak:
+
+```bash
+RUN_PAPER_SOAK=1 PAPER_SOAK_DURATION_SECS=86400 ./scripts/local_validation_ladder.sh
+```
+
+Optional shorter or longer bounded smoke:
+
+```bash
+SMOKE_DURATION_SECS=300 SMOKE_INTERVAL_SECS=15 ./scripts/local_validation_ladder.sh
+```
+
 ## Safety
 
 - Do not enable live mode.
 - Do not inject live credentials.
 - Do not raise risk caps for validation convenience.
+- Do not treat the bounded smoke as equivalent to a full paper-soak evidence pass.
 - Do not treat partial runs as full gate passes.
