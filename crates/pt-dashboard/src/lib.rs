@@ -8,8 +8,10 @@ use axum::{
 use chrono::Utc;
 use parking_lot::RwLock;
 use pt_core::{
-    Asset, ExecutionReport, KillSwitchState, LiveArmState, MarketHistoryPoint, MarketSnapshot,
-    MetricsRegistry, OrderRoute, ProductDetailView, ProductId, ProductStrategyConfigView,
+    AgentApprovalItem, AgentConsoleView, Asset, ExecutionReport, KillSwitchState,
+    ListingLifecycleStage, ListingRadarDetailView, ListingRadarRow, ListingVenueRoute,
+    LiveArmState, MarketHistoryPoint, MarketSnapshot, MetricsRegistry, OrderRoute,
+    ProductDetailView, ProductId, ProductStrategyConfigView, ProviderInsight, RiskOverviewView,
     RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
     WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
@@ -234,6 +236,10 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/products", get(get_products))
         .route("/api/v1/scanner", get(get_scanner))
         .route("/api/v1/products/:product_id", get(get_product_detail))
+        .route("/api/v1/listings", get(get_listing_radar))
+        .route("/api/v1/listings/:product_id", get(get_listing_radar_detail))
+        .route("/api/v1/risk/overview", get(get_risk_overview))
+        .route("/api/v1/agent/console", get(get_agent_console))
         .route("/api/v1/orders", get(get_orders).post(post_order))
         .route("/api/v1/strategies", get(get_strategies))
         .route("/api/v1/mode", post(post_mode))
@@ -475,6 +481,27 @@ async fn get_product_detail(
     Ok(Json(detail))
 }
 
+async fn get_listing_radar(State(state): State<DashboardState>) -> Json<Vec<ListingRadarRow>> {
+    Json(build_listing_radar_rows(&state))
+}
+
+async fn get_listing_radar_detail(
+    State(state): State<DashboardState>,
+    Path(product_id): Path<String>,
+) -> Result<Json<ListingRadarDetailView>, StatusCode> {
+    build_listing_radar_detail(&state, &product_id)
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+async fn get_risk_overview(State(state): State<DashboardState>) -> Json<RiskOverviewView> {
+    Json(build_risk_overview(&state))
+}
+
+async fn get_agent_console(State(state): State<DashboardState>) -> Json<AgentConsoleView> {
+    Json(build_agent_console(&state))
+}
+
 async fn get_orders(State(state): State<DashboardState>) -> Json<Vec<WorkstationOrder>> {
     let mut rows = state.coinbase.orders.read().clone();
     rows.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
@@ -714,6 +741,407 @@ fn strategy_view_to_vector(view: &ProductStrategyConfigView) -> pt_core::Strateg
     }
 }
 
+fn listing_stage_for(product: &WorkstationProduct) -> ListingLifecycleStage {
+    let status = product.status.to_ascii_lowercase();
+    if product.live_tradable {
+        ListingLifecycleStage::FullTrading
+    } else if status.contains("auction") {
+        ListingLifecycleStage::Auction
+    } else if product.scan_only {
+        ListingLifecycleStage::TransferOnly
+    } else if product.trading_disabled {
+        ListingLifecycleStage::Monitoring
+    } else {
+        ListingLifecycleStage::Research
+    }
+}
+
+fn listing_stage_label(stage: &ListingLifecycleStage) -> &'static str {
+    match stage {
+        ListingLifecycleStage::Research => "research",
+        ListingLifecycleStage::Monitoring => "monitoring",
+        ListingLifecycleStage::TransferOnly => "transfer only",
+        ListingLifecycleStage::Auction => "auction",
+        ListingLifecycleStage::FullTrading => "full trading",
+    }
+}
+
+fn scanner_map(state: &DashboardState) -> HashMap<String, ScannerRow> {
+    state
+        .coinbase
+        .scanner
+        .read()
+        .iter()
+        .cloned()
+        .map(|row| (row.product_id.as_str().to_string(), row))
+        .collect()
+}
+
+fn imports_for_product(
+    imports: &[StrategyLabImportSummary],
+    product_id: &str,
+) -> Vec<StrategyLabImportSummary> {
+    imports
+        .iter()
+        .filter(|item| {
+            item.markets.iter().any(|market| market == product_id)
+                || item
+                    .best_variants
+                    .iter()
+                    .any(|variant| variant.starts_with(&format!("{product_id}:")))
+        })
+        .cloned()
+        .collect()
+}
+
+fn build_listing_radar_rows(state: &DashboardState) -> Vec<ListingRadarRow> {
+    let scanner = scanner_map(state);
+    let imports = state.coinbase.imports.read().clone();
+    let mut rows: Vec<ListingRadarRow> = state
+        .coinbase
+        .products
+        .read()
+        .iter()
+        .cloned()
+        .map(|product| {
+            let key = product.product_id.as_str().to_string();
+            let scanner_row = scanner.get(&key);
+            let stage = listing_stage_for(&product);
+            let composite_score = scanner_row.map(|row| row.score).unwrap_or_default();
+            let liquidity_score = scanner_row
+                .map(|row| ((row.fill_rate_estimate * 0.7) + (1.0 / (row.spread_bps + 1.0)) * 0.3).clamp(0.0, 1.0))
+                .unwrap_or(0.15);
+            let sentiment_score = scanner_row
+                .map(|row| ((row.tape_direction + row.imbalance) / 2.0).clamp(-1.0, 1.0))
+                .unwrap_or_default();
+            let unlock_risk_score = if product.scan_only { 0.72 } else { 0.28 };
+            let route_ready = product.live_tradable || !imports_for_product(&imports, &key).is_empty();
+            let priority_fill = scanner_row.map(|row| row.priority_fill).unwrap_or(false);
+            let headline = format!(
+                "{} is in {} with {} route posture",
+                product.product_id.as_str(),
+                listing_stage_label(&stage),
+                if route_ready { "ready" } else { "research" }
+            );
+            let mut tags = vec![product.base_currency.clone(), product.quote_currency.clone()];
+            tags.push(listing_stage_label(&stage).to_string());
+            if priority_fill {
+                tags.push("priority_fill".to_string());
+            }
+            if product.scan_only {
+                tags.push("scan_only".to_string());
+            }
+            if let Some(row) = scanner_row {
+                tags.push(row.active_strategy.clone());
+            }
+            ListingRadarRow {
+                product_id: product.product_id.clone(),
+                asset_symbol: product.base_currency.clone(),
+                base_currency: product.base_currency.clone(),
+                quote_currency: product.quote_currency.clone(),
+                stage,
+                headline,
+                composite_score,
+                liquidity_score,
+                sentiment_score,
+                unlock_risk_score,
+                route_ready,
+                live_tradable: product.live_tradable,
+                scan_only: product.scan_only,
+                priority_fill,
+                tags,
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        b.composite_score
+            .partial_cmp(&a.composite_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    rows
+}
+
+fn build_listing_radar_detail(
+    state: &DashboardState,
+    product_id: &str,
+) -> Option<ListingRadarDetailView> {
+    let product = state
+        .coinbase
+        .products
+        .read()
+        .iter()
+        .find(|product| product.product_id.as_str() == product_id)
+        .cloned()?;
+    let scanner = scanner_map(state);
+    let scanner_row = scanner.get(product_id).cloned();
+    let imports = imports_for_product(&state.coinbase.imports.read().clone(), product_id);
+    let stage = listing_stage_for(&product);
+    let composite_score = scanner_row.as_ref().map(|row| row.score).unwrap_or_default();
+    let liquidity_score = scanner_row
+        .as_ref()
+        .map(|row| ((row.fill_rate_estimate * 0.7) + (1.0 / (row.spread_bps + 1.0)) * 0.3).clamp(0.0, 1.0))
+        .unwrap_or(0.15);
+    let sentiment_score = scanner_row
+        .as_ref()
+        .map(|row| ((row.tape_direction + row.imbalance) / 2.0).clamp(-1.0, 1.0))
+        .unwrap_or_default();
+    let unlock_risk_score = if product.scan_only { 0.72 } else { 0.28 };
+    let route_ready = product.live_tradable || !imports.is_empty();
+    let priority_fill = scanner_row.as_ref().map(|row| row.priority_fill).unwrap_or(false);
+    let eligibility = scanner_row
+        .as_ref()
+        .map(|row| row.current_risk_eligibility.clone())
+        .unwrap_or_else(|| TradingEligibility {
+            product_id: product.product_id.clone(),
+            live_tradable: product.live_tradable,
+            scan_only: product.scan_only,
+            eligible: false,
+            reasons: vec!["listing radar item not yet scored by scanner".to_string()],
+        });
+    let headline = format!(
+        "{} is currently in {}",
+        product.product_id.as_str(),
+        listing_stage_label(&stage)
+    );
+    let summary = format!(
+        "{} routes through a {} execution posture with {} imports loaded.",
+        product.product_id.as_str(),
+        if route_ready { "ready" } else { "research" },
+        imports.len()
+    );
+    let mut catalysts = vec![format!(
+        "Current trading stage is {}.",
+        listing_stage_label(&stage)
+    )];
+    if priority_fill {
+        catalysts.push("Scanner currently flags this market for priority fill conditions.".to_string());
+    }
+    if product.scan_only {
+        catalysts.push("Market remains scan-only until venue state and route policy advance.".to_string());
+    }
+    if !imports.is_empty() {
+        catalysts.push(format!(
+            "{} strategy-lab imports already reference this market.",
+            imports.len()
+        ));
+    }
+    let insights = vec![
+        ProviderInsight {
+            provider: "Coinbase/CDP".to_string(),
+            category: "venue_state".to_string(),
+            summary: format!(
+                "Venue status is '{}' and live_tradable is {}.",
+                product.status,
+                product.live_tradable
+            ),
+            freshness_label: "realtime".to_string(),
+            status: if product.live_tradable {
+                "strong".to_string()
+            } else {
+                "watch".to_string()
+            },
+        },
+        ProviderInsight {
+            provider: "TradingView/Strategy Lab".to_string(),
+            category: "signal_context".to_string(),
+            summary: scanner_row
+                .as_ref()
+                .map(|row| format!(
+                    "Active strategy '{}' with score {:.3} and spread {:.2} bps.",
+                    row.active_strategy, row.score, row.spread_bps
+                ))
+                .unwrap_or_else(|| "No scanner vector has been attached yet.".to_string()),
+            freshness_label: "polling".to_string(),
+            status: if composite_score >= 0.35 {
+                "favorable".to_string()
+            } else {
+                "neutral".to_string()
+            },
+        },
+        ProviderInsight {
+            provider: "Dune/DeFiLlama".to_string(),
+            category: "research_lane".to_string(),
+            summary: "Research adapters are planned to contribute TVL, fee, and wallet growth context here.".to_string(),
+            freshness_label: "planned".to_string(),
+            status: "planned".to_string(),
+        },
+    ];
+    let routes = vec![
+        ListingVenueRoute {
+            venue: "Coinbase".to_string(),
+            route_type: "cex_primary".to_string(),
+            readiness: if product.live_tradable {
+                "ready".to_string()
+            } else {
+                "monitoring".to_string()
+            },
+            tradable: product.live_tradable,
+            notes: if product.live_tradable {
+                "Primary route available under current workstation policy.".to_string()
+            } else {
+                "Await full venue state before live execution.".to_string()
+            },
+        },
+        ListingVenueRoute {
+            venue: "DEX simulation".to_string(),
+            route_type: "pre_listing".to_string(),
+            readiness: if product.scan_only {
+                "research".to_string()
+            } else {
+                "watch".to_string()
+            },
+            tradable: false,
+            notes: "0x and Jupiter adapters should feed this lane in simulation before any multi-chain capital deployment.".to_string(),
+        },
+        ListingVenueRoute {
+            venue: "Strategy replay".to_string(),
+            route_type: "validation".to_string(),
+            readiness: if !imports.is_empty() {
+                "ready".to_string()
+            } else {
+                "missing_evidence".to_string()
+            },
+            tradable: false,
+            notes: "Replay promotion remains the approval gate before any route can escalate.".to_string(),
+        },
+    ];
+
+    Some(ListingRadarDetailView {
+        product,
+        stage,
+        headline,
+        summary,
+        composite_score,
+        liquidity_score,
+        sentiment_score,
+        unlock_risk_score,
+        route_ready,
+        priority_fill,
+        catalysts,
+        insights,
+        routes,
+        eligibility,
+        imports,
+    })
+}
+
+fn build_risk_overview(state: &DashboardState) -> RiskOverviewView {
+    let risk = state.risk_state.read().clone();
+    let scanner = state.coinbase.scanner.read().clone();
+    let orders = state.coinbase.orders.read().clone();
+    let blocked_markets = scanner
+        .iter()
+        .filter(|row| !row.current_risk_eligibility.eligible)
+        .count();
+    let live_eligible_markets = scanner
+        .iter()
+        .filter(|row| row.live_tradable && row.current_risk_eligibility.eligible && !row.scan_only)
+        .count();
+    let queued_notional = orders.iter().map(|order| order.quote_notional).sum::<f64>();
+    let live_orders = orders.iter().filter(|order| order.live).count();
+    let taker_orders = orders
+        .iter()
+        .filter(|order| matches!(order.route, Some(OrderRoute::Taker)))
+        .count();
+    let mut policy_breaches = Vec::new();
+    if blocked_markets > 0 {
+        policy_breaches.push(format!("{blocked_markets} markets are currently blocked by scanner policy."));
+    }
+    if risk.killswitch != "Running" {
+        policy_breaches.push(format!("Kill switch is currently {}.", risk.killswitch));
+    }
+    if state.coinbase.live_arm.read().armed == false {
+        policy_breaches.push("Live arm is disarmed; only bounded recommendation flows should proceed.".to_string());
+    }
+    if taker_orders > 0 {
+        policy_breaches.push(format!("{taker_orders} taker orders are queued and should be reviewed against replay evidence."));
+    }
+    RiskOverviewView {
+        killswitch: risk.killswitch,
+        daily_pnl: risk.daily_pnl,
+        open_notional: risk.open_notional,
+        unhedged_delta: risk.unhedged_delta,
+        blocked_markets,
+        live_eligible_markets,
+        queued_notional,
+        live_orders,
+        taker_orders,
+        policy_breaches,
+    }
+}
+
+fn build_agent_console(state: &DashboardState) -> AgentConsoleView {
+    let live_arm = state.coinbase.live_arm.read().clone();
+    let scanner = state.coinbase.scanner.read().clone();
+    let imports = state.coinbase.imports.read().clone();
+    let blocked_markets = scanner
+        .iter()
+        .filter(|row| !row.current_risk_eligibility.eligible)
+        .count();
+    let recommended_products = scanner
+        .iter()
+        .take(3)
+        .map(|row| row.product_id.clone())
+        .collect::<Vec<_>>();
+    let mut approvals = Vec::new();
+    if !live_arm.armed {
+        approvals.push(AgentApprovalItem {
+            id: "approval-live-arm".to_string(),
+            title: "Review live arming posture".to_string(),
+            description: "Keep autonomy in recommend-only mode until replay, paper, and route evidence are complete.".to_string(),
+            severity: "high".to_string(),
+            status: "pending".to_string(),
+            product_id: None,
+        });
+    }
+    if let Some(product) = scanner
+        .iter()
+        .find(|row| !row.current_risk_eligibility.eligible)
+        .map(|row| row.product_id.clone())
+    {
+        approvals.push(AgentApprovalItem {
+            id: format!("approval-policy-{}", product.as_str()),
+            title: "Resolve policy-blocked market".to_string(),
+            description: "Review blocked market conditions before any strategy escalation or route change.".to_string(),
+            severity: "medium".to_string(),
+            status: "pending".to_string(),
+            product_id: Some(product),
+        });
+    }
+    if imports.is_empty() {
+        approvals.push(AgentApprovalItem {
+            id: "approval-imports".to_string(),
+            title: "Load strategy evidence".to_string(),
+            description: "Import strategy-lab outputs so agent recommendations can point to replayable evidence.".to_string(),
+            severity: "medium".to_string(),
+            status: "pending".to_string(),
+            product_id: None,
+        });
+    }
+    let next_action = if blocked_markets > 0 {
+        "Review blocked markets and route them back through replay or scanner policy adjustments.".to_string()
+    } else if imports.is_empty() {
+        "Import strategy-lab evidence and promote a replay candidate.".to_string()
+    } else if !live_arm.armed {
+        "Stay in recommend-only mode until the approval queue is cleared.".to_string()
+    } else {
+        "Monitor top-ranked markets and keep execution inside bounded policy.".to_string()
+    };
+    AgentConsoleView {
+        autonomy_tier: if live_arm.armed {
+            "bounded_execute".to_string()
+        } else {
+            "recommend_only".to_string()
+        },
+        live_arm,
+        next_action,
+        blocked_markets,
+        imports_loaded: imports.len(),
+        recommended_products,
+        approvals,
+    }
+}
+
 fn parse_side(raw: &str) -> Option<Side> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "buy" => Some(Side::Buy),
@@ -791,8 +1219,9 @@ const FRONTEND_FALLBACK_HTML: &str = r#"<!doctype html>
       <p>Core endpoints:</p>
       <p><a href="/api/v1/scanner">/api/v1/scanner</a></p>
       <p><a href="/api/v1/products">/api/v1/products</a></p>
-      <p><a href="/api/v1/orders">/api/v1/orders</a></p>
-      <p><a href="/api/v1/strategies">/api/v1/strategies</a></p>
+      <p><a href="/api/v1/listings">/api/v1/listings</a></p>
+      <p><a href="/api/v1/risk/overview">/api/v1/risk/overview</a></p>
+      <p><a href="/api/v1/agent/console">/api/v1/agent/console</a></p>
     </div>
   </main>
 </body>
