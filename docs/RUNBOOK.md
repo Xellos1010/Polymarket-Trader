@@ -1,5 +1,16 @@
 # Operational Runbook
 
+## Pre-merge validation
+
+Before merge, deployment, or any operator-readiness claim, run the canonical local-first ladder:
+
+```bash
+./scripts/local_validation_ladder.sh
+```
+
+Reference guide:
+- `docs/LOCAL_VALIDATION.md`
+
 ## Startup
 ```bash
 cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper
@@ -34,25 +45,25 @@ Tiny live pilot guard:
 ## Emergency Controls
 - Halt quoting: `POST /ops/halt`
 - Resume: `POST /ops/resume`
-- Enter safe mode/flatten behavior: `POST /ops/flatten`
+- Enter safe mode or flatten behavior: `POST /ops/flatten`
 
 ## Incident Triage
 1. Check kill-switch and risk state (`/state/risk`).
 2. Inspect recent executions (`/state/executions`).
 3. Verify market feed freshness (`/state/books`, `/state/history`).
-4. If exchange/hedge degraded, keep `halt` or `flatten` active.
+4. If exchange or hedge is degraded, keep `halt` or `flatten` active.
 5. Preserve context snapshot:
    ```bash
    ./scripts/save_context.sh "incident note" docs/SESSION_CONTEXT.md config/config.toml
    ```
 
 ## Rollback
-- Runtime rollback: set manual halt, then restart previous binary/config.
+- Runtime rollback: set manual halt, then restart previous binary or config.
 - Code rollback (git): `git revert <commit>` and redeploy.
 
 ## Post-Incident
 - Append notes to `docs/SESSION_CONTEXT.md`.
-- Update `docs/SDLC_CHECKLIST.md` if process/tooling gaps were found.
+- Update `docs/SDLC_CHECKLIST.md` if process or tooling gaps were found.
 
 ## External AI Handoff
 ```bash
