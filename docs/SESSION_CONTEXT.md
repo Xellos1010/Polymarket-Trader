@@ -1,43 +1,68 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1772072894`
+Generated at UNIX epoch seconds: `1777230241`
 
 ## Note
-Implemented next-priority strategy-lab upgrades:
-- listing overlap auto-discovery for recent Coinbase markets
-- strategy plugin variants (external Pine/AI bias file + momentum + RSI)
-- persistent SQLite trade journal and per-market attribution summary
-- strategy-lab promotion pipeline to replay NDJSON (`tools/promote_strategy_lab.py`, `scripts/promote_strategy_lab.sh`)
-- progress and operator instructions docs (`docs/PROGRESS.md`, `docs/INSTRUCTIONS.md`)
+Control-tower checkpoint after auditing the full Phase 1 queue on 2026-04-26.
 
-## Runtime
-`rustc`: `rustc 1.93.1 (01f6ddf75 2026-02-11)`
-`cargo`: `cargo 1.93.1 (083ac5135 2025-12-15)`
+What is grounded right now:
+- `main` remains in Phase 1: sandbox trading / paper ROI.
+- The strongest active implementation stack is:
+  - PR `#12` for deterministic 3-run evidence gating
+  - PR `#13` for the read-only approval-queue backend contract
+  - PR `#18` for the read-only approval-queue frontend panel stacked on `#13`
+  - PR `#11` for current-API frontend fixture coverage
+- The next runtime blocker is still issue `#9`: queue-relevant workstation orders in the Coinbase workstation runtime are memory-only and do not survive restart.
+- Coordination work is now duplicated across PRs `#14` through `#17`, `#19`, and `#20`.
+- PRs `#4` and `#8` should be treated as stale or superseded unless they are explicitly rebuilt and revalidated.
 
-## Core Commands
-- Run engine: `cargo run -p pt-cli -- run --config config/config.toml`
-- Live preflight: `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
-- Dashboard: `http://127.0.0.1:8080/`
-- Health: `cargo run -p pt-cli -- status --url http://127.0.0.1:8080/health`
+## Recommended next implementation slice
+Implement issue `#9` as one narrow backend PR stacked on PR `#13`:
+- persist only `draft` and `cancel_requested` workstation orders via `storage.sqlite_path`
+- hydrate those rows on startup into `DashboardState.coinbase.orders`
+- prune persisted rows once orders leave queue-relevant statuses
+- keep `/api/v1/orders` and `/api/v1/approval-queue` read-only from an operator-action standpoint
+- add focused tests for create, update, and restart reload behavior
 
-### Strategy Lab
-- Generate dashboard: `python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090`
-- Overlap with auto-discovery: `python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery`
-- Backtest without journal writes: `python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json --disable-journal`
+## Runtime surface for issue #9
+- queue state source today:
+  - `crates/pt-dashboard/src/lib.rs`
+  - `DashboardState.coinbase.orders`
+- runtime initialization and lifecycle:
+  - `crates/pt-cli/src/coinbase.rs`
+  - `CoinbaseWorkstationRuntime::new(...)`
+  - `spawn_order_loop`
+  - `process_draft_orders`
+  - `process_cancel_requests`
+  - `maybe_submit_auto_orders`
+  - `merge_live_orders`
+- existing SQLite/storage pattern to reuse:
+  - `crates/pt-engine/src/lib.rs`
+  - `Storage` with `rusqlite`, WAL mode, and `CREATE TABLE IF NOT EXISTS`
 
-### Promotion / Replay
-- Promote lab result: `./scripts/promote_strategy_lab.sh data/strategy_lab/<report>.json BTC-USD sma_baseline`
-- Apply replay config:
-  - `engine.mode = "replay"`
-  - `engine.replay_path = "data/replay/strategy_lab_promoted.ndjson"`
+## Validation ladder
+1. `cargo fmt --all`
+2. `cargo check --workspace`
+3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+4. `cargo test -p pt-cli`
+5. `cargo test -p pt-dashboard`
+6. `cargo test --workspace`
+7. `cargo build --workspace`
+8. `cargo audit`
+9. `./scripts/generate_sbom.sh artifacts`
+10. `python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json`
+11. `python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery`
+12. `python3 tools/coinbase_strategy_lab.py optimize --config config/coinbase_strategy_lab.json`
+13. `cargo run -p pt-cli -- run --config config/config.toml`
+14. `./scripts/paper_soak.sh 86400 30 config/config.toml`
 
-### Pine Tuning
-- Extract pine params: `cargo run -p pt-cli -- pine-params --path pine-scripts/<script> --out data/tuning/pine_params.json`
-- Tune pine params: `cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 100 --evaluate-cmd "python3 tools/evaluate_candidate.py"`
-- Promote tuning candidate: `./scripts/promote_candidate.sh data/tuning/pine_tuning_results.json data/tuning/promoted_candidate.json BTC 15m`
+## Guardrails
+- Do not enable live mode.
+- Do not add or modify credentials.
+- Do not raise risk caps.
+- Do not add approval or execution mutation endpoints as part of issue `#9`.
+- Do not treat tracker refreshes as evidence that Phase 1 gates have passed.
 
-## Live Prerequisites
-- Set `engine.mode = "live"` in config.
-- Set `venues.polymarket.private_key` or `POLYMARKET_PRIVATE_KEY`.
-- Set `venues.coinbase.api_key`/`api_secret` or `COINBASE_API_KEY`/`COINBASE_API_SECRET`.
-- Keep hard risk caps enabled for tiny-live rollout.
+## Operator decision needed
+No approval is needed to implement the narrow issue `#9` persistence slice.
+Explicit approval is still required for merge, deployment, live mode, live credentials, or a tiny live pilot.
