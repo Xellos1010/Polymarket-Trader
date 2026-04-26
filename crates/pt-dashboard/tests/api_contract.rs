@@ -300,9 +300,7 @@ async fn assert_json_contract(
     request_uri: &str,
     request_body: Option<&str>,
 ) {
-    let mut builder = Request::builder()
-        .method(method)
-        .uri(request_uri);
+    let mut builder = Request::builder().method(method).uri(request_uri);
     if request_body.is_some() {
         builder = builder.header("content-type", "application/json");
     }
@@ -364,6 +362,15 @@ async fn state_endpoints_match_openapi_contract() {
             "/api/v1/products/BTC-USD",
             None,
         ),
+        ("GET", "/api/v1/listings", "/api/v1/listings", None),
+        (
+            "GET",
+            "/api/v1/listings/{product_id}",
+            "/api/v1/listings/BTC-USD",
+            None,
+        ),
+        ("GET", "/api/v1/risk/overview", "/api/v1/risk/overview", None),
+        ("GET", "/api/v1/agent/console", "/api/v1/agent/console", None),
         ("GET", "/api/v1/orders", "/api/v1/orders", None),
         ("GET", "/api/v1/strategies", "/api/v1/strategies", None),
         (
@@ -447,6 +454,10 @@ fn openapi_contains_all_runtime_paths() {
         "/api/v1/products",
         "/api/v1/scanner",
         "/api/v1/products/{product_id}",
+        "/api/v1/listings",
+        "/api/v1/listings/{product_id}",
+        "/api/v1/risk/overview",
+        "/api/v1/agent/console",
         "/api/v1/orders",
         "/api/v1/strategies",
         "/api/v1/mode",

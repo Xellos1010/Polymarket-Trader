@@ -47,6 +47,35 @@
         "risk counters and replay or paper evidence are visible",
         "frontend work stays in a separate PR when code changes are required"
       ]
+  "program": "coinbase-first-ai-trading-terminal",
+  "workstreams": [
+    {
+      "id": "ws-command-center",
+      "name": "Command Center",
+      "priority": "P1",
+      "status": "in_progress",
+      "features": ["UX-001", "EX-001", "EX-003", "DEV-006"]
+    },
+    {
+      "id": "ws-listing-radar",
+      "name": "Listing Radar",
+      "priority": "P2",
+      "status": "planned",
+      "features": ["LR-001", "LR-002", "LR-003", "LR-011", "UX-002"]
+    },
+    {
+      "id": "ws-risk-cockpit",
+      "name": "Risk Cockpit",
+      "priority": "P1",
+      "status": "planned",
+      "features": ["PR-002", "PR-006", "PR-007", "UX-005"]
+    },
+    {
+      "id": "ws-agent-console",
+      "name": "Agent Console",
+      "priority": "P3",
+      "status": "planned",
+      "features": ["AI-001", "AI-002", "AI-009", "UX-006"]
     }
   ]
 }
