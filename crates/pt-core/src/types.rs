@@ -433,3 +433,105 @@ pub struct ProductDetailView {
     pub orders: Vec<WorkstationOrder>,
     pub imports: Vec<StrategyLabImportSummary>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ListingLifecycleStage {
+    #[default]
+    Research,
+    Monitoring,
+    TransferOnly,
+    Auction,
+    FullTrading,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProviderInsight {
+    pub provider: String,
+    pub category: String,
+    pub summary: String,
+    pub freshness_label: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ListingVenueRoute {
+    pub venue: String,
+    pub route_type: String,
+    pub readiness: String,
+    pub tradable: bool,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ListingRadarRow {
+    pub product_id: ProductId,
+    pub asset_symbol: String,
+    pub base_currency: String,
+    pub quote_currency: String,
+    pub stage: ListingLifecycleStage,
+    pub headline: String,
+    pub composite_score: f64,
+    pub liquidity_score: f64,
+    pub sentiment_score: f64,
+    pub unlock_risk_score: f64,
+    pub route_ready: bool,
+    pub live_tradable: bool,
+    pub scan_only: bool,
+    pub priority_fill: bool,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ListingRadarDetailView {
+    pub product: WorkstationProduct,
+    pub stage: ListingLifecycleStage,
+    pub headline: String,
+    pub summary: String,
+    pub composite_score: f64,
+    pub liquidity_score: f64,
+    pub sentiment_score: f64,
+    pub unlock_risk_score: f64,
+    pub route_ready: bool,
+    pub priority_fill: bool,
+    pub catalysts: Vec<String>,
+    pub insights: Vec<ProviderInsight>,
+    pub routes: Vec<ListingVenueRoute>,
+    pub eligibility: TradingEligibility,
+    pub imports: Vec<StrategyLabImportSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RiskOverviewView {
+    pub killswitch: String,
+    pub daily_pnl: f64,
+    pub open_notional: f64,
+    pub unhedged_delta: f64,
+    pub blocked_markets: usize,
+    pub live_eligible_markets: usize,
+    pub queued_notional: f64,
+    pub live_orders: usize,
+    pub taker_orders: usize,
+    pub policy_breaches: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentApprovalItem {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub severity: String,
+    pub status: String,
+    pub product_id: Option<ProductId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AgentConsoleView {
+    pub autonomy_tier: String,
+    pub live_arm: LiveArmState,
+    pub next_action: String,
+    pub blocked_markets: usize,
+    pub imports_loaded: usize,
+    pub recommended_products: Vec<ProductId>,
+    pub approvals: Vec<AgentApprovalItem>,
+}
