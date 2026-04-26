@@ -172,6 +172,24 @@ struct StrategiesResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct ApprovalQueueItem {
+    order_id: String,
+    product_id: String,
+    side: Option<String>,
+    route: Option<String>,
+    status: Option<String>,
+    live: bool,
+    quote_notional: f64,
+    expected_net_bps: f64,
+    reason: Option<String>,
+    queue_state: String,
+    requires_operator_action: bool,
+    auto_execute: bool,
+    created_at: Option<String>,
+    updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct ActionResponse {
     ok: bool,
     message: String,
@@ -235,6 +253,7 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/scanner", get(get_scanner))
         .route("/api/v1/products/:product_id", get(get_product_detail))
         .route("/api/v1/orders", get(get_orders).post(post_order))
+        .route("/api/v1/approval-queue", get(get_approval_queue))
         .route("/api/v1/strategies", get(get_strategies))
         .route("/api/v1/mode", post(post_mode))
         .route("/api/v1/live/arm", post(post_live_arm))
@@ -481,6 +500,36 @@ async fn get_orders(State(state): State<DashboardState>) -> Json<Vec<Workstation
     Json(rows)
 }
 
+async fn get_approval_queue(State(state): State<DashboardState>) -> Json<Vec<ApprovalQueueItem>> {
+    let mut rows = state
+        .coinbase
+        .orders
+        .read()
+        .iter()
+        .filter_map(|order| {
+            let queue_state = approval_queue_state(order.status.as_ref())?;
+            Some(ApprovalQueueItem {
+                order_id: order.order_id.clone(),
+                product_id: order.product_id.as_str().to_string(),
+                side: order.side.as_ref().map(side_label).map(str::to_string),
+                route: order.route.as_ref().map(route_label).map(str::to_string),
+                status: order.status.as_ref().map(order_status_label).map(str::to_string),
+                live: order.live,
+                quote_notional: order.quote_notional,
+                expected_net_bps: order.expected_net_bps,
+                reason: order.reason.clone(),
+                queue_state: queue_state.to_string(),
+                requires_operator_action: true,
+                auto_execute: false,
+                created_at: order.created_at.map(|ts| ts.to_rfc3339()),
+                updated_at: order.updated_at.map(|ts| ts.to_rfc3339()),
+            })
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    Json(rows)
+}
+
 async fn get_strategies(State(state): State<DashboardState>) -> Json<StrategiesResponse> {
     Json(StrategiesResponse {
         mode: state.coinbase.mode.read().clone(),
@@ -714,6 +763,42 @@ fn strategy_view_to_vector(view: &ProductStrategyConfigView) -> pt_core::Strateg
     }
 }
 
+fn approval_queue_state(status: Option<&WorkstationOrderStatus>) -> Option<&'static str> {
+    match status {
+        Some(WorkstationOrderStatus::Draft) => Some("pending_review"),
+        Some(WorkstationOrderStatus::CancelRequested) => Some("cancel_requested"),
+        _ => None,
+    }
+}
+
+fn side_label(side: &Side) -> &'static str {
+    match side {
+        Side::Buy => "buy",
+        Side::Sell => "sell",
+    }
+}
+
+fn route_label(route: &OrderRoute) -> &'static str {
+    match route {
+        OrderRoute::Maker => "maker",
+        OrderRoute::Taker => "taker",
+        OrderRoute::ScanOnly => "scan_only",
+    }
+}
+
+fn order_status_label(status: &WorkstationOrderStatus) -> &'static str {
+    match status {
+        WorkstationOrderStatus::Draft => "draft",
+        WorkstationOrderStatus::CancelRequested => "cancel_requested",
+        WorkstationOrderStatus::Open => "open",
+        WorkstationOrderStatus::Filled => "filled",
+        WorkstationOrderStatus::Canceled => "canceled",
+        WorkstationOrderStatus::Rejected => "rejected",
+        WorkstationOrderStatus::AutoCanceled => "auto_canceled",
+        WorkstationOrderStatus::ScanOnly => "scan_only",
+    }
+}
+
 fn parse_side(raw: &str) -> Option<Side> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "buy" => Some(Side::Buy),
@@ -792,6 +877,7 @@ const FRONTEND_FALLBACK_HTML: &str = r#"<!doctype html>
       <p><a href="/api/v1/scanner">/api/v1/scanner</a></p>
       <p><a href="/api/v1/products">/api/v1/products</a></p>
       <p><a href="/api/v1/orders">/api/v1/orders</a></p>
+      <p><a href="/api/v1/approval-queue">/api/v1/approval-queue</a></p>
       <p><a href="/api/v1/strategies">/api/v1/strategies</a></p>
     </div>
   </main>
