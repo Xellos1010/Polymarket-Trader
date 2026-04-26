@@ -228,6 +228,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkstationOrder'
+  /api/v1/approval-queue:
+    get:
+      summary: Read-only operator review queue derived from current workstation orders
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalQueueItem'
   /api/v1/strategies:
     get:
       summary: Strategy config, imports, and live-arm state
@@ -541,6 +553,38 @@ components:
         reason:
           type: string
           nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    ApprovalQueueItem:
+      type: object
+      required: [order_id, product_id, live, quote_notional, expected_net_bps, queue_state, requires_operator_action, auto_execute]
+      properties:
+        order_id: { type: string }
+        product_id: { type: string }
+        side:
+          type: string
+          nullable: true
+        route:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        live: { type: boolean }
+        quote_notional: { type: number }
+        expected_net_bps: { type: number }
+        reason:
+          type: string
+          nullable: true
+        queue_state: { type: string }
+        requires_operator_action: { type: boolean }
+        auto_execute: { type: boolean }
         created_at:
           type: string
           format: date-time
