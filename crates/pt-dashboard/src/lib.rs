@@ -20,13 +20,13 @@ use serde_json::Value;
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
 #[derive(Debug, Clone)]
-struct StoredPolicyEvent {
-    event_id: String,
-    event_type: String,
-    outcome: String,
-    summary: String,
-    product_id: Option<ProductId>,
-    created_at: chrono::DateTime<Utc>,
+pub struct StoredPolicyEvent {
+    pub event_id: String,
+    pub event_type: String,
+    pub outcome: String,
+    pub summary: String,
+    pub product_id: Option<ProductId>,
+    pub created_at: chrono::DateTime<Utc>,
 }
 
 #[derive(Clone)]
