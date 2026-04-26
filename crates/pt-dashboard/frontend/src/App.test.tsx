@@ -178,7 +178,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Scanner-first entry and exit control.")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Selected Market" })).toBeInTheDocument();
-    expect(await screen.findByText("BTC-USD")).toBeInTheDocument();
+    expect((await screen.findAllByText("BTC-USD")).length).toBeGreaterThan(0);
     expect(screen.getByText("daily loss limit near threshold")).toBeInTheDocument();
     expect(screen.getByText("data/strategy_lab/dashboard-btc.json")).toBeInTheDocument();
   });
@@ -188,7 +188,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByText("BTC-USD");
+    await screen.findByRole("heading", { name: "Selected Market" });
     fireEvent.change(screen.getByPlaceholderText("Quote notional"), {
       target: { value: "40" },
     });
@@ -218,8 +218,8 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByText("BTC-USD");
-    fireEvent.change(screen.getByDisplayValue("Paper"), {
+    await screen.findByRole("heading", { name: "Selected Market" });
+    fireEvent.change(screen.getAllByRole("combobox")[0], {
       target: { value: "replay" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply Mode" }));
