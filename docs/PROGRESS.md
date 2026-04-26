@@ -9,22 +9,26 @@
   - overlap (candle-aligned listing analysis)
   - optimize
   - unified dashboard
+  - comparative CSV/Markdown report export
 - Listing overlap now supports **auto-discovery** of likely recent Coinbase listings.
+- Listing overlap now ranks **post-anchor cohorts** by impulse and volatility buckets.
 - Strategy variants now support a **plugin interface**:
   - `external_bias_file` (Pine/AI bias series input)
+  - `tradingview_webhook_file` (direct TradingView webhook snapshot replay input)
   - `momentum_bias`
   - `rsi_bias`
 - Persistent SQLite trade journal now records runs/trades and exposes per-market attribution summaries.
 - Strategy-lab promotion tooling now converts selected market/variant into replay NDJSON for Rust replay mode.
+- Replay acceptance tooling now validates promoted replay NDJSON plus optional SQLite risk/execution evidence.
 
 ## In Progress
 
-- Validate promotion flow end-to-end against `pt-cli` replay mode with a selected promoted artifact.
-- Expand docs/examples for external bias file formats and tuning loop ergonomics.
+- Validate promoted replay artifacts against `pt-cli` replay mode in a Rust-enabled environment.
+- Wire hosted branch protection/manual approval settings in GitHub.
 
 ## Next Queue
 
-1. Add optional ranked listing cohorts by post-anchor impulse and volatility buckets.
-2. Add plugin presets for direct TradingView webhook replay snapshots.
-3. Add a replay acceptance script that checks risk/latency counters after promoted runs.
-4. Add comparative report export (CSV/Markdown) across variants and markets.
+1. Run the full Rust validation ladder in an environment with `cargo` and network access.
+2. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
+3. Add mutation tests for risk and quote-critical logic.
+4. Configure hosted branch protections and required status checks.
