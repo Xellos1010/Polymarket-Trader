@@ -6,7 +6,9 @@ Local-first visualization, strategy modification, and backtesting for Coinbase m
 
 - Tool: `tools/coinbase_strategy_lab.py`
 - Promotion tool: `tools/promote_strategy_lab.py`
-- Wrapper: `scripts/promote_strategy_lab.sh`
+- Replay acceptance tool: `tools/replay_acceptance.py`
+- Promotion wrapper: `scripts/promote_strategy_lab.sh`
+- Replay acceptance wrapper: `scripts/replay_acceptance.sh`
 - Config example: `config/coinbase_strategy_lab.example.json`
 - Config schema: `schemas/coinbase_strategy_lab.schema.json`
 - Output folder: `data/strategy_lab/`
@@ -130,6 +132,35 @@ Then set in `config/config.toml`:
 
 - `engine.mode = "replay"`
 - `engine.replay_path = "data/replay/strategy_lab_promoted.ndjson"`
+
+## Replay Acceptance
+
+After promotion, validate the replay artifact before or after running the Rust engine:
+
+```bash
+./scripts/replay_acceptance.sh data/replay/strategy_lab_promoted.ndjson data/tuning/strategy_lab_promoted.json
+```
+
+The validator checks that replay frames are parseable, chronologically ordered, bounded, and internally consistent. It verifies snapshot fields such as market id, token id, bid, ask, spread, liquidity, timestamp, and replay bias.
+
+Optional runtime evidence can be checked from the engine SQLite store after a replay run:
+
+```bash
+python3 tools/replay_acceptance.py \
+  --replay data/replay/strategy_lab_promoted.ndjson \
+  --promotion data/tuning/strategy_lab_promoted.json \
+  --sqlite data/output/pt.sqlite \
+  --min-risk-events 1 \
+  --min-snapshots 1
+```
+
+Optional dashboard evidence can be checked while the local dashboard is running:
+
+```bash
+python3 tools/replay_acceptance.py \
+  --replay data/replay/strategy_lab_promoted.ndjson \
+  --dashboard-url http://127.0.0.1:8080
+```
 
 ## Pine + AI Fine-Tuning Loop
 
