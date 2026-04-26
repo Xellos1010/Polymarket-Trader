@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCHEMA_VERSION=1
+
 usage() {
   cat >&2 <<'EOF'
 usage: ./scripts/phase1_evidence_bundle.sh \
@@ -92,6 +94,8 @@ from pathlib import Path
 
 run_dir = Path(${RUN_DIR@Q})
 manifest = {
+    "schema_version": ${SCHEMA_VERSION},
+    "phase": "Phase 1",
     "run_label": ${RUN_LABEL@Q},
     "generated_at": dt.datetime.now(tz=dt.timezone.utc).isoformat(),
     "artifacts": {
