@@ -26,6 +26,13 @@
 - `ts_ms` INTEGER NOT NULL
 - `payload` TEXT NOT NULL (`RiskState` JSON)
 
+### `approval_queue_orders`
+- `order_id` TEXT PRIMARY KEY
+- `status` TEXT NOT NULL (`draft` or `cancel_requested` only)
+- `payload` TEXT NOT NULL (`WorkstationOrder` JSON)
+- `created_at_ms` INTEGER NOT NULL
+- `updated_at_ms` INTEGER NOT NULL
+
 ## Strategy Lab Journal (SQLite)
 
 Default file: `data/strategy_lab/trade_journal.sqlite`
