@@ -1,3 +1,6 @@
+use pt_core::{
+    clamp, round_down, round_up, Asset, MarketSelection, MarketSnapshot, MarketTier, QuoteIntent,
+    TimeBucket,
 use chrono::Utc;
 use pt_core::{
     clamp, round_down, round_up, EntryExitVector, ExecutionCostAttribution, ExecutionReport,
@@ -182,6 +185,38 @@ pub fn default_fee_bps_for_venue(venue: &Venue, maker_fee_bps: f64, taker_fee_bp
 mod tests {
     use super::*;
     use chrono::Utc;
+
+    fn market(tick_size: f64, min_order_size: f64) -> MarketSelection {
+        MarketSelection {
+            market_id: "m1".into(),
+            question: "test".into(),
+            slug: "updown-5m-btc".into(),
+            token_id_yes: "yes".into(),
+            token_id_no: "no".into(),
+            asset: Asset::Btc,
+            bucket: TimeBucket::FiveMinute,
+            tier: MarketTier::TierA,
+            fees_enabled: true,
+            spread: 0.02,
+            liquidity: 1_000.0,
+            volume24h: 100.0,
+            tick_size,
+            min_order_size,
+            end_date: Utc::now(),
+        }
+    }
+
+    fn book(bid: f64, ask: f64) -> MarketSnapshot {
+        MarketSnapshot {
+            market_id: "m1".into(),
+            token_id: "yes".into(),
+            bid,
+            ask,
+            spread: ask - bid,
+            liquidity: 1_000.0,
+            ts: Utc::now(),
+        }
+    }
     use pt_core::{ExecutionStatus, Side, Venue};
 
     #[test]
@@ -191,6 +226,82 @@ mod tests {
     }
 
     #[test]
+    fn invalid_books_are_rejected() {
+        let market = market(0.01, 1.0);
+        let cfg = QuoteConfig::default();
+        let costs = CostInputs::default();
+
+        for snapshot in [book(0.50, 0.50), book(0.51, 0.50), book(0.0, 0.50), book(0.49, 0.0)] {
+            assert!(build_quote_intent(&market, &snapshot, 0.0, 0.0, &costs, &cfg).is_none());
+        }
+    }
+
+    #[test]
+    fn expected_net_threshold_is_inclusive_at_boundary() {
+        let market = market(0.01, 1.0);
+        let snapshot = book(0.49, 0.51);
+        let costs = CostInputs::default();
+
+        let boundary_cfg = QuoteConfig {
+            min_expected_net: 0.02,
+            ..QuoteConfig::default()
+        };
+        let boundary = build_quote_intent(&market, &snapshot, 0.0, 0.0, &costs, &boundary_cfg)
+            .expect("boundary quote");
+        assert!((boundary.expected_net - 0.02).abs() < 1e-9);
+
+        let reject_cfg = QuoteConfig {
+            min_expected_net: 0.0201,
+            ..QuoteConfig::default()
+        };
+        assert!(build_quote_intent(&market, &snapshot, 0.0, 0.0, &costs, &reject_cfg).is_none());
+    }
+
+    #[test]
+    fn tick_rounding_and_clamp_are_deterministic() {
+        let market = market(0.05, 1.0);
+        let snapshot = book(0.48, 0.52);
+        let cfg = QuoteConfig {
+            base_half: 0.01,
+            max_half: 0.20,
+            ..QuoteConfig::default()
+        };
+
+        let quote = build_quote_intent(&market, &snapshot, 0.01, 0.0, &CostInputs::default(), &cfg)
+            .expect("quote");
+        assert!((quote.bid_px - 0.45).abs() < 1e-9);
+        assert!((quote.ask_px - 0.60).abs() < 1e-9);
+    }
+
+    #[test]
+    fn min_order_size_sets_quote_floor() {
+        let market = market(0.01, 3.0);
+        let snapshot = book(0.49, 0.51);
+        let cfg = QuoteConfig {
+            base_size: 1.0,
+            ..QuoteConfig::default()
+        };
+
+        let quote = build_quote_intent(&market, &snapshot, 0.0, 0.0, &CostInputs::default(), &cfg)
+            .expect("quote");
+        assert_eq!(quote.bid_sz, 3.0);
+        assert_eq!(quote.ask_sz, 3.0);
+    }
+
+    #[test]
+    fn large_negative_shift_invalidates_quote() {
+        let market = market(0.01, 1.0);
+        let snapshot = book(0.49, 0.51);
+
+        assert!(build_quote_intent(
+            &market,
+            &snapshot,
+            -1.0,
+            0.0,
+            &CostInputs::default(),
+            &QuoteConfig::default(),
+        )
+        .is_none());
     fn vector_gate_allows_in_range() {
         let quote = QuoteIntent {
             market_id: "m1".to_string(),
