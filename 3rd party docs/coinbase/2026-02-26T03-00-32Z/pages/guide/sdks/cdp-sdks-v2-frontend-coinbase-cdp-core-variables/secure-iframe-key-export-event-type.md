@@ -1,0 +1,51 @@
+# secure iframe key export event type
+
+```
+const SECURE_IFRAME_KEY_EXPORT_EVENT_TYPE: {
+  GET_PRIVATE_KEY: "CDP_WEB_SECURE_IFRAME_GET_PRIVATE_KEY";
+  INIT: "CDP_WEB_SECURE_IFRAME_INIT";
+  LISTENING: "CDP_WEB_SECURE_IFRAME_LISTENING";
+  STATUS: "CDP_WEB_SECURE_IFRAME_STATUS";
+  THEME: "CDP_WEB_SECURE_IFRAME_THEME";
+};
+
+```
+
+The type of event for the secure iframe key export.
+
+## Type declaration
+
+### GET\_PRIVATE\_KEY
+
+```
+readonly GET_PRIVATE_KEY: "CDP_WEB_SECURE_IFRAME_GET_PRIVATE_KEY";
+
+```
+
+### INIT
+
+```
+readonly INIT: "CDP_WEB_SECURE_IFRAME_INIT";
+
+```
+
+### LISTENING
+
+```
+readonly LISTENING: "CDP_WEB_SECURE_IFRAME_LISTENING";
+
+```
+
+### STATUS
+
+```
+readonly STATUS: "CDP_WEB_SECURE_IFRAME_STATUS";
+
+```
+
+### THEME
+
+```
+readonly THEME: "CDP_WEB_SECURE_IFRAME_THEME";
+
+```

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polymarket-trader.local/schemas/strategy_lab.schema.json",
+  "title": "Strategy Lab Profile",
+  "type": "object",
+  "required": [
+    "profile_id",
+    "name",
+    "version",
+    "product_id",
+    "granularity_sec",
+    "candle_limit",
+    "starting_equity",
+    "indicators",
+    "fusion",
+    "costs",
+    "weights"
+  ],
+  "properties": {
+    "profile_id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "integer", "minimum": 1 },
+    "product_id": { "type": "string", "pattern": "^[A-Z0-9]+-[A-Z0-9]+$" },
+    "granularity_sec": { "type": "integer", "minimum": 60 },
+    "candle_limit": { "type": "integer", "minimum": 50 },
+    "starting_equity": { "type": "number", "exclusiveMinimum": 0 },
+    "indicators": {
+      "type": "object",
+      "required": [
+        "ma_type",
+        "ma_fast",
+        "ma_slow",
+        "rsi_len",
+        "rsi_oversold",
+        "rsi_overbought",
+        "bb_len",
+        "bb_fib_multiplier",
+        "ichimoku_conv",
+        "ichimoku_base",
+        "ichimoku_span_b",
+        "ichimoku_displacement",
+        "macd_fast",
+        "macd_slow",
+        "macd_signal",
+        "adx_len",
+        "atr_len",
+        "stoch_rsi_len",
+        "stoch_rsi_smooth",
+        "volume_lookback",
+        "vwap_dev_lookback"
+      ],
+      "properties": {
+        "ma_type": {
+          "type": "string",
+          "enum": ["ema", "sma", "wma", "hma", "dema", "tema", "vwma", "rma", "zlema"]
+        },
+        "ma_fast": { "type": "integer", "minimum": 2 },
+        "ma_slow": { "type": "integer", "minimum": 3 },
+        "rsi_len": { "type": "integer", "minimum": 2 },
+        "rsi_oversold": { "type": "number", "minimum": 0, "maximum": 100 },
+        "rsi_overbought": { "type": "number", "minimum": 0, "maximum": 100 },
+        "bb_len": { "type": "integer", "minimum": 2 },
+        "bb_fib_multiplier": { "type": "number", "exclusiveMinimum": 0 },
+        "ichimoku_conv": { "type": "integer", "minimum": 2 },
+        "ichimoku_base": { "type": "integer", "minimum": 2 },
+        "ichimoku_span_b": { "type": "integer", "minimum": 2 },
+        "ichimoku_displacement": { "type": "integer", "minimum": 1 },
+        "macd_fast": { "type": "integer", "minimum": 2 },
+        "macd_slow": { "type": "integer", "minimum": 3 },
+        "macd_signal": { "type": "integer", "minimum": 2 },
+        "adx_len": { "type": "integer", "minimum": 2 },
+        "atr_len": { "type": "integer", "minimum": 2 },
+        "stoch_rsi_len": { "type": "integer", "minimum": 2 },
+        "stoch_rsi_smooth": { "type": "integer", "minimum": 1 },
+        "volume_lookback": { "type": "integer", "minimum": 2 },
+        "vwap_dev_lookback": { "type": "integer", "minimum": 2 }
+      },
+      "additionalProperties": false
+    },
+    "fusion": {
+      "type": "object",
+      "required": ["buy_threshold", "sell_threshold", "min_confluence", "neutral_regime_multiplier"],
+      "properties": {
+        "buy_threshold": { "type": "number", "minimum": -1, "maximum": 1 },
+        "sell_threshold": { "type": "number", "minimum": -1, "maximum": 1 },
+        "min_confluence": { "type": "integer", "minimum": 1 },
+        "neutral_regime_multiplier": { "type": "number", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "costs": {
+      "type": "object",
+      "required": ["fee_bps", "slippage_bps", "fixed_trade_cost"],
+      "properties": {
+        "fee_bps": { "type": "number", "minimum": 0 },
+        "slippage_bps": { "type": "number", "minimum": 0 },
+        "fixed_trade_cost": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "weights": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "number" }
+    }
+  },
+  "additionalProperties": false
+}

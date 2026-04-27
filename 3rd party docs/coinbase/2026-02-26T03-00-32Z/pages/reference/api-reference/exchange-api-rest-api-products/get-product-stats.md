@@ -1,0 +1,16 @@
+# get product stats
+
+```
+{
+  "open": "5414.18000000",
+  "high": "6441.37000000",
+  "low": "5261.69000000",
+  "volume": "53687.76764233",
+  "last": "6250.02000000",
+  "volume_30day": "786763.72930864",
+  "rfq_volume_24hour": "78.23",
+  "conversions_volume_24hour": "0.000000",
+  "rfq_volume_30day": "0.000000",
+  "conversions_volume_30day": "0.000000"
+}
+```
