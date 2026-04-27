@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../CoinBasePro-Trader"
+		},
+		{
+			"path": "../FinancialTrader"
+		},
+		{
+			"path": "../algotrading-crypto"
+		},
+		{
+			"path": "../lambda-tradingviewer-ws"
+		},
+		{
+			"path": "../coinbase-advanced-node-ts"
+		}
+	],
+	"settings": {}
+}
