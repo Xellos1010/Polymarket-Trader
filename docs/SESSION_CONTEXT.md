@@ -1,44 +1,44 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1777230241`
+Generated at UNIX epoch seconds: `1777288058`
 
-## Note
-Control-tower checkpoint after auditing the full Phase 1 queue on 2026-04-26.
+## Phase
+Phase 1: sandbox trading / paper ROI.
 
-What is grounded right now:
-- `main` remains in Phase 1: sandbox trading / paper ROI.
-- The strongest active implementation stack is:
-  - PR `#12` for deterministic 3-run evidence gating
-  - PR `#13` for the read-only approval-queue backend contract
-  - PR `#18` for the read-only approval-queue frontend panel stacked on `#13`
-  - PR `#11` for current-API frontend fixture coverage
-- The next runtime blocker is still issue `#9`: queue-relevant workstation orders in the Coinbase workstation runtime are memory-only and do not survive restart.
-- Coordination work is now duplicated across PRs `#14` through `#17`, `#19`, and `#20`.
-- PRs `#4` and `#8` should be treated as stale or superseded unless they are explicitly rebuilt and revalidated.
+## Current audit finding
+I re-audited the repo state, issue `#9`, the merged queue, and the open draft PR stack on 2026-04-27.
+
+What is grounded now:
+- `main` remains in Phase 1.
+- The materially relevant merged work is:
+  - PR `#11`: fixture-backed dashboard frontend tests
+  - PR `#12`: deterministic 3-run Phase 1 evidence gate
+  - PR `#13`: read-only approval-queue backend contract
+  - PR `#18`: read-only approval-queue frontend panel
+  - PR `#24`: tracker refresh on `main`
+- Open draft PRs now span `#32` through `#38`.
+- PR `#37` is the only open code-bearing approval-queue branch that should drive the next runtime sequence.
+- PR `#32` overlaps the same helper-stack area and is the highest merge/conflict risk.
+- PRs `#33`, `#34`, `#35`, `#36`, and `#38` are docs/control-tower handoff drafts only and should not steer implementation sequencing.
+- The remaining runtime blocker for issue `#9` is still the final `crates/pt-cli/src/coinbase.rs` wiring for restart-safe approval-queue behavior.
 
 ## Recommended next implementation slice
-Implement issue `#9` as one narrow backend PR stacked on PR `#13`:
-- persist only `draft` and `cancel_requested` workstation orders via `storage.sqlite_path`
-- hydrate those rows on startup into `DashboardState.coinbase.orders`
-- prune persisted rows once orders leave queue-relevant statuses
-- keep `/api/v1/orders` and `/api/v1/approval-queue` read-only from an operator-action standpoint
-- add focused tests for create, update, and restart reload behavior
+Land PR `#37` first, then open one narrow follow-up PR that only wires the approval-queue helpers into the Coinbase workstation runtime.
 
-## Runtime surface for issue #9
-- queue state source today:
-  - `crates/pt-dashboard/src/lib.rs`
-  - `DashboardState.coinbase.orders`
-- runtime initialization and lifecycle:
-  - `crates/pt-cli/src/coinbase.rs`
-  - `CoinbaseWorkstationRuntime::new(...)`
-  - `spawn_order_loop`
-  - `process_draft_orders`
-  - `process_cancel_requests`
-  - `maybe_submit_auto_orders`
-  - `merge_live_orders`
-- existing SQLite/storage pattern to reuse:
-  - `crates/pt-engine/src/lib.rs`
-  - `Storage` with `rusqlite`, WAL mode, and `CREATE TABLE IF NOT EXISTS`
+Keep that follow-up PR limited to:
+- open `ApprovalQueueStore` from `storage.sqlite_path`
+- hydrate queue-relevant rows (`draft`, `cancel_requested`) on workstation startup
+- reconcile queue state after local lifecycle mutations
+- reconcile queue state after live-order sync and identity changes
+- keep `/api/v1/orders` and `/api/v1/approval-queue` read-only
+- avoid live-mode, credential, deployment, or risk-cap changes
+
+## Acceptance criteria
+- PR `#37` remains the canonical helper-stack base.
+- The next runtime-wiring PR touches only the `coinbase.rs` integration slice plus focused tests/docs as needed.
+- Queue persistence stays limited to `draft` and `cancel_requested`.
+- Restart/reload behavior becomes deterministic without widening execution authority.
+- No live-mode enablement, credential changes, or risk-cap increases are introduced.
 
 ## Validation ladder
 1. `cargo fmt --all`
@@ -56,211 +56,14 @@ Implement issue `#9` as one narrow backend PR stacked on PR `#13`:
 13. `cargo run -p pt-cli -- run --config config/config.toml`
 14. `./scripts/paper_soak.sh 86400 30 config/config.toml`
 
-## Guardrails
+## Risks and guardrails
 - Do not enable live mode.
 - Do not add or modify credentials.
 - Do not raise risk caps.
-- Do not add approval or execution mutation endpoints as part of issue `#9`.
-- Do not treat tracker refreshes as evidence that Phase 1 gates have passed.
+- Do not widen queue persistence beyond `draft` and `cancel_requested` in this blocker path.
+- Do not add approval or execution mutation endpoints as part of the persistence slice.
+- Do not let docs-only draft PR churn obscure the code-bearing sequence.
 
 ## Operator decision needed
-No approval is needed to implement the narrow issue `#9` persistence slice.
-Explicit approval is still required for merge, deployment, live mode, live credentials, or a tiny live pilot.
-Generated at UNIX epoch seconds: `1777223346`
-
-## Note
-Control-tower audit and queue start for the next Phase 1 round.
-Generated at UNIX epoch seconds: `1772420340`
-
-## Note
-Patched Coinbase blockers (rustls provider + SEC1 key handling), passed coinbase-smoke, added Rust strategy-lab crate + CLI + dashboard, and added wallet conversion + maker speed-test controls in main dashboard.
-Added listing-pattern dashboard tab with recent-listing overlays, plus feed health and parity monitor surfaces.
-Added listing overlay CSV export and enhanced parity monitor math columns (gross/net/cost/min gate/usd).
-Added parity CSV export and Coinbase WS timeout/reconnect hardening (keepalive ping + timeout streak gate).
-Added server-side parity CSV export API (`/state/parity/export-csv`) and expanded feed-health counters for WS timeout/ping/connect diagnostics.
-Added Master Optimization v4 scaffolding:
-- Multi-venue config contracts (`venues.kraken`, `venues.gemini`) + runtime/hardware tuning config blocks.
-- New endpoints: `/state/feed/diagnostics`, `/state/venues/*`, `/state/routes/export-csv`, `/state/wallet-intel/*`.
-- New profile: `config/profiles/live_linux_ultra_tight.toml`.
-- New scripts: `scripts/linux_tune_baseline.sh`, `scripts/install_homebase_service.sh`.
-Added cross-venue route ingestion in `pt-engine`:
-- Dedicated Kraken/Gemini top-of-book loops feeding route books.
-- Route merge now consumes `coinbase + kraken + gemini` with venue-prefixed leg IDs.
-- `pt-route` now supports prefixed products (`coinbase:BTC-USD`) and deterministic product iteration for stable route ordering.
-Added venue-specific route fee modeling:
-- `execution.fees.kraken` and `execution.fees.gemini` are now supported with defaults.
-- Route net-edge now applies maker fee by leg venue instead of a single shared maker fee.
-Added route quality penalties:
-- Dynamic reject-risk penalty from rolling 10m execution reject ratio.
-- Dynamic latency-decay penalty from Coinbase L2 freshness relative to `execution.stale_book_ms`.
-Added local realtime homebase expansion:
-- Basic/Advanced dashboard mode (`/state/ui/mode`, `/ops/ui/mode`).
-- Cross-exchange shadow summary (`/state/crossvenue/shadow-summary`).
-- Downturn strategy summary (`/state/strategy/downturn-summary`).
-- Capital planner + close-day workflow (`/state/capital/plan`, `/ops/capital/close-day`, `/state/capital/ledger`).
-- Equity capability probe + paper run surfaces (`/state/equities/universe`, `/state/equities/paper-runs`).
-- Added config blocks: `ui`, `capital_plan`, `equities`.
-- Added SQLite runtime tables for capital/equity persistence.
-
-## 2026-04-26 Next Round Checkpoint
-- reviewed current `main`, open PRs #11, #12, #13, and #14, plus issues #9 and #10
-- confirmed the repo is still in Phase 1 and the next implementation blocker is restart-safe approval-queue persistence
-- queued the next focused coding slice in `docs/PHASE1_NEXT_ROUND_2026-04-26.md`
-- recommended merge/order sequence:
-  - PR #12 evidence gate
-  - PR #13 read-only approval queue API
-  - PR #11 frontend fixture safety net
-  - PR #14 close or supersede after implementation work is active
-  - next new code PR: issue #9 SQLite-backed workstation order persistence and startup hydration
-- parallel analysis results agreed on the narrowest safe path:
-  - persist workstation order lifecycle state using `storage.sqlite_path`
-  - hydrate persisted orders into runtime startup state
-  - keep execution authority unchanged and avoid new mutating approval APIs
-  - validate with create/update/reload coverage before any merge/deploy decision
-
-What is grounded from the current repo state:
-- `main` is still in **Phase 1: sandbox trading / paper ROI**.
-- Real active implementation tracks are draft PRs `#11`, `#12`, `#13`, and `#18`.
-- Draft PRs `#14` through `#17` overlap as planning/checkpoint work and should not become the long-term source of truth.
-- Older open PRs `#4` and `#8` remain stale/superseded until explicitly rebased and revalidated.
-- The next concrete runtime blocker is issue `#9`: approval-queue/workstation-order state is still in-memory inside the Coinbase workstation runtime.
-
-Next round that is now queued and started:
-- persist only operator-review queue states (`draft`, `cancel_requested`) via `storage.sqlite_path`
-- hydrate those rows on startup so restart/reload behavior is deterministic
-- keep `/api/v1/orders` and `/api/v1/approval-queue` read-only
-- add focused tests for create/update/reload behavior
-- do not widen live authority, credentials, or risk caps
-
-## Last Known Local Runtime
-This audit cycle was remote-first through GitHub inspection and did **not** rerun cargo locally.
-
-Prior saved local toolchain snapshot:
-- `rustc`: `rustc 1.93.1 (01f6ddf75 2026-02-11)`
-- `cargo`: `cargo 1.93.1 (083ac5135 2025-12-15)`
-
-## Core Commands
-- Run engine: `cargo run -p pt-cli -- run --config config/config.toml`
-- Run homebase mode: `cargo run -p pt-cli -- run-homebase --config config/config.toml`
-- Run exec-only mode: `cargo run -p pt-cli -- run-exec --config config/config.toml`
-- Live preflight: `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
-- Dashboard: `http://127.0.0.1:8080/`
-- Health: `cargo run -p pt-cli -- status --url http://127.0.0.1:8080/health`
-
-### Strategy Lab
-- Generate dashboard: `python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090`
-- Overlap with auto-discovery: `python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery`
-- Backtest without journal writes: `python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json --disable-journal`
-
-### Promotion / Replay
-- Promote lab result: `./scripts/promote_strategy_lab.sh data/strategy_lab/<report>.json BTC-USD sma_baseline`
-- Apply replay config:
-  - `engine.mode = "replay"`
-  - `engine.replay_path = "data/replay/strategy_lab_promoted.ndjson"`
-
-### Immediate Validation Ladder For The Next Code Slice
-- `cargo fmt --all`
-- `cargo check --workspace`
-- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- `cargo test -p pt-cli`
-- `cargo test -p pt-dashboard`
-- `cargo test --workspace`
-- `cargo build --workspace`
-- `cargo audit`
-- `./scripts/generate_sbom.sh artifacts`
-- Wallet status: `cargo run -p pt-cli -- wallet-status`
-- Wallet plan: `cargo run -p pt-cli -- wallet-plan`
-- Wallet approve: `cargo run -p pt-cli -- wallet-approve --token-id <token_id>`
-- Execution status: `cargo run -p pt-cli -- execution-status`
-- Coinbase WS status: `cargo run -p pt-cli -- coinbase-ws-status`
-- Coinbase auth status: `cargo run -p pt-cli -- coinbase-auth-status`
-- Coinbase auth reload: `cargo run -p pt-cli -- coinbase-auth-reload`
-- Coinbase auth switch: `cargo run -p pt-cli -- coinbase-auth-switch --profile primary`
-- Order manager status: `cargo run -p pt-cli -- order-manager-status`
-- Routes status: `cargo run -p pt-cli -- routes-status`
-- Set edge profile: `cargo run -p pt-cli -- set-edge-profile --strategy maker_mm_spot --min-bps 8`
-- Pilot start: `cargo run -p pt-cli -- pilot-start --capital 20 --profile ultra-tight --timeout-ms 3000`
-- Market list: `curl -s http://127.0.0.1:8080/state/markets | jq '.[0:5]'`
-- Market history: `curl -s "http://127.0.0.1:8080/state/history?limit=120" | jq`
-- Coinbase orderbook: `curl -s http://127.0.0.1:8080/state/coinbase/orderbook | jq '.[0:5]'`
-- Route opportunities: `curl -s http://127.0.0.1:8080/state/routes/opportunities | jq '.[0:5]'`
-- Route opportunities (venue filtered): `curl -s "http://127.0.0.1:8080/state/routes/opportunities?venue_set=coinbase,kraken,gemini" | jq '.[0:5]'`
-- Feed health: `curl -s http://127.0.0.1:8080/state/feed/health | jq`
-- Feed diagnostics: `curl -s http://127.0.0.1:8080/state/feed/diagnostics | jq`
-- Parity monitor: `curl -s http://127.0.0.1:8080/state/parity/monitor | jq '.rows[0:5]'`
-- Venue latency: `curl -s http://127.0.0.1:8080/state/venues/latency | jq`
-- Venue fill quality: `curl -s http://127.0.0.1:8080/state/venues/fill-quality | jq`
-- Wallet intel coinbase: `curl -s http://127.0.0.1:8080/state/wallet-intel/coinbase | jq '.[0:20]'`
-- Wallet intel polymarket: `curl -s http://127.0.0.1:8080/state/wallet-intel/polymarket | jq '.[0:20]'`
-- Wallet intel leaderboard: `curl -s http://127.0.0.1:8080/state/wallet-intel/leaderboard | jq '.[0:20]'`
-- Routes CSV export: `curl -s -X POST http://127.0.0.1:8080/state/routes/export-csv -H 'content-type: application/json' -d '{"limit":500,"min_expected_net_bps":0}' | jq`
-- Wallet intel CSV export: `curl -s -X POST http://127.0.0.1:8080/state/wallet-intel/export-csv -H 'content-type: application/json' -d '{"source":"all","limit":5000}' | jq`
-- Listing candidates: `curl -s "http://127.0.0.1:8080/state/listings/candidates?window=90d&granularity_sec=14400" | jq '.candidates[0:10]'`
-- Listing overlay: `curl -s -X POST http://127.0.0.1:8080/state/listings/overlay -H 'content-type: application/json' -d '{"window_preset":"90d","granularity_sec":14400,"alignment_mode":"entry_aligned","normalization":"indexed","product_ids":["BTC-USD","ETH-USD"]}' | jq`
-- Coinbase smoke: `cargo run -p pt-cli -- coinbase-smoke --timeout-ms 8000`
-- Strategy lab serve: `cargo run -p pt-cli -- strategy-lab-serve --bind 127.0.0.1:9090 --db data/strategy_lab/strategy_lab.sqlite`
-- Convert preview: `curl -s -X POST http://127.0.0.1:8080/ops/coinbase/convert/preview -H 'content-type: application/json' -d '{"from_asset":"BTC","to_asset":"USD","amount":0.0001,"live":false}' | jq`
-- Convert execute (paper): `curl -s -X POST http://127.0.0.1:8080/ops/coinbase/convert/execute -H 'content-type: application/json' -d '{"from_asset":"BTC","to_asset":"USD","amount":0.0001,"live":false}' | jq`
-- Maker speed test (paper): `curl -s -X POST http://127.0.0.1:8080/ops/coinbase/maker-test -H 'content-type: application/json' -d '{"product_id":"BTC-USD","side":"buy","base_size":0.0001,"live":false}' | jq`
-- Strategy backtest: `cargo run -p pt-cli -- strategy-backtest --product BTC-USD --granularity-sec 300 --limit 600 --out data/output/strategy_backtest_report.json`
-- Strategy optimize: `cargo run -p pt-cli -- strategy-optimize --product BTC-USD --granularity-sec 300 --limit 600 --iterations 200 --walk-forward-splits 4 --out data/output/strategy_optimize_report.json`
-- Strategy profile load: `cargo run -p pt-cli -- strategy-profile-load --profile-id default --out data/output/strategy_profile_default.json`
-- Strategy profile save: `cargo run -p pt-cli -- strategy-profile-save --path data/output/strategy_profile_default.json --note \"manual update\"`
-- Extract pine params: `cargo run -p pt-cli -- pine-params --path pine-scripts/<script> --out data/tuning/pine_params.json`
-- Tune pine params: `cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 100 --evaluate-cmd "python3 tools/evaluate_candidate.py"`
-
-- Promote tuning candidate: `./scripts/promote_candidate.sh data/tuning/pine_tuning_results.json data/tuning/promoted_candidate.json BTC 15m`
-- Verify promoted artifact: `cargo run -p pt-cli -- verify-promoted --artifact data/tuning/promoted_candidate.json --out data/output/replay_acceptance_report.json`
-- Report variants: `cargo run -p pt-cli -- report-variants --journal data/strategy_lab/trade_journal.sqlite --out-csv data/output/variant_report.csv --out-md data/output/variant_report.md`
-- Paper soak: `./scripts/paper_soak.sh 3600 30 config/config.toml`
-- Tiny live pilot checks: `./scripts/tiny_live_pilot.sh config/config.toml 3000`
-- Linux host tune baseline: `sudo ./scripts/linux_tune_baseline.sh`
-- Install macOS homebase service: `./scripts/install_homebase_service.sh config/config.toml`
-- Install git hooks: `./scripts/install_git_hooks.sh`
-
-## Live Prerequisites
-- Set `engine.mode = "live"` in config.
-- Set `venues.polymarket.private_key` or `POLYMARKET_PRIVATE_KEY`.
-- Coinbase auth: legacy (`venues.coinbase.api_key/api_secret`) OR profile (`venues.coinbase.auth.active_profile` + `cdp_key_file|cdp_secret_id`).
-- Env overrides: `COINBASE_AUTH_PROFILE`, `COINBASE_CDP_KEY_FILE`, `COINBASE_CDP_SECRET_ID`, `COINBASE_EXPECTED_KEY_ID`.
-- Keep hard risk caps enabled for tiny-live rollout.
-- Require explicit human approval before any live credential use, live mode, deployment, or order execution.
-
-## 2026-04-26 Phase 1 checkpoint
-
-### Current repo queue
-- PR #11: fixture-backed dashboard frontend tests for the current API surface.
-- PR #12: hardened Phase 1 evidence bundle and 3-run gate workflow.
-- PR #13: read-only `/api/v1/approval-queue` operator API derived from queue-relevant order states.
-- Issue #9 remains the next clean blocker after those slices: durable approval-queue persistence and restart recovery.
-
-### Current safest next action
-- Persist workstation order state through `storage.sqlite_path` and hydrate it on Coinbase workstation startup.
-- Keep read models in `/api/v1/orders` and, when merged, `/api/v1/approval-queue` strictly read-only.
-- Do not add approval, execute, or autonomous live-routing endpoints.
-
-### Acceptance criteria for the next code slice
-- `draft`, `cancel_requested`, `open`, `filled`, `canceled`, and `rejected` workstation orders survive restart.
-- Reload restores deterministic queue state before the dashboard serves traffic.
-- Queue visibility remains operator-facing only and does not change execution authority.
-- Tests cover create, update, and reload behavior.
-
-### Validation ladder still required before merge or deploy
-1. `cargo fmt --all`
-2. `cargo check --workspace`
-3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-4. `cargo test --workspace`
-5. `cargo build --workspace`
-6. `cargo audit`
-7. `./scripts/generate_sbom.sh artifacts`
-8. `python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json`
-9. `python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery`
-10. `python3 tools/coinbase_strategy_lab.py optimize --config config/coinbase_strategy_lab.json`
-11. `cargo run -p pt-cli -- run --config config/config.toml`
-12. `./scripts/paper_soak.sh 86400 30 config/config.toml`
-
-### Known unknowns
-- This workspace still does not provide a local Rust checkout and full validation path, so gate status is not yet freshly re-proven here.
-- Do not treat open PRs or docs planning as evidence that Phase 1 ROI gates have passed.
-- Live convert confirm phrase: `I_UNDERSTAND_LIVE_CONVERT`.
-- Live maker-test confirm phrase: `I_UNDERSTAND_LIVE_MAKER_TEST`.
+No approval is needed to prepare the next narrow issue `#9` runtime slice.
+Explicit approval is still required before merge, deployment, live mode, live credentials, or a tiny live pilot.
