@@ -12,7 +12,17 @@ Install local hooks once per clone:
 ```
 
 ## Local Quality Gates
-Run before pushing:
+
+Run the canonical local-first ladder before pushing changes that affect runtime behavior, replay or paper workflows, or merge readiness:
+
+```bash
+./scripts/local_validation_ladder.sh
+```
+
+Reference guide:
+- `docs/LOCAL_VALIDATION.md`
+
+At minimum, every change should still satisfy the core Rust checks:
 
 ```bash
 cargo fmt --all
@@ -22,11 +32,12 @@ cargo test --workspace
 
 ## Definition of Done
 - Acceptance criteria pass.
-- Tests added/updated.
+- Tests added or updated.
 - Docs updated (README/docs/adr as needed).
-- `docs/SDLC_CHECKLIST.md` updated when setup/process changes.
+- `docs/SDLC_CHECKLIST.md` updated when setup or process changes.
 
 ## Security
 - Never commit secrets.
 - Use `config/config.toml` locally and keep secrets out of VCS.
 - Prefer environment injection in deployment runtime.
+- Do not enable live mode as part of local validation.

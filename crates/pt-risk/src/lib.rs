@@ -211,6 +211,8 @@ mod tests {
             min_expected_net: 0.002,
         }
     }
+            pilot: pt_core::RiskPilotConfig::default(),
+        };
 
     fn quote(market_id: &str, bid_sz: f64) -> QuoteIntent {
         QuoteIntent {

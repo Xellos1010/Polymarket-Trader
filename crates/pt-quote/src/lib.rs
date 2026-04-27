@@ -1,6 +1,10 @@
 use pt_core::{
     clamp, round_down, round_up, Asset, MarketSelection, MarketSnapshot, MarketTier, QuoteIntent,
     TimeBucket,
+use chrono::Utc;
+use pt_core::{
+    clamp, round_down, round_up, EntryExitVector, ExecutionCostAttribution, ExecutionReport,
+    MarketSelection, MarketSnapshot, QuoteIntent, Side, Venue,
 };
 
 #[derive(Debug, Clone)]
@@ -89,6 +93,94 @@ pub fn expected_net(
     maker_edge + rebate_est - adverse_sel_est - hedge_cost_est - gas_amortized_est
 }
 
+pub fn vector_gate(
+    quote: &QuoteIntent,
+    book: &MarketSnapshot,
+    vectors: &EntryExitVector,
+) -> Result<(), String> {
+    let mid = (book.bid + book.ask) / 2.0;
+    if mid <= 0.0 {
+        return Err("invalid mid".to_string());
+    }
+
+    let target_bid = mid * (1.0 - vectors.entry_offset_bps / 10_000.0);
+    let target_ask = mid * (1.0 + vectors.exit_offset_bps / 10_000.0);
+
+    let bid_slippage_bps = ((target_bid - quote.bid_px).abs() / mid) * 10_000.0;
+    let ask_slippage_bps = ((quote.ask_px - target_ask).abs() / mid) * 10_000.0;
+
+    if bid_slippage_bps > vectors.entry_max_slippage_bps {
+        return Err(format!(
+            "entry vector breach: {:.4}bps > {:.4}bps",
+            bid_slippage_bps, vectors.entry_max_slippage_bps
+        ));
+    }
+    if ask_slippage_bps > vectors.exit_max_slippage_bps {
+        return Err(format!(
+            "exit vector breach: {:.4}bps > {:.4}bps",
+            ask_slippage_bps, vectors.exit_max_slippage_bps
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn estimate_execution_cost(
+    execution_id: &str,
+    report: &ExecutionReport,
+    reference_px: f64,
+    fee_bps: f64,
+    rebate_bps_est: f64,
+) -> ExecutionCostAttribution {
+    let qty = report.filled_qty.max(0.0);
+    let px = report.avg_px.max(0.0);
+    let notional = qty * px;
+    let fee_est = notional * fee_bps / 10_000.0;
+    let rebate_est = notional * rebate_bps_est / 10_000.0;
+
+    let slippage_bps = if reference_px > 0.0 {
+        match report.side {
+            Side::Buy => ((px - reference_px) / reference_px) * 10_000.0,
+            Side::Sell => ((reference_px - px) / reference_px) * 10_000.0,
+        }
+    } else {
+        0.0
+    };
+    let slippage_est = if reference_px > 0.0 {
+        notional * slippage_bps / 10_000.0
+    } else {
+        0.0
+    };
+
+    ExecutionCostAttribution {
+        execution_id: execution_id.to_string(),
+        venue: report.venue.clone(),
+        market_id: report.market_id.clone(),
+        side: report.side.clone(),
+        qty,
+        avg_px: px,
+        reference_px,
+        fee_bps,
+        fee_est,
+        slippage_bps,
+        slippage_est,
+        rebate_bps_est,
+        rebate_est,
+        effective_edge: rebate_est - fee_est - slippage_est,
+        ts: Utc::now(),
+        strategy_class: None,
+        route_id: None,
+    }
+}
+
+pub fn default_fee_bps_for_venue(venue: &Venue, maker_fee_bps: f64, taker_fee_bps: f64) -> f64 {
+    match venue {
+        Venue::Polymarket => maker_fee_bps,
+        Venue::Coinbase | Venue::Kraken | Venue::Gemini => taker_fee_bps,
+        Venue::Sim => 0.0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,6 +217,7 @@ mod tests {
             ts: Utc::now(),
         }
     }
+    use pt_core::{ExecutionStatus, Side, Venue};
 
     #[test]
     fn expected_net_math() {
@@ -209,5 +302,51 @@ mod tests {
             &QuoteConfig::default(),
         )
         .is_none());
+    fn vector_gate_allows_in_range() {
+        let quote = QuoteIntent {
+            market_id: "m1".to_string(),
+            token_id: "t1".to_string(),
+            bid_px: 99.9,
+            ask_px: 100.1,
+            bid_sz: 1.0,
+            ask_sz: 1.0,
+            ttl_ms: 1000,
+            expected_net: 0.01,
+        };
+        let book = MarketSnapshot {
+            market_id: "m1".to_string(),
+            token_id: "t1".to_string(),
+            bid: 99.95,
+            ask: 100.05,
+            spread: 0.10,
+            liquidity: 1_000.0,
+            ts: Utc::now(),
+        };
+        let vectors = EntryExitVector {
+            entry_max_slippage_bps: 20.0,
+            exit_max_slippage_bps: 20.0,
+            entry_offset_bps: 10.0,
+            exit_offset_bps: 10.0,
+            max_cross_bps_unwind: 25.0,
+        };
+        assert!(vector_gate(&quote, &book, &vectors).is_ok());
+    }
+
+    #[test]
+    fn estimate_execution_cost_shapes_output() {
+        let report = ExecutionReport {
+            venue: Venue::Coinbase,
+            order_id: "o1".to_string(),
+            market_id: Some("m1".to_string()),
+            status: ExecutionStatus::Filled,
+            side: Side::Buy,
+            filled_qty: 2.0,
+            avg_px: 101.0,
+            ts: Utc::now(),
+            details: None,
+        };
+        let out = estimate_execution_cost("x1", &report, 100.0, 10.0, 0.0);
+        assert_eq!(out.execution_id, "x1");
+        assert!(out.fee_est >= 0.0);
     }
 }

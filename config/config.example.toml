@@ -40,14 +40,32 @@ strict_live_auth = false
 [venues.coinbase.auth.profiles.primary]
 cdp_key_file = "config/cdp_api_key.json"
 cdp_secret_id = ""
-expected_key_id = ""
-strategy_tags = ["maker_mm_spot", "coinbase_workstation"]
+expected_key_id = "a5602f09-8a12-422a-b55d-b6981c5a0776"
+strategy_tags = ["maker_mm_spot", "conversion_cycle", "coinbase_workstation"]
 
 [venues.coinbase.ws]
 url = "wss://advanced-trade-ws.coinbase.com"
 channels = ["heartbeats", "level2", "user"]
 heartbeat_timeout_ms = 8000
 resync_on_gap = true
+
+[venues.kraken]
+enabled = false
+api_base = "https://api.kraken.com"
+ws_url = "wss://ws.kraken.com/v2"
+api_key = ""
+api_secret = ""
+passphrase = ""
+products = ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"]
+
+[venues.gemini]
+enabled = false
+api_base = "https://api.gemini.com"
+ws_url = "wss://api.gemini.com/v2/marketdata"
+api_key = ""
+api_secret = ""
+passphrase = ""
+products = ["BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD"]
 
 [signals.wallet]
 refresh_secs = 30
@@ -71,6 +89,13 @@ max_unhedged_delta = 10.0
 max_order_age_secs = 20
 stale_book_threshold_ms = 400
 min_expected_net = 0.002
+
+[risk.pilot]
+enforce_ultra_tight_live = true
+ultra_tight_daily_loss_limit_pct = 0.01
+ultra_tight_max_notional_per_market = 2.5
+ultra_tight_max_total_open_notional = 10.0
+ultra_tight_max_markets_quoted = 1
 
 [execution]
 mode = "maker_first"
@@ -121,6 +146,34 @@ edit_vs_replace_threshold_bps = 5.0
 cancel_replace_cooldown_ms = 250
 min_rest_ms = 400
 
+[wallet]
+enabled = true
+mode = "assist"
+sync_secs = 10
+
+[wallet.targets]
+btc = 0.25
+eth = 0.20
+sol = 0.10
+xrp = 0.05
+usd = 0.40
+
+[wallet.rebalance]
+drift_trigger_pct = 0.03
+min_order_usd = 5.0
+max_order_usd = 25.0
+max_slippage_bps = 10.0
+max_orders_per_cycle = 3
+
+[wallet.approval]
+required = true
+token_ttl_secs = 300
+
+[acceptance.replay]
+max_reject_error_rate = 0.05
+max_effective_fee_bps_avg = 25.0
+max_unhedged_delta = 10.0
+require_killswitch_running = true
 [strategy]
 default_strategy_name = "coinbase_microstructure"
 imbalance_weight = 0.45
@@ -176,3 +229,51 @@ metrics_flush_secs = 5
 market_refresh_secs = 60
 wallet_refresh_secs = 30
 risk_watchdog_ms = 100
+
+[ui]
+mode_default = "basic"
+
+[capital_plan]
+enabled = true
+daily_contribution_usd = 10.0
+tiers = [
+  { min_equity_usd = 0.0, reserve_pct = 0.0 },
+  { min_equity_usd = 250.0, reserve_pct = 0.20 },
+  { min_equity_usd = 500.0, reserve_pct = 0.30 },
+]
+
+[equities]
+products = []
+
+[equities.paper]
+enabled = true
+
+[equities.live]
+enabled = false
+
+[runtime.affinity]
+enabled = false
+feed_cores = [0, 1]
+strategy_cores = [2, 3]
+execution_cores = [4, 5]
+persistence_cores = [6, 7]
+
+[runtime.jitter_controls]
+enabled = false
+nic_polling = true
+disable_cpu_powersave = true
+isolate_cores = true
+rcu_nocbs = true
+nohz_full = true
+
+[wallet_intel]
+enabled = true
+top_wallets = 50
+refresh_secs = 60
+include_coinbase = true
+include_polymarket = true
+
+[benchmark.hotpath]
+enabled = false
+sample_size = 10000
+warmup_iters = 1000

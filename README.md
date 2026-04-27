@@ -30,6 +30,17 @@ Open dashboard:
 http://127.0.0.1:8080/
 ```
 
+## Local validation
+
+Use the canonical local-first ladder before merge or deployment decisions:
+
+```bash
+./scripts/local_validation_ladder.sh
+```
+
+Guide:
+- `docs/LOCAL_VALIDATION.md`
+
 ## Developer setup
 
 Install local git hooks:
@@ -64,11 +75,21 @@ Use `.env.example` as the baseline for local/dev shells.
 - `GET /state/markets`
 - `GET /state/history?market_id=<id>&limit=360`
 - `GET /state/executions`
+- `GET /state/execution/orders`
+- `GET /state/execution/costs`
+- `GET /state/execution/vectors`
 - `GET /state/bias`
 - `GET /state/inventory`
+- `GET /state/coinbase/wallet`
+- `GET /state/coinbase/allocations`
+- `GET /state/coinbase/rebalance-plan`
+- `GET /state/coinbase/orders`
 - `POST /ops/halt`
 - `POST /ops/resume`
 - `POST /ops/flatten`
+- `POST /ops/coinbase/rebalance/approve`
+- `POST /ops/coinbase/rebalance/reject`
+- `POST /ops/execution/unwind`
 
 ## CLI utilities
 
@@ -78,6 +99,15 @@ Use `.env.example` as the baseline for local/dev shells.
   - `cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000`
 - Live preflight gate:
   - `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
+- Wallet/execution operator shortcuts:
+  - `cargo run -p pt-cli -- wallet-status`
+  - `cargo run -p pt-cli -- wallet-plan`
+  - `cargo run -p pt-cli -- wallet-approve --token-id <token_id>`
+  - `cargo run -p pt-cli -- execution-status`
+- Replay promotion acceptance:
+  - `cargo run -p pt-cli -- verify-promoted --artifact data/tuning/promoted_candidate.json --out data/output/replay_acceptance_report.json`
+- Journal comparative export:
+  - `cargo run -p pt-cli -- report-variants --journal data/strategy_lab/trade_journal.sqlite --out-csv data/output/variant_report.csv --out-md data/output/variant_report.md`
 - Maker opportunity scan (live orderbook spread/entry ranking):
   - `cargo run -p pt-cli -- scan-markets --config config/config.toml --limit 60 --top 15`
   - tune assumptions: `cargo run -p pt-cli -- scan-markets --config config/config.toml --adverse-sel-est 0.0025 --hedge-cost-est 0.0008 --gas-amortized-est 0.0003`
@@ -129,6 +159,7 @@ Use `.env.example` as the baseline for local/dev shells.
 - Prompt bundle guide: `docs/PROMPT_BUNDLE.md`
 - Progress tracker: `docs/PROGRESS.md`
 - Local instructions: `docs/INSTRUCTIONS.md`
+- Local validation guide: `docs/LOCAL_VALIDATION.md`
 
 ## CI security gates
 

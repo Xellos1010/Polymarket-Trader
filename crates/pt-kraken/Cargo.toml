@@ -1,0 +1,17 @@
+[package]
+name = "pt-kraken"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+pt-core = { path = "../pt-core" }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+base64 = "0.22"
+hmac = "0.12"
+sha2 = "0.10"
+url.workspace = true
