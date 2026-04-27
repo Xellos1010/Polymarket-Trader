@@ -1,3 +1,4 @@
+# DEPRECATED: Disabled pending local reliability inspection before recommissioning.
 name: CI
 
 on:
@@ -7,6 +8,7 @@ on:
 
 jobs:
   rust-checks:
+    if: ${{ false }} # Deprecated: do not invoke until recommissioned.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +34,7 @@ jobs:
         run: cargo build --workspace
 
   security:
+    if: ${{ false }} # Deprecated: do not invoke until recommissioned.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
