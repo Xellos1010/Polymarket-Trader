@@ -50,10 +50,10 @@ check_limit() {
   fi
 }
 
-check_limit daily_loss_limit_pct 0.02
-check_limit max_notional_per_market 5
-check_limit max_total_open_notional 20
-check_limit max_markets_quoted_simultaneously 2
+check_limit daily_loss_limit_pct 0.01
+check_limit max_notional_per_market 2.5
+check_limit max_total_open_notional 10
+check_limit max_markets_quoted_simultaneously 1
 check_limit max_unhedged_delta 10
 
 if [[ ${#errors[@]} -gt 0 ]]; then

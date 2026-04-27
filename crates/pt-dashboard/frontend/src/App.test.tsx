@@ -194,6 +194,8 @@ afterEach(() => {
 
 describe("App approval queue", () => {
   it("renders the read-only approval queue panel", async () => {
+describe("App", () => {
+  it("renders the current workstation surface from fixture data", async () => {
     installFetchMock();
 
     render(<App />);
@@ -228,6 +230,14 @@ describe("App approval queue", () => {
   });
 
   it("still submits a manual order through the current API route", async () => {
+    expect(await screen.findByText("Scanner-first entry and exit control.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Selected Market" })).toBeInTheDocument();
+    expect((await screen.findAllByText("BTC-USD")).length).toBeGreaterThan(0);
+    expect(screen.getByText("daily loss limit near threshold")).toBeInTheDocument();
+    expect(screen.getByText("data/strategy_lab/dashboard-btc.json")).toBeInTheDocument();
+  });
+
+  it("submits a manual order against the current API route", async () => {
     const fetchMock = installFetchMock();
 
     render(<App />);
@@ -254,6 +264,40 @@ describe("App approval queue", () => {
           }),
         }),
       );
+    });
+  });
+
+  it("submits a mode change against the current API route", async () => {
+    const fetchMock = installFetchMock();
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Selected Market" });
+    fireEvent.change(screen.getAllByRole("combobox")[0], {
+      target: { value: "replay" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply Mode" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/mode",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ mode: "replay" }),
+        }),
+      );
+    });
+  });
+
+  it("shows an error banner when an API request fails", async () => {
+    installFetchMock({
+      "/api/v1/strategies": new Response("boom", { status: 500 }),
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("/api/v1/strategies failed with 500")).toBeInTheDocument();
     });
   });
 });

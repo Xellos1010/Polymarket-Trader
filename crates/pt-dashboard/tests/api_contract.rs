@@ -1,7 +1,18 @@
 use axum::{body::to_bytes, body::Body, http::Request, http::StatusCode, Router};
 use chrono::Utc;
 use parking_lot::RwLock;
+use pt_coinbase::CoinbaseOrderSummary;
 use pt_core::{
+    AllocationDrift, ApprovalToken, Asset, CapitalLedgerEntry, CapitalTierRule,
+    CoinbaseOrderBookState, EdgeProfile, EngineMode, EntryExitVector, EquityPaperRun,
+    EquityProductSnapshot, ExecutionCostAttribution, ExecutionEvent, ExecutionMode,
+    ExecutionPolicy, ExecutionReport, ExecutionStatus, KillSwitchState, MarketHistoryPoint,
+    MarketSnapshot, MetricsRegistry, OrderLifecycleState, RebalanceIntent, RebalancePlan,
+    RebalancePlanStatus, RiskState, RouteExecutionPlan, RouteOpportunity, Side, StrategyClass,
+    UiMode, Venue, VenueCapability, VenueFeeSchedule, WalletBalance,
+};
+use pt_dashboard::{router, DashboardState};
+use serde_json::{json, Value};
     Asset, ExecutionReport, ExecutionStatus, KillSwitchState, LiveArmState, MarketHistoryPoint,
     MarketSnapshot, MetricsRegistry, ProductDetailView, ProductId, ProductStrategyConfigView,
     RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
@@ -53,6 +64,186 @@ fn fixture_state() -> DashboardState {
         ts: now,
         details: Some("fixture".to_string()),
     }];
+
+    let execution_events = vec![ExecutionEvent {
+        order_id: "sim-1".to_string(),
+        venue: Venue::Sim,
+        market_id: Some(market_id.clone()),
+        product_id: Some("BTC-USD".to_string()),
+        side: Side::Buy,
+        state: OrderLifecycleState::Filled,
+        qty: 1.0,
+        price: 0.495,
+        ts: now,
+        details: Some("fixture".to_string()),
+        reason_code: Some("fixture".to_string()),
+        unwind_flag: false,
+    }];
+
+    let execution_costs = vec![ExecutionCostAttribution {
+        execution_id: "sim-1".to_string(),
+        venue: Venue::Sim,
+        market_id: Some(market_id.clone()),
+        side: Side::Buy,
+        qty: 1.0,
+        avg_px: 0.495,
+        reference_px: 0.494,
+        fee_bps: 0.0,
+        fee_est: 0.0,
+        slippage_bps: 1.0,
+        slippage_est: 0.01,
+        rebate_bps_est: 0.0,
+        rebate_est: 0.0,
+        effective_edge: 0.01,
+        ts: now,
+        strategy_class: Some(StrategyClass::MakerMmSpot),
+        route_id: None,
+    }];
+
+    let execution_policy = ExecutionPolicy {
+        mode: ExecutionMode::MakerFirst,
+        allow_taker_on_unwind_only: true,
+        post_only: true,
+        cancel_replace_cooldown_ms: 250,
+        min_rest_ms: 400,
+        stale_book_ms: 400,
+        vectors: EntryExitVector {
+            entry_max_slippage_bps: 8.0,
+            exit_max_slippage_bps: 10.0,
+            entry_offset_bps: 2.0,
+            exit_offset_bps: 2.0,
+            max_cross_bps_unwind: 20.0,
+        },
+        coinbase_fees: VenueFeeSchedule {
+            maker_bps: 6.0,
+            taker_bps: 12.0,
+            rebate_bps_est: 0.0,
+        },
+        kraken_fees: VenueFeeSchedule {
+            maker_bps: 16.0,
+            taker_bps: 26.0,
+            rebate_bps_est: 0.0,
+        },
+        gemini_fees: VenueFeeSchedule {
+            maker_bps: 20.0,
+            taker_bps: 35.0,
+            rebate_bps_est: 0.0,
+        },
+        polymarket_fees: VenueFeeSchedule {
+            maker_bps: 0.0,
+            taker_bps: 5.0,
+            rebate_bps_est: 1.0,
+        },
+        edge_profiles: EdgeProfile {
+            maker_mm_spot_min_bps: 8.0,
+            conversion_cycle_min_bps: 100.0,
+            position_reentry_min_bps: 40.0,
+            per_asset_overrides_bps: HashMap::new(),
+        },
+    };
+
+    let wallet_balances = vec![WalletBalance {
+        venue: Venue::Coinbase,
+        account_id: "acc-1".to_string(),
+        asset: "BTC".to_string(),
+        available: 0.1,
+        hold: 0.0,
+        usd_value: 5000.0,
+        ts: now,
+    }];
+
+    let wallet_drifts = vec![AllocationDrift {
+        asset: "BTC".to_string(),
+        current_weight: 0.30,
+        target_weight: 0.25,
+        drift_weight: 0.05,
+        current_usd: 5000.0,
+        target_usd: 4200.0,
+        drift_usd: 800.0,
+    }];
+
+    let wallet_open_orders = vec![CoinbaseOrderSummary {
+        order_id: "cb-1".to_string(),
+        product_id: "BTC-USD".to_string(),
+        side: "BUY".to_string(),
+        status: "OPEN".to_string(),
+        order_type: "LIMIT".to_string(),
+        average_filled_price: "0".to_string(),
+        filled_size: "0".to_string(),
+        order_configuration: json!({
+            "limit_limit_gtc": {
+                "base_size": "0.001",
+                "limit_price": "50000.00",
+                "post_only": true
+            }
+        }),
+        created_time: now.to_rfc3339(),
+        last_update_time: now.to_rfc3339(),
+    }];
+
+    let mut coinbase_orderbooks = HashMap::new();
+    coinbase_orderbooks.insert(
+        "BTC-USD".to_string(),
+        CoinbaseOrderBookState {
+            product_id: "BTC-USD".to_string(),
+            sequence_num: 12,
+            bids: vec![(50_000.0, 0.15)],
+            asks: vec![(50_001.0, 0.17)],
+            last_event_ts: Some(now),
+        },
+    );
+
+    let route_opportunities = vec![RouteOpportunity {
+        route_id: "route-1".to_string(),
+        legs: vec![],
+        gross_edge_bps: 110.0,
+        expected_net_bps: 101.0,
+        expected_usd_profit: 0.20,
+        capital_required_usd: 2.5,
+        strategy_class: StrategyClass::ConversionCycle,
+        ts: now,
+    }];
+
+    let route_executions = vec![RouteExecutionPlan {
+        route_id: "route-1".to_string(),
+        legs: vec![],
+        approved: false,
+        reason: Some("assist_mode_route_candidate".to_string()),
+        ts: now,
+    }];
+
+    let fee_summary = Some(pt_coinbase::CoinbaseTransactionSummary {
+        total_fees: 1.25,
+        maker_fee_rate: Some("0.0006".to_string()),
+        taker_fee_rate: Some("0.0012".to_string()),
+        raw: json!({"fee_tier":{"maker_fee_rate":"0.0006","taker_fee_rate":"0.0012"}}),
+    });
+
+    let rebalance_plan = Some(RebalancePlan {
+        plan_id: "plan-1".to_string(),
+        status: RebalancePlanStatus::Planned,
+        intents: vec![RebalanceIntent {
+            intent_id: "intent-1".to_string(),
+            product_id: "BTC-USD".to_string(),
+            asset: Asset::Btc,
+            side: Side::Sell,
+            usd_notional: 25.0,
+            limit_price: 50_000.0,
+            max_slippage_bps: 10.0,
+        }],
+        drifts: wallet_drifts.clone(),
+        total_drift_abs_usd: 800.0,
+        created_ts: now,
+        expires_ts: now + chrono::Duration::seconds(300),
+    });
+
+    let rebalance_approval = Some(ApprovalToken {
+        token_id: "token-1".to_string(),
+        plan_id: "plan-1".to_string(),
+        approved: false,
+        created_ts: now,
+        expires_ts: now + chrono::Duration::seconds(300),
+    });
 
     let mut bias = HashMap::new();
     bias.insert(Asset::Btc, 0.2);
@@ -210,6 +401,72 @@ fn fixture_state() -> DashboardState {
             stale_books: 0,
             last_update_ms: now.timestamp_millis(),
         })),
+        Arc::new(RwLock::new(KillSwitchState::Running)),
+        Arc::new(RwLock::new(Vec::new())),
+        Arc::new(RwLock::new(latest_books)),
+        Arc::new(RwLock::new(history)),
+        Arc::new(RwLock::new(executions)),
+        Arc::new(RwLock::new(execution_events)),
+        Arc::new(RwLock::new(execution_costs)),
+        Arc::new(RwLock::new(execution_policy)),
+        Arc::new(RwLock::new(bias)),
+        Arc::new(RwLock::new(5.0)),
+        Arc::new(RwLock::new(wallet_balances)),
+        Arc::new(RwLock::new(wallet_drifts)),
+        Arc::new(RwLock::new(wallet_open_orders)),
+        Arc::new(RwLock::new(coinbase_orderbooks)),
+        Arc::new(RwLock::new(route_opportunities)),
+        Arc::new(RwLock::new(route_executions)),
+        Arc::new(RwLock::new(vec![
+            VenueCapability {
+                venue: Venue::Coinbase,
+                supports_post_only: true,
+                supports_amend: true,
+                supports_fix: false,
+                min_tick: 0.01,
+                min_size: 0.00000001,
+                fee_model: "tiered_maker_taker".to_string(),
+            },
+            VenueCapability {
+                venue: Venue::Polymarket,
+                supports_post_only: true,
+                supports_amend: false,
+                supports_fix: false,
+                min_tick: 0.01,
+                min_size: 1.0,
+                fee_model: "maker_reward_taker_fee".to_string(),
+            },
+        ])),
+        Arc::new(RwLock::new(fee_summary)),
+        Arc::new(RwLock::new(rebalance_plan)),
+        Arc::new(RwLock::new(rebalance_approval)),
+        Arc::new(RwLock::new(false)),
+        None,
+        None,
+        vec!["BTC-USD".to_string()],
+        EngineMode::Paper,
+        "default".to_string(),
+        Arc::new(RwLock::new(UiMode::Basic)),
+        true,
+        10.0,
+        vec![
+            CapitalTierRule {
+                min_equity_usd: 0.0,
+                reserve_pct: 0.0,
+            },
+            CapitalTierRule {
+                min_equity_usd: 250.0,
+                reserve_pct: 0.20,
+            },
+            CapitalTierRule {
+                min_equity_usd: 500.0,
+                reserve_pct: 0.30,
+            },
+        ],
+        Arc::new(RwLock::new(Vec::<CapitalLedgerEntry>::new())),
+        Arc::new(RwLock::new(Vec::<EquityProductSnapshot>::new())),
+        Arc::new(RwLock::new(Vec::<EquityPaperRun>::new())),
+    )
         kill_switch: Arc::new(RwLock::new(KillSwitchState::Running)),
         latest_books: Arc::new(RwLock::new(latest_books)),
         market_history: Arc::new(RwLock::new(history)),
@@ -318,11 +575,20 @@ async fn assert_json_contract(
     method: &str,
     path: &str,
     request_uri: &str,
+    body: Option<Value>,
+) {
+    let builder = Request::builder().method(method).uri(request_uri);
+    let req = if let Some(body) = body {
+        builder
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .expect("build request")
+    } else {
+        builder.body(Body::empty()).expect("build request")
+    };
     request_body: Option<&str>,
 ) {
-    let mut builder = Request::builder()
-        .method(method)
-        .uri(request_uri);
+    let mut builder = Request::builder().method(method).uri(request_uri);
     if request_body.is_some() {
         builder = builder.header("content-type", "application/json");
     }
@@ -371,6 +637,188 @@ async fn state_endpoints_match_openapi_contract() {
             None,
         ),
         ("GET", "/state/executions", "/state/executions", None),
+        (
+            "GET",
+            "/state/execution/orders",
+            "/state/execution/orders",
+            None,
+        ),
+        (
+            "GET",
+            "/state/execution/costs",
+            "/state/execution/costs",
+            None,
+        ),
+        (
+            "GET",
+            "/state/execution/vectors",
+            "/state/execution/vectors",
+            None,
+        ),
+        ("GET", "/state/bias", "/state/bias", None),
+        ("GET", "/state/inventory", "/state/inventory", None),
+        (
+            "GET",
+            "/state/coinbase/wallet",
+            "/state/coinbase/wallet",
+            None,
+        ),
+        (
+            "GET",
+            "/state/coinbase/allocations",
+            "/state/coinbase/allocations",
+            None,
+        ),
+        (
+            "GET",
+            "/state/coinbase/rebalance-plan",
+            "/state/coinbase/rebalance-plan",
+            None,
+        ),
+        (
+            "GET",
+            "/state/coinbase/orderbook",
+            "/state/coinbase/orderbook",
+            None,
+        ),
+        ("GET", "/state/coinbase/auth", "/state/coinbase/auth", None),
+        (
+            "GET",
+            "/state/coinbase/orders",
+            "/state/coinbase/orders",
+            None,
+        ),
+        (
+            "GET",
+            "/state/routes/opportunities",
+            "/state/routes/opportunities",
+            None,
+        ),
+        (
+            "GET",
+            "/state/routes/executions",
+            "/state/routes/executions",
+            None,
+        ),
+        ("GET", "/state/fees/summary", "/state/fees/summary", None),
+        (
+            "GET",
+            "/state/listings/l2-archive",
+            "/state/listings/l2-archive",
+            None,
+        ),
+        ("GET", "/state/feed/health", "/state/feed/health", None),
+        (
+            "GET",
+            "/state/feed/diagnostics",
+            "/state/feed/diagnostics",
+            None,
+        ),
+        (
+            "GET",
+            "/state/parity/monitor",
+            "/state/parity/monitor",
+            None,
+        ),
+        (
+            "POST",
+            "/state/parity/export-csv",
+            "/state/parity/export-csv",
+            Some(json!({"limit": 100, "include_failures": true})),
+        ),
+        (
+            "GET",
+            "/state/venues/capabilities",
+            "/state/venues/capabilities",
+            None,
+        ),
+        (
+            "GET",
+            "/state/venues/latency",
+            "/state/venues/latency",
+            None,
+        ),
+        (
+            "GET",
+            "/state/venues/fill-quality",
+            "/state/venues/fill-quality",
+            None,
+        ),
+        (
+            "GET",
+            "/state/venues/rejects",
+            "/state/venues/rejects",
+            None,
+        ),
+        (
+            "GET",
+            "/state/wallet-intel/coinbase",
+            "/state/wallet-intel/coinbase",
+            None,
+        ),
+        (
+            "GET",
+            "/state/wallet-intel/polymarket",
+            "/state/wallet-intel/polymarket",
+            None,
+        ),
+        (
+            "GET",
+            "/state/wallet-intel/leaderboard",
+            "/state/wallet-intel/leaderboard",
+            None,
+        ),
+        (
+            "POST",
+            "/state/routes/export-csv",
+            "/state/routes/export-csv",
+            Some(json!({"limit": 100, "min_expected_net_bps": 0.0})),
+        ),
+        (
+            "POST",
+            "/state/wallet-intel/export-csv",
+            "/state/wallet-intel/export-csv",
+            Some(json!({"source": "all", "limit": 100})),
+        ),
+        ("POST", "/ops/halt", "/ops/halt", None),
+        ("POST", "/ops/resume", "/ops/resume", None),
+        ("POST", "/ops/flatten", "/ops/flatten", None),
+        (
+            "POST",
+            "/ops/profile/pilot-ultra-tight",
+            "/ops/profile/pilot-ultra-tight",
+            None,
+        ),
+        (
+            "POST",
+            "/ops/coinbase/rebalance/reject",
+            "/ops/coinbase/rebalance/reject",
+            None,
+        ),
+        (
+            "POST",
+            "/ops/coinbase/auth/reload",
+            "/ops/coinbase/auth/reload",
+            None,
+        ),
+        (
+            "POST",
+            "/ops/coinbase/auth/switch-profile",
+            "/ops/coinbase/auth/switch-profile",
+            Some(json!({ "profile_id": "primary" })),
+        ),
+        (
+            "POST",
+            "/ops/execution/unwind",
+            "/ops/execution/unwind",
+            None,
+        ),
+        ("POST", "/ops/unwind/now", "/ops/unwind/now", None),
+        (
+            "POST",
+            "/ops/coinbase/rebalance/approve",
+            "/ops/coinbase/rebalance/approve",
+            Some(json!({ "token_id": "token-1" })),
         ("GET", "/state/bias", "/state/bias", None),
         ("GET", "/state/inventory", "/state/inventory", None),
         ("POST", "/ops/halt", "/ops/halt", None),
@@ -384,6 +832,15 @@ async fn state_endpoints_match_openapi_contract() {
             "/api/v1/products/BTC-USD",
             None,
         ),
+        ("GET", "/api/v1/listings", "/api/v1/listings", None),
+        (
+            "GET",
+            "/api/v1/listings/{product_id}",
+            "/api/v1/listings/BTC-USD",
+            None,
+        ),
+        ("GET", "/api/v1/risk/overview", "/api/v1/risk/overview", None),
+        ("GET", "/api/v1/agent/console", "/api/v1/agent/console", None),
         ("GET", "/api/v1/orders", "/api/v1/orders", None),
         ("GET", "/api/v1/approval-queue", "/api/v1/approval-queue", None),
         ("GET", "/api/v1/strategies", "/api/v1/strategies", None),
@@ -520,14 +977,51 @@ fn openapi_contains_all_runtime_paths() {
         "/state/markets",
         "/state/history",
         "/state/executions",
+        "/state/execution/orders",
+        "/state/execution/costs",
+        "/state/execution/vectors",
         "/state/bias",
         "/state/inventory",
+        "/state/coinbase/wallet",
+        "/state/coinbase/allocations",
+        "/state/coinbase/rebalance-plan",
+        "/state/coinbase/orderbook",
+        "/state/coinbase/auth",
+        "/state/coinbase/orders",
+        "/state/routes/opportunities",
+        "/state/routes/executions",
+        "/state/fees/summary",
+        "/state/listings/candidates",
+        "/state/listings/overlay",
+        "/state/listings/l2-archive",
+        "/state/feed/health",
+        "/state/feed/diagnostics",
+        "/state/parity/monitor",
+        "/state/parity/export-csv",
+        "/state/venues/capabilities",
+        "/state/venues/latency",
+        "/state/venues/fill-quality",
+        "/state/venues/rejects",
+        "/state/routes/export-csv",
+        "/state/wallet-intel/coinbase",
+        "/state/wallet-intel/polymarket",
+        "/state/wallet-intel/leaderboard",
+        "/state/wallet-intel/export-csv",
         "/ops/halt",
         "/ops/resume",
         "/ops/flatten",
+        "/ops/coinbase/rebalance/approve",
+        "/ops/coinbase/rebalance/reject",
+        "/ops/coinbase/auth/reload",
+        "/ops/coinbase/auth/switch-profile",
+        "/ops/execution/unwind",
         "/api/v1/products",
         "/api/v1/scanner",
         "/api/v1/products/{product_id}",
+        "/api/v1/listings",
+        "/api/v1/listings/{product_id}",
+        "/api/v1/risk/overview",
+        "/api/v1/agent/console",
         "/api/v1/orders",
         "/api/v1/approval-queue",
         "/api/v1/strategies",
