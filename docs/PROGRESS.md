@@ -21,18 +21,18 @@
 - Strategy-lab promotion tooling now converts selected market/variant into replay NDJSON for Rust replay mode.
 - Replay acceptance tooling now validates promoted replay NDJSON plus optional SQLite risk/execution evidence.
 - Dashboard now exposes a read-only approval queue view for draft and cancel-requested workstation orders.
-- Approval queue storage now has snapshot reconciliation and a tested runtime hydration helper layer in `pt-cli`.
+- Approval queue storage now has snapshot reconciliation, a tested runtime hydration helper layer, and a runtime-store bridge in `pt-cli`.
 
 ## In Progress
 
 - Validate promoted replay artifacts against `pt-cli` replay mode in a Rust-enabled environment.
 - Wire hosted branch protection/manual approval settings in GitHub.
-- Finish issue `#9` by loading approval queue state into Coinbase workstation startup and syncing it through runtime lifecycle hooks.
+- Finish issue `#9` by calling the approval queue runtime-store bridge from Coinbase workstation startup and runtime lifecycle hooks.
 
 ## Next Queue
 
 1. Run the full Rust validation ladder in an environment with `cargo` and network access.
-2. Wire `CoinbaseWorkstationRuntime` to hydrate queue-relevant rows from `storage.sqlite_path` and reconcile them continuously from in-memory workstation state.
+2. Wire `CoinbaseWorkstationRuntime` to call the new runtime-store bridge against `storage.sqlite_path` during startup hydration and continuous reconciliation.
 3. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
 4. Add mutation tests for risk and quote-critical logic.
 5. Configure hosted branch protections and required status checks.
