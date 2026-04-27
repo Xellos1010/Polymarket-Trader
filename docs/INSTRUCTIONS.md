@@ -2,12 +2,25 @@
 
 ## Local-First Rule
 
-Do not run CI/CD or deployment automation until these local checks pass:
+Do not run CI/CD or deployment automation until the canonical local validation ladder passes:
 
-1. `cargo check --workspace`
-2. `cargo test --workspace`
-3. strategy-lab validation (`backtest`, `overlap`, `optimize`, `dashboard`)
-4. replay/paper verification for any promoted candidate
+```bash
+./scripts/local_validation_ladder.sh
+```
+
+Reference guide:
+- `docs/LOCAL_VALIDATION.md`
+
+The minimum ladder includes:
+1. `cargo fmt --all`
+2. `cargo check --workspace`
+3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+4. `cargo test --workspace`
+5. `cargo build --workspace`
+6. `cargo audit`
+7. `./scripts/generate_sbom.sh artifacts`
+8. strategy-lab validation (`backtest`, `overlap`, `optimize`)
+9. runtime smoke and paper verification in sandbox mode only
 
 ## Core Local Workflow
 
@@ -29,7 +42,7 @@ cargo run -p pt-cli -- strategy-lab-serve --bind 127.0.0.1:9090 --db data/strate
 cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper
 ```
 
-3. Run strategy dashboard when you need offline backtest/optimization output:
+3. Run strategy dashboard when you need offline backtest or optimization output:
 ```bash
 python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090
 ```
@@ -189,7 +202,7 @@ launchctl list | rg 'com.pt.homebase'
 
 Configured in `backtest.variants[*].plugins`:
 
-- `external_bias_file`: load `{idx,bias}` or `{ts_ms,bias}` series from JSON/CSV.
+- `external_bias_file`: load `{idx,bias}` or `{ts_ms,bias}` series from JSON or CSV.
 - `momentum_bias`: tanh-scaled lookback return.
 - `rsi_bias`: directional bias from RSI extremes.
 

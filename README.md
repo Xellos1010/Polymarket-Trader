@@ -30,6 +30,17 @@ Open dashboard:
 http://127.0.0.1:8080/
 ```
 
+## Local validation
+
+Use the canonical local-first ladder before merge or deployment decisions:
+
+```bash
+./scripts/local_validation_ladder.sh
+```
+
+Guide:
+- `docs/LOCAL_VALIDATION.md`
+
 ## Developer setup
 
 Install local git hooks:
@@ -148,6 +159,7 @@ Use `.env.example` as the baseline for local/dev shells.
 - Prompt bundle guide: `docs/PROMPT_BUNDLE.md`
 - Progress tracker: `docs/PROGRESS.md`
 - Local instructions: `docs/INSTRUCTIONS.md`
+- Local validation guide: `docs/LOCAL_VALIDATION.md`
 
 ## CI security gates
 
