@@ -310,44 +310,14 @@
 - Validation status:
   - `cargo check --workspace` passes
   - `cargo test --workspace` passes
+- Deterministic risk and quote failure-path tests merged in PR `#26`.
 
 ## In Progress
 
 - Live Coinbase wallet integration validation on real keys (assist mode, tiny notional, approval workflow).
 - WebSocket auth/ops hardening against live subscription constraints per API key scope.
 - Route execution promotion from candidate plans to guarded live multi-leg sequencing.
-
-## Next Queue
-
-1. Run Coinbase WS in paper/live with real keys and verify stable `level2` + `user` stream for 24h (no desync).
-2. Execute a strict `$20` pilot in live assist mode using `pilot-start` and confirm hard-cap enforcement.
-3. Add guarded operator approval workflow for route execution promotion beyond candidate plans.
-4. Run `pt-cli verify-promoted` on current promoted artifact and persist replay acceptance evidence.
-5. Run `pt-cli report-variants` and publish comparative variant report artifacts.
-- Replay acceptance tooling now validates promoted replay NDJSON plus optional SQLite risk/execution evidence.
-- Merged PRs to date include:
-  - `#1` maker-focused market scanner CLI + EC2 workflow notes
-  - `#2` clippy fix + audit policy cleanup
-  - `#3` replay acceptance + readiness docs
-
-## Current Audit (2026-04-26)
-
-- Repo remains in **Phase 1: sandbox trading / paper ROI**.
-- The active implementation queue is concentrated in draft PRs `#11`, `#12`, `#13`, and `#18`.
-- Planning-only queue churn exists across draft PRs `#14` through `#17`.
-- Older open PRs `#4` and `#8` should be treated as stale/superseded until explicitly rebased and revalidated.
-- The next runtime blocker is issue `#9`: workstation orders that drive the approval queue are still memory-only in the Coinbase workstation runtime, so restart-safe operator review is not yet achieved.
-- Visible PR checks are not yet green across the active stack; latest failures repeatedly show format-check and dependency-vulnerability-scan failures.
-
-## In Progress
-
-- Harden the Phase 1 repeatability/evidence workflow in PR `#12` and gather fresh local validation evidence.
-- Keep approval-queue visibility read-only in PR `#13` and PR `#18`; do not add approval/execution mutation controls in that surface.
-- Start the next runtime slice for issue `#9` with a deliberately narrow scope:
-  - persist only operator-review queue states (`draft`, `cancel_requested`) via `storage.sqlite_path`
-  - hydrate those rows on startup
-  - cover create/update/reload behavior with focused tests
-- Refresh CI/local validation for the active stack before any merge/deploy decision.
+- Canonical next-round checkpoint published in `docs/PHASE1_NEXT_ROUND_2026-04-27.md`.
 
 ## Next Queue
 
@@ -360,47 +330,23 @@
    - `cargo build --workspace`
    - `cargo audit`
    - `./scripts/generate_sbom.sh artifacts`
-3. Clean up duplicate planning PRs `#14`-`#17` and stale/superseded PRs `#4` and `#8` before merge sequencing.
-4. Add hosted branch protections and required approvals after local checks are green.
-5. Continue toward replay/paper repeatability proof with at least three independent positive-cost-modeled runs before any tiny-live recommendation.
-- Dashboard now exposes a read-only approval queue view for draft and cancel-requested workstation orders.
-- Phase 1 evidence bundle scaffolding now exists for dated run bundles plus a strict gate report (`scripts/phase1_evidence_bundle.sh`, `tools/phase1_gate_report.py`, `docs/PHASE1_EVIDENCE.md`).
-- The Phase 1 gate report now enforces a deterministic three-run repeatability standard with aggregate net-after-costs checks, manifest schema validation, and fixture-backed Python tests.
-- Product expansion workspace now exists under `docs/product/` with a master feature tracker, provider matrix, UX plan, work orders, and machine-readable tracker.
-- Dashboard frontend shell now supports multi-workspace operator views for command, listing, risk, strategy, and agent supervision.
-- Listing Radar is now backed by dashboard API endpoints with typed shared models and OpenAPI coverage.
-- Risk Cockpit and Agent Console now have backend summary endpoints instead of frontend-only placeholder content.
-- Sandbox optimization cycle tooling now exists in `tools/sandbox_optimizer_cycle.py` to run optimize -> backtest -> promote -> replay acceptance -> incumbent update.
-- Sandbox optimization daemon tooling now exists in `tools/sandbox_optimizer_daemon.py` to run the cycle repeatedly on a fixed interval for sandbox use.
-- Sandbox ROI roadmap now exists in `docs/product/SANDBOX_ROI_ROADMAP.md`.
+3. Keep the approval queue read-only while adding backend durability.
+4. Continue toward replay/paper repeatability proof with at least three independent positive-cost-modeled runs before any tiny-live recommendation.
 
-## In Progress
+## Current Audit (2026-04-27)
 
-- PR `#12`: harden the Phase 1 evidence bundle into a deterministic 3-run repeatability gate.
-- PR `#13`: add a read-only `/api/v1/approval-queue` operator API as the backend base for issue `#9`.
-- PR `#18`: add the read-only approval-queue frontend panel on top of PR `#13`.
-- PR `#11`: keep fixture-backed dashboard frontend tests available as the current-API safety net.
+- Repo remains in **Phase 1: sandbox trading / paper ROI**.
+- Recently merged work reduced safety gaps but did not change the next runtime blocker:
+  - `#11`, `#12`, `#13`, `#18`, and `#26` are merged on `main`.
+- The next concrete implementation blocker remains issue `#9`: workstation approval-queue state is still memory-only in the Coinbase workstation runtime.
+- The safe next slice is backend durability and startup hydration, not more UI expansion.
+- Fresh local gate status is still unknown from this control-tower cycle because this workspace did not have a normal authenticated local checkout for the private repo.
 
 ## Current audit finding
 
 - The repository is still in Phase 1: sandbox trading / paper ROI.
-- The next concrete runtime blocker remains issue `#9`: queue-relevant workstation orders are memory-only in the Coinbase workstation and do not survive restart.
-- Coordination churn is now overlapping the active implementation queue:
-  - main-based tracker PRs `#14` through `#17` and `#19`
-  - stacked planning PR `#20` on top of `#13`
-- Older PRs `#4` and `#8` remain stale or superseded and should not be treated as current delivery tracks.
-
-## Next Queue
-
-1. Implement issue `#9` as a small backend PR stacked on PR `#13`:
-   - persist only `draft` and `cancel_requested` workstation orders via `storage.sqlite_path`
-   - hydrate those queue-relevant rows on startup
-   - prune persisted rows once orders move out of queue-relevant statuses
-   - keep approval surfaces read-only and non-autonomous
-   - add focused create/update/reload tests
-2. Run the local-first validation ladder on the active approval-queue stack.
-3. Rebase PR `#18` after the backend queue stack settles.
-4. Reduce review noise by keeping one canonical coordination track and closing or superseding overlapping planning PRs.
+- The next concrete runtime blocker remains issue `#9`: queue-relevant workstation orders do not survive restart.
+- `docs/PHASE1_NEXT_ROUND_2026-04-27.md` is now the canonical checkpoint for the next implementation round.
 
 ## Validation ladder
 
@@ -419,26 +365,5 @@
 - Validate promoted replay artifacts against `pt-cli` replay mode in a Rust-enabled environment.
 - Capture at least three independent replay/paper evidence bundles and generate a Phase 1 gate report.
 - Wire hosted branch protection/manual approval settings in GitHub.
-- Add durable approval-queue persistence behind the new read-only operator queue surface.
+- Add durable approval-queue persistence behind the existing read-only operator queue surface.
 - Run end-stage Rust/frontend validation for the expanded dashboard surface.
-- Turn the sandbox optimization cycle into a scheduled hourly workflow with operator-visible status.
-
-## Next Queue
-
-1. Run the full Rust validation ladder in an environment with `cargo` and network access.
-2. Add durable approval-queue persistence and restart recovery using `storage.sqlite_path`.
-3. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
-4. Add mutation tests for risk and quote-critical logic.
-5. Configure hosted branch protections and required status checks.
-2. Populate `data/evidence/phase1/<bundle>/` with three independent runs and generate `report.json` plus `report.md`.
-3. Persist dashboard approval queue state across restart/reload using `storage.sqlite_path`, keeping execution authority unchanged.
-4. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
-5. Add mutation tests for risk and quote-critical logic.
-6. Configure hosted branch protections and required status checks.
-2. Expose the sandbox optimizer daemon status, incumbent, latest candidate, and replay result in the dashboard.
-3. Add operator-visible incumbent/candidate/promotion evidence to the dashboard.
-4. Add fixture-driven frontend tests for workspace navigation and new listing/risk/agent API rendering.
-5. Add execution-policy and approval-queue persistence so the new workspaces move from derived summaries to durable audit history.
-6. Add external incident destinations (PagerDuty/Slack/Sentry/OTel) after deployment target is selected.
-7. Add mutation tests for risk and quote-critical logic.
-8. Configure hosted branch protections and required status checks.
