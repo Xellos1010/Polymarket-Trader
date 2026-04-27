@@ -6,25 +6,35 @@ Phase 1: sandbox trading / paper ROI.
 
 ## Current audit finding
 
-Grounded repo state after parallel review:
+This round re-audited all materially relevant prior work using parallel sub-agent review plus live GitHub inspection.
 
-- `main` already contains the approval-queue stack through PRs `#27`, `#29`, `#30`, and `#31`.
-- The read-only operator surfaces are already in place from PRs `#13` and `#18`.
-- Open PRs `#32`, `#33`, `#34`, and `#35` are coordination-heavy drafts and should not block the next engineering step.
-- The remaining blocker for issue `#9` is still the final runtime integration inside `crates/pt-cli/src/coinbase.rs`.
-- This environment still does not provide a safe local checkout plus `gh` publish path, so the safest action here is to pin one exact next implementation slice in the repo itself rather than guess at an unvalidated blind runtime edit.
+Grounded repo state now:
+
+- Merged work already in place on `main`:
+  - PR `#11` dashboard fixture tests
+  - PR `#12` Phase 1 evidence-gate hardening
+  - PR `#13` read-only approval queue API
+  - PR `#18` read-only approval queue frontend panel
+  - PR `#27` queue storage foundation
+  - PR `#29` queue snapshot reconciliation
+  - PR `#30` runtime hydration merge helper
+  - PR `#31` runtime-store bridge helper
+- The remaining engineering blocker for issue `#9` is still the final runtime integration inside `crates/pt-cli/src/coinbase.rs`.
+- Open PRs `#32` through `#35` are overlapping coordination drafts and should not block the next code slice.
+- This environment still does not provide a safe local checkout plus `gh` publish path, so the safest repo-native action from this run is to keep one canonical execution-plan PR updated rather than open another planning PR on top of the same blocker.
 
 ## Recommended next action
 
 Open one narrow backend PR on top of `main` that wires the existing approval-queue persistence helpers into `CoinbaseWorkstationRuntime`.
 
-Scope that PR to only these responsibilities:
+Keep that PR limited to these responsibilities:
 
 1. Open the queue store from `storage.sqlite_path` during runtime construction.
 2. Hydrate queue-relevant rows (`draft`, `cancel_requested`) into `state.coinbase.orders` on startup.
-3. Reconcile persisted queue state after runtime order lifecycle changes and after live-order sync.
-4. Keep `/api/v1/orders` and `/api/v1/approval-queue` read-only.
-5. Add focused `pt-cli` tests for startup restore and post-mutation reconciliation.
+3. Reconcile persisted queue state from the current runtime order snapshot after order-loop lifecycle changes.
+4. Reconcile persisted queue state after live-order sync so remote identity/status changes prune stale queue rows.
+5. Keep `/api/v1/orders` and `/api/v1/approval-queue` read-only.
+6. Avoid any new planning-only PRs until that runtime slice lands.
 
 ## Acceptance criteria
 
@@ -33,12 +43,16 @@ Scope that PR to only these responsibilities:
 - Identity changes from local draft ids to remote exchange ids do not leave stale queue rows behind.
 - Runtime wiring does not add approval, execution, or live-autonomy behavior.
 - Queue persistence remains limited to `draft` and `cancel_requested` only.
+- The next implementation PR is code-focused and reviewable, not another coordination-only branch.
 
 ## Validation commands
+
+Targeted runtime slice validation:
 
 ```bash
 cargo check -p pt-cli
 cargo test -p pt-cli
+cargo test -p pt-dashboard
 cargo check --workspace
 cargo test --workspace
 ```
@@ -53,6 +67,11 @@ cargo test --workspace
 cargo build --workspace
 cargo audit
 ./scripts/generate_sbom.sh artifacts
+python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json
+python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery
+python3 tools/coinbase_strategy_lab.py optimize --config config/coinbase_strategy_lab.json
+cargo run -p pt-cli -- run --config config/config.toml
+./scripts/paper_soak.sh 86400 30 config/config.toml
 ```
 
 ## Risks and guardrails
@@ -63,12 +82,14 @@ cargo audit
 - Do not widen persistence beyond `draft` and `cancel_requested`.
 - Do not add approval or execution mutation endpoints as part of this slice.
 - Do not treat helper-layer merges alone as proof that Phase 1 ROI gates passed.
+- Do not create more docs-only checkpoint PRs for the same blocker unless repo state materially changes.
 
 ## Parallel workstreams used for this checkpoint
 
-- PR queue audit: confirmed the real active implementation base is the merged `#27 -> #29 -> #30 -> #31` chain.
-- Issue `#9` audit: confirmed the remaining gap is runtime wiring, not storage design or dashboard surface design.
-- Environment audit: confirmed the current runtime lacks a safe local checkout plus `gh` publish path, so repo-native queuing is the reliable action from this session.
+- Prior-work audit: confirmed the merged base is `#11`, `#12`, `#13`, `#18`, `#27`, `#29`, `#30`, `#31`.
+- PR queue audit: confirmed `#32` through `#35` are coordination-heavy and should not block the next code slice.
+- Runtime audit: confirmed the missing work is startup hydration plus runtime reconciliation in `crates/pt-cli/src/coinbase.rs`.
+- Environment audit: confirmed this session can keep the queue grounded in GitHub, but not safely run a full local Rust checkout and publish workflow.
 
 ## Codex-ready task prompt
 
@@ -84,9 +105,9 @@ Finish issue `#9` by wiring the existing queue persistence helpers into `crates/
 Context:
 - `docs/APPROVAL_QUEUE_PERSISTENCE_PLAN.md`
 - `docs/PROGRESS.md`
+- `docs/SESSION_CONTEXT.md`
 - issue `#9`
-- merged PRs `#27`, `#29`, `#30`, `#31`
-- read-only queue surfaces already merged in PRs `#13` and `#18`
+- merged PRs `#13`, `#18`, `#27`, `#29`, `#30`, `#31`
 
 Files likely involved:
 - `crates/pt-cli/src/coinbase.rs`
@@ -106,6 +127,7 @@ Required implementation:
 Validation:
 - `cargo check -p pt-cli`
 - `cargo test -p pt-cli`
+- `cargo test -p pt-dashboard`
 - `cargo check --workspace`
 - `cargo test --workspace`
 
