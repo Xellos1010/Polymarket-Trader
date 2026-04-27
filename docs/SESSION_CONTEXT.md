@@ -1,24 +1,26 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1777242900`
+Generated at UNIX epoch seconds: `1777243200`
 
 ## Phase
 Phase 1: sandbox trading / paper ROI.
 
 ## Current audit finding
-Re-audited the repo after the approval-queue persistence stack landed.
+Re-audited the repo after the approval-queue persistence work progressed through a stacked PR chain.
 
-What is grounded on `main` now:
-- PR `#13` merged the read-only `/api/v1/approval-queue` backend contract.
-- PR `#18` merged the read-only approval-queue frontend panel.
-- PR `#27` merged the SQLite storage foundation for queue-relevant workstation orders.
-- PR `#29` merged snapshot reconciliation so stale queue rows are deleted when identity or status changes.
-- PR `#30` merged runtime hydration helpers for queue-relevant orders.
-- PR `#31` merged the runtime-store bridge helpers and documented the SQLite queue table in `docs/data/SCHEMA.md`.
+What is grounded right now:
+- PR `#13` is merged on `main` and defines the read-only `/api/v1/approval-queue` backend contract.
+- PR `#18` is merged on `main` and adds the read-only approval-queue frontend panel.
+- PRs `#27`, `#29`, `#30`, and `#31` form the active stacked backend chain for issue `#9`:
+  - SQLite storage foundation
+  - snapshot reconciliation
+  - runtime hydration helpers
+  - runtime-store bridge helpers
+- That stacked chain is the correct base for the next runtime slice.
 - The next remaining blocker for issue `#9` is the final runtime wiring inside `crates/pt-cli/src/coinbase.rs`.
 
 ## Recommended next implementation slice
-Start one narrow backend PR that only wires the existing helpers into the Coinbase workstation runtime.
+After the stacked queue-store chain is promoted to `main`, start one narrow backend PR that only wires the existing helpers into the Coinbase workstation runtime.
 
 Exact scope:
 - open `ApprovalQueueStore` from `storage.sqlite_path` during `CoinbaseWorkstationRuntime::new(...)`
