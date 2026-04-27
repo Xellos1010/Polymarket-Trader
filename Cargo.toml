@@ -35,3 +35,7 @@ url = "2.5"
 arrow-array = "53"
 arrow-schema = "53"
 parquet = { version = "53", features = ["arrow"] }
+aws-config = "1.8"
+aws-sdk-secretsmanager = "1.78"
+rustls = { version = "0.23", features = ["aws_lc_rs", "ring"] }
+p256 = { version = "0.13", features = ["pem", "pkcs8"] }
