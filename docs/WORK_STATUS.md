@@ -14,9 +14,15 @@ Grounded state as of April 28, 2026:
 - Remote branch search shows a much larger `codex/` inventory than the earlier short list, so all visible branches now need an explicit classification to avoid accidental parallel integration.
 - Diverged remote branches must not be treated as parallel active review tracks.
 
+## Audit stamp
+- last audited on: April 28, 2026
+- audit source: GitHub repository, open issue queue, open PR queue, and active integration branch documents
+- validation evidence state: not rerun from a full private-repo checkout in this environment
+- current truth standard: status files may claim queue order and blockers, but they must not imply that the Phase 0 Rust validation ladder is green
+
 ## Automation mirror
 - `docs/WORK_STATUS.json` is the machine-readable mirror of this file.
-- Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, next slice, decision-gate state, or branch-classification inventory changes.
+- Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, next slice, decision-gate state, validation evidence state, or branch-classification inventory changes.
 
 ## Current stage
 Stage: `phase0_slice1_waiting_on_compile_recovery`
@@ -25,6 +31,12 @@ Meaning:
 - one canonical PR owns the active work queue
 - the next safe code change is still issue `#48`
 - no Phase 1 queue-runtime or frontend expansion should outrun compile recovery
+
+## Stage status
+- stage owner: PR `#51`
+- stage source: issue `#48`
+- stage execution status: ready for a narrow code-bearing Slice 1 pass from a full repo checkout
+- environment note: this audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before any readiness claim changes
 
 ## Decision-gate tracker
 - current stage requires human decision: no
@@ -61,12 +73,13 @@ Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 1. repair `crates/pt-cli/src/main.rs`
 2. repair `crates/pt-coinbase/src/lib.rs`
 3. keep changes syntax and structure only
-4. avoid queue-runtime behavior in this slice
+4. preserve coherent newer behavior where it is already intact
+5. avoid queue-runtime behavior in this slice
 
 ## Consolidated feature queue
 | Order | Feature or slice | Source | Status | Human decision required | Next action |
 |---|---|---|---|---|---|
-| 1 | Compile recovery slice 1 (`pt-cli` + `pt-coinbase`) | issue `#48` | active next step | no | continue on PR `#51` with a narrow code-bearing commit set |
+| 1 | Compile recovery slice 1 (`pt-cli` + `pt-coinbase`) | issue `#48` | active next step | no | continue on PR `#51` with a narrow code-bearing commit set from a full checkout |
 | 2 | Compile recovery slice 2 (`pt-core/src/config.rs`) | Phase 0 recovery queue | queued | no | continue on PR `#51` after slice 1 parser recovery is confirmed |
 | 3 | Compile recovery slice 3 (remaining parser-blocked dashboard/runtime files) | Phase 0 recovery queue | queued | no | continue on PR `#51` after slice 2 |
 | 4 | Phase 0 validation ladder | repo readiness gate | queued | no | run fmt, check, clippy, test, build, audit, SBOM on the consolidated branch |
@@ -90,6 +103,7 @@ High-value reference branches currently classified for later salvage or archive:
 - every visible `codex/` branch is classified as active, salvage, blocked, or archive context
 - issue `#48` remains the next code-bearing slice
 - the queue includes a defined rule for what happens when a stage needs human input
+- the status board clearly distinguishes tracker truth from validation evidence
 
 ## Integration completion rule
 Integration is complete for this cycle when:
@@ -131,4 +145,4 @@ Human approval is still required before:
 
 ## Status ownership
 This file is the operator-readable work-stage tracker.
-Update it together with `docs/WORK_STATUS.json` whenever the active stage, blocker, integration branch, eligible next feature, decision-gate state, or branch-classification inventory changes.
+Update it together with `docs/WORK_STATUS.json` whenever the active stage, blocker, integration branch, eligible next feature, decision-gate state, validation evidence state, or branch-classification inventory changes.
