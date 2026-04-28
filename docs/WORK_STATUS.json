@@ -1,11 +1,11 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "updated_on": "2026-04-28",
   "phase": {
     "id": "phase0",
     "name": "Phase 0: repo readiness"
   },
-  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, the active PR still carries tracker and control files only, and the first code-bearing recovery slice is now documented with exact file-level blocker signatures.",
+  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, the active PR still carries tracker and control files only, and issue #48 remains the one active_now code-bearing slice.",
   "audit": {
     "last_audited_on": "2026-04-28",
     "audit_source": [
@@ -17,7 +17,7 @@
       "current branch versions of crates/pt-cli/src/main.rs and crates/pt-coinbase/src/lib.rs"
     ],
     "validation_evidence_state": "not_rerun_from_full_private_repo_checkout",
-    "truth_standard": "Tracker files may describe queue order and blockers, but they must not imply that the Phase 0 validation ladder is green without fresh local evidence."
+    "truth_standard": "Tracker files may describe queue order, blockers, and execution policy, but they must not imply that the Phase 0 validation ladder is green without fresh local evidence."
   },
   "workflow_invariants": {
     "single_active_integration_branch": true,
@@ -25,7 +25,23 @@
     "single_ordered_queue": true,
     "status_markdown_json_mirror_required": true,
     "full_codex_branch_classification_required": true,
-    "tracker_truth_must_not_imply_validation": true
+    "tracker_truth_must_not_imply_validation": true,
+    "exactly_one_active_now_queue_item": true,
+    "refinement_only_after_no_eligible_implementation_items": true
+  },
+  "queue_state_machine": {
+    "allowed_states": [
+      "active_now",
+      "queued",
+      "blocked_by_phase0",
+      "blocked_on_human_decision",
+      "deferred_until_phase0_green",
+      "deferred_until_current_api_reaudit",
+      "completed",
+      "explicitly_deferred"
+    ],
+    "execution_rule": "Continue the active_now item on PR #51 unless it becomes blocked_on_human_decision, then promote the next defined and independent queued item.",
+    "refinement_trigger": "Only start the final best-practices refinement pass after no defined eligible implementation items remain."
   },
   "current_stage": {
     "id": "phase0_slice1_waiting_on_compile_recovery",
@@ -36,6 +52,8 @@
     "code_bearing_progress": "not_started_on_active_pr",
     "next_required_environment": "authenticated_checkout_of_codex/single-integration-board-2026-04-28",
     "environment_note": "This audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before readiness status changes.",
+    "active_now_queue_order": 1,
+    "next_automatically_eligible_queue_order": 2,
     "fallback_if_human_decision_blocks": {
       "label": "Compile recovery slice 2",
       "source": "Phase 0 recovery queue",
@@ -78,7 +96,7 @@
   "active_next_step": {
     "label": "Issue #48 compile recovery slice 1",
     "source": "issue #48",
-    "status": "active_next_step",
+    "queue_state": "active_now",
     "files": [
       "crates/pt-cli/src/main.rs",
       "crates/pt-coinbase/src/lib.rs"
@@ -100,7 +118,8 @@
     "queued_after_current_stage": 3,
     "deferred_until_phase0_green": 3,
     "blocked_by_phase0": 1,
-    "deferred_until_current_api_reaudit": 1
+    "deferred_until_current_api_reaudit": 1,
+    "blocked_on_human_decision": 0
   },
   "branch_inventory": {
     "query": "codex/",
@@ -164,76 +183,85 @@
       "order": 1,
       "label": "Compile recovery slice 1",
       "source": "issue #48",
-      "status": "active_next_step",
-      "requires_human_decision": false
+      "status": "active_now",
+      "requires_human_decision": false,
+      "eligible_after_current_item": "current_item"
     },
     {
       "order": 2,
       "label": "Compile recovery slice 2",
       "source": "Phase 0 recovery queue",
       "status": "queued",
-      "requires_human_decision": false
+      "requires_human_decision": false,
+      "eligible_after_current_item": true
     },
     {
       "order": 3,
       "label": "Compile recovery slice 3",
       "source": "Phase 0 recovery queue",
       "status": "queued",
-      "requires_human_decision": false
+      "requires_human_decision": false,
+      "eligible_after_current_item": true
     },
     {
       "order": 4,
       "label": "Phase 0 validation ladder",
       "source": "repo readiness gate",
       "status": "queued",
-      "requires_human_decision": false
+      "requires_human_decision": false,
+      "eligible_after_current_item": true
     },
     {
       "order": 5,
       "label": "Deterministic risk and quote failure-path tests",
       "source": "issue #23",
       "status": "deferred_until_phase0_green",
-      "requires_human_decision": false
+      "requires_human_decision": false,
+      "eligible_after_current_item": false
     },
     {
       "order": 6,
       "label": "Dashboard safety-net and read-only queue test consolidation",
       "source": "issue #22",
       "status": "deferred_until_phase0_green",
-      "requires_human_decision": false
+      "requires_human_decision": false,
+      "eligible_after_current_item": false
     },
     {
       "order": 7,
       "label": "Repeatable replay and paper evidence bundle refresh",
       "source": "issue #10",
       "status": "deferred_until_phase0_green",
-      "requires_human_decision": false
+      "requires_human_decision": false,
+      "eligible_after_current_item": false
     },
     {
       "order": 8,
       "label": "Durable approval-queue persistence",
       "source": "issue #9",
       "status": "blocked_by_phase0",
-      "requires_human_decision": false
+      "requires_human_decision": false,
+      "eligible_after_current_item": false
     },
     {
       "order": 9,
       "label": "Dashboard shell or UI salvage",
       "source": "codex/dashboard-shell-current-api",
       "status": "deferred_until_current_api_reaudit",
-      "requires_human_decision": true
+      "requires_human_decision": true,
+      "eligible_after_current_item": false
     }
   ],
   "queue_progression_rule": {
-    "default": "Advance the first queue item that is well-defined and unblocked.",
-    "if_human_decision_blocks": "Record the blocker in the status files and advance the next eligible item on the same integration PR.",
+    "default": "Advance the first queue item that is well-defined, unblocked, and independent of any active human-decision blocker.",
+    "if_human_decision_blocks": "Record the blocker in the status files and promote the next eligible item on the same integration PR.",
     "if_no_eligible_items_remain": "Stop adding scope and run the final consistency and best-practices refinement pass."
   },
   "refinement_trigger": {
     "run_when_remaining_items_are_only": [
       "completed",
       "explicitly_deferred",
-      "blocked_on_human_approval",
+      "blocked_on_human_decision",
       "blocked_on_missing_validation_evidence"
     ],
     "scope": [
