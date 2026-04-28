@@ -11,12 +11,12 @@ Grounded state as of April 28, 2026:
 - PR `#51` is now the only active integration PR.
 - Issue `#48` is still the active next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is recovered.
-- Remote branch search shows a much larger `codex/` inventory than the earlier short list, so all visible branches now need an explicit classification to avoid accidental parallel integration.
+- Remote branch search shows 44 visible `codex/` branches, all of which must stay explicitly classified to avoid accidental parallel integration.
 - Diverged remote branches must not be treated as parallel active review tracks.
 
 ## Audit stamp
 - last audited on: April 28, 2026
-- audit source: GitHub repository, open issue queue, open PR queue, and active integration branch documents
+- audit source: GitHub repository, open issue queue, open PR queue, active integration branch documents, and current visible `codex/` branch inventory
 - validation evidence state: not rerun from a full private-repo checkout in this environment
 - current truth standard: status files may claim queue order and blockers, but they must not imply that the Phase 0 Rust validation ladder is green
 
@@ -37,6 +37,14 @@ Meaning:
 - stage source: issue `#48`
 - stage execution status: ready for a narrow code-bearing Slice 1 pass from a full repo checkout
 - environment note: this audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before any readiness claim changes
+
+## Workflow invariants
+- one active integration branch
+- one active integration PR
+- one ordered queue
+- one operator-readable status file plus one machine-readable mirror
+- every visible `codex/` branch classified before salvage work begins
+- tracker truth kept separate from validation evidence
 
 ## Decision-gate tracker
 - current stage requires human decision: no
@@ -76,6 +84,13 @@ Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 4. preserve coherent newer behavior where it is already intact
 5. avoid queue-runtime behavior in this slice
 
+## Queue summary
+- active now: 1 item
+- queued after current stage: 3 Phase 0 items
+- deferred until Phase 0 green: 3 items
+- blocked by Phase 0: 1 item
+- deferred until current API re-audit: 1 item
+
 ## Consolidated feature queue
 | Order | Feature or slice | Source | Status | Human decision required | Next action |
 |---|---|---|---|---|---|
@@ -94,7 +109,7 @@ High-value reference branches currently classified for later salvage or archive:
 - compile recovery: `codex/fix-pt-cli-duplicate-chrono`, `codex/phase0-compile-hotfix-execution-2026-04-27`, `codex/phase0-compile-recovery-2026-04-27`, `codex/phase0-execution-board-2026-04-27`, `codex/phase0-manifest-and-risk-scar-2026-04-27`, `codex/phase0-recovery-queue-2026-04-27`, `codex/phase0-slice1-compile-recovery`, `codex/phase0-slice1-start-2026-04-27`
 - frontend or dashboard: `codex/approval-queue-frontend-panel`, `codex/dashboard-shell-current-api`, `codex/frontend-fixture-tests-current-api`, `codex/full-scale-product-expansion`, `codex/set-up-portfolio-and-orders-management`
 - approval queue and persistence: `codex/approval-queue-runtime-hydration-helpers`, `codex/approval-queue-runtime-store-bridge`, `codex/approval-queue-snapshot-reconcile`, `codex/approval-queue-storage-foundation`, `codex/issue-9-persistence-stack-brief`, `codex/issue-9-runtime-wiring-brief`, `codex/phase1-approval-queue-persistence-plan`, `codex/queue-helper-stack-on-main`, `codex/read-only-approval-queue-api`
-- planning or audit context: `codex/codespaces-cloud-agent-tdd`, `codex/consolidated-open-work-2026-04-27`, `codex/issue-21-local-validation-ladder`, `codex/issue-23-risk-quote-tests`, `codex/local-validation-bounded-smoke`, `codex/phase1-canonical-next-round-2026-04-26`, `codex/phase1-control-tower-2026-04-26`, `codex/phase1-control-tower-2026-04-27`, `codex/phase1-evidence-bundle-starter`, `codex/phase1-next-round-after-pr31`, `codex/phase1-next-round-after-pr37-audit`, `codex/phase1-next-round-canonical-issue9`, `codex/phase1-next-round-coordination-2026-04-26`, `codex/phase1-next-round-start-2026-04-26`, `codex/phase1-queue-audit-2026-04-26`, `codex/phase1-queue-control-after-pr37`, `codex/phase1-runtime-roundup-2026-04-27`, `codex/phase1-runtime-wiring-execution-plan-2026-04-27`, `codex/project-completion-pass`, `codex/single-status-board-2026-04-28`
+- planning or audit context: `codex/codespaces-cloud-agent-tdd`, `codex/consolidated-open-work-2026-04-27`, `codex/issue-5-phase1-product-bootstrap`, `codex/issue-21-local-validation-ladder`, `codex/issue-23-risk-quote-tests`, `codex/local-validation-bounded-smoke`, `codex/phase1-canonical-next-round-2026-04-26`, `codex/phase1-control-tower-2026-04-26`, `codex/phase1-control-tower-2026-04-27`, `codex/phase1-evidence-bundle-starter`, `codex/phase1-next-round-after-pr31`, `codex/phase1-next-round-after-pr37-audit`, `codex/phase1-next-round-canonical-issue9`, `codex/phase1-next-round-coordination-2026-04-26`, `codex/phase1-next-round-start-2026-04-26`, `codex/phase1-queue-audit-2026-04-26`, `codex/phase1-queue-control-after-pr37`, `codex/phase1-runtime-roundup-2026-04-27`, `codex/phase1-runtime-wiring-execution-plan-2026-04-27`, `codex/project-completion-pass`, `codex/single-status-board-2026-04-28`
 
 ## Acceptance criteria for the current stage
 - one draft PR exists and remains the only active integration PR
