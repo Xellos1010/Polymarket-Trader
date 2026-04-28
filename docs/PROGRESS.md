@@ -11,7 +11,7 @@ Grounded current state:
 - PR `#51` is now the only active integration PR.
 - Issue `#48` is the active next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is restored.
-- Remote branch search shows a larger `codex/` inventory than the earlier short tracker list, so the branch set has now been explicitly classified in the control files.
+- Remote branch search shows 44 visible `codex/` branches and the control files now classify the full set.
 - `docs/WORK_STATUS.md` is the operator-readable stage tracker and `docs/WORK_STATUS.json` is the machine-readable mirror.
 
 ## Validation evidence status
@@ -22,14 +22,15 @@ Grounded current state:
 - Earlier open-work consolidation was merged through PR `#47`.
 - Queue-start and status-tracker cleanup landed through PR `#49` and PR `#50`.
 - PR `#51` re-established one integration branch, one canonical work board, and one machine-readable work-stage mirror.
-- The tracker set now classifies all visible `codex/` branches so future work does not accidentally reopen parallel review lanes.
+- The tracker set now classifies all 44 visible `codex/` branches so future work does not accidentally reopen parallel review lanes.
 - The status and progress files now distinguish tracker truth from validation evidence so the queue does not overstate repo readiness.
+- The control files now encode the single-PR progression rule, the fallback rule for human-decision gates, and the final refinement trigger.
 
 ## In progress
 - Keep all current-cycle coordination in the single integration PR.
 - Keep the next code-bearing step narrowly focused on issue `#48`.
-- Record the fallback execution rule so work keeps moving if a later stage requires human input.
 - Hold deferred branch payload as salvage or reference material only until Phase 0 is green again.
+- Preserve the queue discipline that moves to the next eligible feature if a later stage hits a human-decision gate.
 
 ## Active execution rule
 - Work the active next slice first.
@@ -52,7 +53,7 @@ Canonical branch-classification source:
 2. Recover `crates/pt-core/src/config.rs`.
 3. Recover remaining parser-blocked dashboard and runtime files.
 4. Run the Phase 0 validation ladder end to end.
-5. Re-open deferred Phase 1 work as fresh small PRs on current `main`.
+5. Re-open deferred Phase 1 work as fresh small PRs on current `main` after repo readiness is restored.
 6. Finish with a consistency and best-practices refinement pass once no more defined eligible features remain.
 
 ## Validation ladder
