@@ -11,11 +11,12 @@ Grounded state as of April 28, 2026:
 - PR `#51` is now the only active integration PR.
 - Issue `#48` is still the active next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is recovered.
-- Diverged remote branches still carry unmerged payload, but they are behind current `main` and must not be treated as parallel active review tracks.
+- Remote branch search shows a much larger `codex/` inventory than the earlier short list, so all visible branches now need an explicit classification to avoid accidental parallel integration.
+- Diverged remote branches must not be treated as parallel active review tracks.
 
 ## Automation mirror
 - `docs/WORK_STATUS.json` is the machine-readable mirror of this file.
-- Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, next slice, or decision-gate state changes.
+- Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, next slice, decision-gate state, or branch-classification inventory changes.
 
 ## Current stage
 Stage: `phase0_slice1_waiting_on_compile_recovery`
@@ -36,6 +37,18 @@ Meaning:
 - PR: `#51`
 - purpose: keep one truthful PR and one truthful status board while the repo works through the remaining recovery and salvage queue
 - status: active
+
+## Branch-classification coverage
+The current tracker now treats every visible `codex/` branch as one of these states:
+- active integration branch
+- compile-recovery reference
+- frontend or dashboard salvage reference
+- approval-queue persistence reference
+- planning or audit archive context
+
+Current rule:
+- only the active integration branch may carry new implementation work for this cycle
+- every other branch is reference-only until the current phase gates allow targeted salvage
 
 ## Stage execution rule
 - If the current stage does not require a human decision, continue the active next step on PR `#51`.
@@ -58,29 +71,23 @@ Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 | 3 | Compile recovery slice 3 (remaining parser-blocked dashboard/runtime files) | Phase 0 recovery queue | queued | no | continue on PR `#51` after slice 2 |
 | 4 | Phase 0 validation ladder | repo readiness gate | queued | no | run fmt, check, clippy, test, build, audit, SBOM on the consolidated branch |
 | 5 | Deterministic risk and quote failure-path tests | issue `#23` | deferred until Phase 0 green | no | continue on PR `#51` after the validation ladder passes |
-| 6 | Dashboard safety-net and read-only queue test consolidation | issue `#22` | deferred until Phase 0 green | no | replay surviving frontend/test payload onto PR `#51` after repo readiness recovers |
+| 6 | Dashboard safety-net and read-only queue test consolidation | issue `#22` | deferred until Phase 0 green | no | replay surviving frontend or test payload onto PR `#51` after repo readiness recovers |
 | 7 | Repeatable replay and paper evidence bundle | issue `#10` | deferred until Phase 0 green | no | refresh artifacts and gate report path on PR `#51` after repo readiness recovers |
 | 8 | Durable approval-queue persistence | issue `#9` | blocked by Phase 0 | no | resume on PR `#51` only after compile integrity and validation ladder are green |
-| 9 | Dashboard shell/UI salvage | `codex/dashboard-shell-current-api` | deferred until current API re-audit | possible later | salvage only the current-API-backed pieces onto PR `#51` after Phase 0 recovery |
+| 9 | Dashboard shell or UI salvage | `codex/dashboard-shell-current-api` | deferred until current API re-audit | possible later | salvage only the current-API-backed pieces onto PR `#51` after Phase 0 recovery |
 
-## Outstanding remote work to consolidate later
-- `codex/approval-queue-frontend-panel`
-- `codex/read-only-approval-queue-api`
-- `codex/approval-queue-storage-foundation`
-- `codex/approval-queue-snapshot-reconcile`
-- `codex/approval-queue-runtime-store-bridge`
-- `codex/approval-queue-runtime-hydration-helpers`
-- `codex/dashboard-shell-current-api`
-
-Disposition for all of the above:
-- reference only while Phase 0 is red
-- do not merge them directly
-- replay any still-useful payload onto PR `#51` after repo readiness is restored
+## Reference-only branch inventory
+High-value reference branches currently classified for later salvage or archive:
+- compile recovery: `codex/fix-pt-cli-duplicate-chrono`, `codex/phase0-compile-hotfix-execution-2026-04-27`, `codex/phase0-compile-recovery-2026-04-27`, `codex/phase0-execution-board-2026-04-27`, `codex/phase0-manifest-and-risk-scar-2026-04-27`, `codex/phase0-recovery-queue-2026-04-27`, `codex/phase0-slice1-compile-recovery`, `codex/phase0-slice1-start-2026-04-27`
+- frontend or dashboard: `codex/approval-queue-frontend-panel`, `codex/dashboard-shell-current-api`, `codex/frontend-fixture-tests-current-api`, `codex/full-scale-product-expansion`, `codex/set-up-portfolio-and-orders-management`
+- approval queue and persistence: `codex/approval-queue-runtime-hydration-helpers`, `codex/approval-queue-runtime-store-bridge`, `codex/approval-queue-snapshot-reconcile`, `codex/approval-queue-storage-foundation`, `codex/issue-9-persistence-stack-brief`, `codex/issue-9-runtime-wiring-brief`, `codex/phase1-approval-queue-persistence-plan`, `codex/queue-helper-stack-on-main`, `codex/read-only-approval-queue-api`
+- planning or audit context: `codex/codespaces-cloud-agent-tdd`, `codex/consolidated-open-work-2026-04-27`, `codex/issue-21-local-validation-ladder`, `codex/issue-23-risk-quote-tests`, `codex/local-validation-bounded-smoke`, `codex/phase1-canonical-next-round-2026-04-26`, `codex/phase1-control-tower-2026-04-26`, `codex/phase1-control-tower-2026-04-27`, `codex/phase1-evidence-bundle-starter`, `codex/phase1-next-round-after-pr31`, `codex/phase1-next-round-after-pr37-audit`, `codex/phase1-next-round-canonical-issue9`, `codex/phase1-next-round-coordination-2026-04-26`, `codex/phase1-next-round-start-2026-04-26`, `codex/phase1-queue-audit-2026-04-26`, `codex/phase1-queue-control-after-pr37`, `codex/phase1-runtime-roundup-2026-04-27`, `codex/phase1-runtime-wiring-execution-plan-2026-04-27`, `codex/project-completion-pass`, `codex/single-status-board-2026-04-28`
 
 ## Acceptance criteria for the current stage
 - one draft PR exists and remains the only active integration PR
 - `docs/WORK_STATUS.md`, `docs/WORK_STATUS.json`, `docs/SESSION_CONTEXT.md`, `docs/PROGRESS.md`, and `docs/INTEGRATION_BOARD.md` all agree on the active stage and next slice
 - the repo no longer implies multiple active PR tracks
+- every visible `codex/` branch is classified as active, salvage, blocked, or archive context
 - issue `#48` remains the next code-bearing slice
 - the queue includes a defined rule for what happens when a stage needs human input
 
@@ -124,4 +131,4 @@ Human approval is still required before:
 
 ## Status ownership
 This file is the operator-readable work-stage tracker.
-Update it together with `docs/WORK_STATUS.json` whenever the active stage, blocker, integration branch, eligible next feature, or decision-gate state changes.
+Update it together with `docs/WORK_STATUS.json` whenever the active stage, blocker, integration branch, eligible next feature, decision-gate state, or branch-classification inventory changes.
