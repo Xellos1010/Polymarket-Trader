@@ -4,36 +4,36 @@
 Phase 0: repo readiness
 
 ## Current audit finding
-The repository is still blocked in Phase 0 and the only active PR should remain the integration-tracking PR until the queue is fully consolidated.
+The repository is still blocked in Phase 0 by compile-integrity failures, and PR `#51` should remain the only active integration PR until the queue either clears or reaches a real human-decision gate.
 
 Grounded state as of April 28, 2026:
 - `main` already contains the earlier consolidation work from PR `#47`, PR `#49`, and PR `#50`.
-- PR `#51` is now the only active integration PR.
-- PR `#51` still changes tracker and control files only; the first code-bearing recovery slice has not landed yet.
+- PR `#51` is the only open integration PR.
+- PR `#51` still carries tracker and control-file work only; the first code-bearing recovery slice has not landed yet.
 - Issue `#48` is still the active next code-bearing slice.
-- Issue `#9` remains paused until compile integrity is recovered.
-- Remote branch search shows 44 visible `codex/` branches, all of which must stay explicitly classified to avoid accidental parallel integration.
-- Diverged remote branches must not be treated as parallel active review tracks.
+- Issue `#9` remains paused until compile integrity is recovered and the local validation ladder is green.
+- Visible `codex/` branches remain reference-only unless they are explicitly replayed onto PR `#51`.
 
 ## Audit stamp
 - last audited on: April 28, 2026
-- audit source: GitHub repository, open issue queue, open PR queue, active integration branch documents, visible `codex/` branch inventory, and current branch versions of the Slice 1 Rust files
+- audit source: GitHub repository state, open issue queue, open PR queue, active integration branch documents, visible `codex/` branch inventory, and current branch versions of the Slice 1 Rust files
 - validation evidence state: not rerun from a full private-repo checkout in this environment
-- current truth standard: status files may claim queue order and blockers, but they must not imply that the Phase 0 Rust validation ladder is green
+- truth standard: tracker files may describe queue order, blockers, and execution policy, but they must not imply that the Phase 0 validation ladder is green
 
 ## Automation mirror
 - `docs/WORK_STATUS.json` is the machine-readable mirror of this file.
-- Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, next slice, decision-gate state, validation evidence state, or branch-classification inventory changes.
+- Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, eligibility state, next slice, decision-gate state, validation evidence state, or branch-classification inventory changes.
 
 ## Current stage
 Stage: `phase0_slice1_waiting_on_compile_recovery`
 
-Meaning:
+Stage contract:
 - one canonical PR owns the active work queue
+- exactly one queue item is marked `active_now`
 - the next safe code change is still issue `#48`
 - no Phase 1 queue-runtime or frontend expansion should outrun compile recovery
 
-## Stage status
+## Stage execution state
 - stage owner: PR `#51`
 - stage source: issue `#48`
 - stage execution status: exact Slice 1 repairs identified and waiting on a proper code-bearing pass
@@ -68,36 +68,38 @@ Meaning:
 - one operator-readable status file plus one machine-readable mirror
 - every visible `codex/` branch classified before salvage work begins
 - tracker truth kept separate from validation evidence
-
-## Decision-gate tracker
-- current stage requires human decision: no
-- current blocker type: compile-integrity recovery, not operator approval
-- fallback next eligible feature if a later stage becomes `waiting_on_human_decision`: compile recovery slice 2 in `crates/pt-core/src/config.rs`
-- canonical fallback policy: `docs/INTEGRATION_BOARD.md`
+- exactly one `active_now` feature at a time
+- refinement only begins after the queue has no more defined eligible implementation work
 
 ## Single active integration branch
 - branch: `codex/single-integration-board-2026-04-28`
 - PR: `#51`
-- purpose: keep one truthful PR and one truthful status board while the repo works through the remaining recovery and salvage queue
+- purpose: keep one truthful PR and one truthful status board while the repo works through recovery, validation, and later salvage work
 - status: active
 
-## Branch-classification coverage
-The current tracker now treats every visible `codex/` branch as one of these states:
-- active integration branch
-- compile-recovery reference
-- frontend or dashboard salvage reference
-- approval-queue persistence reference
-- planning or audit archive context
+## Queue state machine
+Allowed queue states for this cycle:
+- `active_now`: the one feature currently being worked
+- `queued`: defined and ready after the current item
+- `blocked_by_phase0`: defined but not eligible until Phase 0 is green
+- `blocked_on_human_decision`: defined but waiting on explicit operator approval
+- `deferred_until_phase0_green`: useful later, but intentionally paused behind repo readiness
+- `deferred_until_current_api_reaudit`: useful later, but requires a fresh backend or API fit check first
+- `completed`: finished on the active integration PR or already merged
+- `explicitly_deferred`: intentionally left out of the current cycle
 
-Current rule:
-- only the active integration branch may carry new implementation work for this cycle
-- every other branch is reference-only until the current phase gates allow targeted salvage
+## Decision-gate tracker
+- current stage requires human decision: no
+- current blocker type: compile-integrity recovery, not operator approval
+- current `active_now` item: issue `#48` compile recovery slice 1
+- next automatically eligible item if the current stage later becomes `blocked_on_human_decision`: compile recovery slice 2 in `crates/pt-core/src/config.rs`
+- canonical fallback policy: `docs/INTEGRATION_BOARD.md`
 
-## Stage execution rule
-- If the current stage does not require a human decision, continue the active next step on PR `#51`.
-- If the current stage becomes `waiting_on_human_decision`, record the blocker here and advance the next eligible feature on the same PR as long as it does not depend on that decision and does not violate the current phase guardrails.
+## Execution rule
+- If the current stage does not require a human decision, continue the `active_now` item on PR `#51`.
+- If the current stage becomes `blocked_on_human_decision`, record the blocker here and promote the next queue item that is both defined and independent of that decision.
 - Never open a second integration PR to keep work moving.
-- When no more defined eligible features remain, stop adding scope and do one refinement pass for clarity, consistency, and software-engineering hygiene.
+- When no more defined eligible implementation items remain, stop adding scope and run one refinement pass for clarity, consistency, and software-engineering hygiene.
 
 ## Active next step
 Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
@@ -111,7 +113,7 @@ Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 If those repairs land cleanly, the next immediate action is:
 1. `cargo fmt --all -- --check`
 2. `cargo check --workspace`
-3. if parser failures move on to `crates/pt-core/src/config.rs`, continue slice 2 on the same PR
+3. if parser failures move to `crates/pt-core/src/config.rs`, promote Slice 2 to `active_now` on the same PR
 
 ## Queue summary
 - active now: 1 item
@@ -119,26 +121,32 @@ If those repairs land cleanly, the next immediate action is:
 - deferred until Phase 0 green: 3 items
 - blocked by Phase 0: 1 item
 - deferred until current API re-audit: 1 item
+- blocked on human decision right now: 0 items
 
 ## Consolidated feature queue
-| Order | Feature or slice | Source | Status | Human decision required | Next action |
-|---|---|---|---|---|---|
-| 1 | Compile recovery slice 1 (`pt-cli` + `pt-coinbase`) | issue `#48` | active next step | no | continue on PR `#51` with a narrow code-bearing commit set from a full checkout |
-| 2 | Compile recovery slice 2 (`pt-core/src/config.rs`) | Phase 0 recovery queue | queued | no | continue on PR `#51` after slice 1 parser recovery is confirmed |
-| 3 | Compile recovery slice 3 (remaining parser-blocked dashboard/runtime files) | Phase 0 recovery queue | queued | no | continue on PR `#51` after slice 2 |
-| 4 | Phase 0 validation ladder | repo readiness gate | queued | no | run fmt, check, clippy, test, build, audit, SBOM on the consolidated branch |
-| 5 | Deterministic risk and quote failure-path tests | issue `#23` | deferred until Phase 0 green | no | continue on PR `#51` after the validation ladder passes |
-| 6 | Dashboard safety-net and read-only queue test consolidation | issue `#22` | deferred until Phase 0 green | no | replay surviving frontend or test payload onto PR `#51` after repo readiness recovers |
-| 7 | Repeatable replay and paper evidence bundle refresh | issue `#10` | deferred until Phase 0 green | no | refresh artifacts and gate report path on PR `#51` after repo readiness recovers |
-| 8 | Durable approval-queue persistence | issue `#9` | blocked by Phase 0 | no | resume on PR `#51` only after compile integrity and validation ladder are green |
-| 9 | Dashboard shell or UI salvage | `codex/dashboard-shell-current-api` | deferred until current API re-audit | possible later | salvage only the current-API-backed pieces onto PR `#51` after Phase 0 recovery |
+| Order | Feature or slice | Source | Queue state | Human decision required | Eligible after current item | Next action |
+|---|---|---|---|---|---|---|
+| 1 | Compile recovery slice 1 (`pt-cli` + `pt-coinbase`) | issue `#48` | active_now | no | current item | continue on PR `#51` with a narrow code-bearing commit set from a full checkout |
+| 2 | Compile recovery slice 2 (`pt-core/src/config.rs`) | Phase 0 recovery queue | queued | no | yes | promote to `active_now` after slice 1 parser recovery is confirmed |
+| 3 | Compile recovery slice 3 (remaining parser-blocked dashboard/runtime files) | Phase 0 recovery queue | queued | no | yes | continue on PR `#51` after slice 2 |
+| 4 | Phase 0 validation ladder | repo readiness gate | queued | no | yes | run fmt, check, clippy, test, build, audit, and SBOM on the consolidated branch |
+| 5 | Deterministic risk and quote failure-path tests | issue `#23` | deferred_until_phase0_green | no | no | continue on PR `#51` after the validation ladder passes |
+| 6 | Dashboard safety-net and read-only queue test consolidation | issue `#22` | deferred_until_phase0_green | no | no | replay surviving frontend or test payload onto PR `#51` after repo readiness recovers |
+| 7 | Repeatable replay and paper evidence bundle refresh | issue `#10` | deferred_until_phase0_green | no | no | refresh artifacts and gate report path on PR `#51` after repo readiness recovers |
+| 8 | Durable approval-queue persistence | issue `#9` | blocked_by_phase0 | no | no | resume on PR `#51` only after compile integrity and validation ladder are green |
+| 9 | Dashboard shell or UI salvage | `codex/dashboard-shell-current-api` | deferred_until_current_api_reaudit | possible later | no | salvage only the current-API-backed pieces onto PR `#51` after Phase 0 recovery |
 
-## Reference-only branch inventory
-High-value reference branches currently classified for later salvage or archive:
-- compile recovery: `codex/fix-pt-cli-duplicate-chrono`, `codex/phase0-compile-hotfix-execution-2026-04-27`, `codex/phase0-compile-recovery-2026-04-27`, `codex/phase0-execution-board-2026-04-27`, `codex/phase0-manifest-and-risk-scar-2026-04-27`, `codex/phase0-recovery-queue-2026-04-27`, `codex/phase0-slice1-compile-recovery`, `codex/phase0-slice1-start-2026-04-27`
-- frontend or dashboard: `codex/approval-queue-frontend-panel`, `codex/dashboard-shell-current-api`, `codex/frontend-fixture-tests-current-api`, `codex/full-scale-product-expansion`, `codex/set-up-portfolio-and-orders-management`
-- approval queue and persistence: `codex/approval-queue-runtime-hydration-helpers`, `codex/approval-queue-runtime-store-bridge`, `codex/approval-queue-snapshot-reconcile`, `codex/approval-queue-storage-foundation`, `codex/issue-9-persistence-stack-brief`, `codex/issue-9-runtime-wiring-brief`, `codex/phase1-approval-queue-persistence-plan`, `codex/queue-helper-stack-on-main`, `codex/read-only-approval-queue-api`
-- planning or audit context: `codex/codespaces-cloud-agent-tdd`, `codex/consolidated-open-work-2026-04-27`, `codex/issue-5-phase1-product-bootstrap`, `codex/issue-21-local-validation-ladder`, `codex/issue-23-risk-quote-tests`, `codex/local-validation-bounded-smoke`, `codex/phase1-canonical-next-round-2026-04-26`, `codex/phase1-control-tower-2026-04-26`, `codex/phase1-control-tower-2026-04-27`, `codex/phase1-evidence-bundle-starter`, `codex/phase1-next-round-after-pr31`, `codex/phase1-next-round-after-pr37-audit`, `codex/phase1-next-round-canonical-issue9`, `codex/phase1-next-round-coordination-2026-04-26`, `codex/phase1-next-round-start-2026-04-26`, `codex/phase1-queue-audit-2026-04-26`, `codex/phase1-queue-control-after-pr37`, `codex/phase1-runtime-roundup-2026-04-27`, `codex/phase1-runtime-wiring-execution-plan-2026-04-27`, `codex/project-completion-pass`, `codex/single-status-board-2026-04-28`
+## Branch-classification coverage
+The tracker treats every visible `codex/` branch as one of these states:
+- active integration branch
+- compile-recovery reference
+- frontend or dashboard salvage reference
+- approval-queue persistence reference
+- planning or audit archive context
+
+Current rule:
+- only the active integration branch may carry new implementation work for this cycle
+- every other branch is reference-only until the current phase gates allow targeted salvage
 
 ## Acceptance criteria for the current stage
 - one draft PR exists and remains the only active integration PR
@@ -149,10 +157,12 @@ High-value reference branches currently classified for later salvage or archive:
 - issue `#48` remains the next code-bearing slice
 - the queue includes a defined rule for what happens when a stage needs human input
 - the status board clearly distinguishes tracker truth from validation evidence
+- exactly one queue item is marked `active_now`
 
 ## Integration completion rule
 Integration is complete for this cycle when:
-- every defined non-blocked feature has either been merged, explicitly deferred, or marked as needing human approval
+- every defined feature has one truthful queue state
+- every non-blocked and non-human-gated item has either been completed or explicitly deferred
 - no additional stale branch payload remains untriaged
 - the remaining open work is represented truthfully in this file
 - the final pass has refined status and planning files for consistency and engineering clarity
@@ -190,4 +200,4 @@ Human approval is still required before:
 
 ## Status ownership
 This file is the operator-readable work-stage tracker.
-Update it together with `docs/WORK_STATUS.json` whenever the active stage, blocker, integration branch, eligible next feature, decision-gate state, validation evidence state, or branch-classification inventory changes.
+Update it together with `docs/WORK_STATUS.json` whenever the active stage, blocker, integration branch, eligible next feature, queue state, decision-gate state, validation evidence state, or branch-classification inventory changes.
