@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "updated_on": "2026-04-28",
   "phase": {
     "id": "phase0",
@@ -40,7 +40,7 @@
       "completed",
       "explicitly_deferred"
     ],
-    "execution_rule": "Continue the active_now item on PR #51 unless it becomes blocked_on_human_decision, then promote the next defined and independent queued item.",
+    "execution_rule": "Continue the active_now item on PR #51 unless it becomes blocked_on_human_decision; environment-only audit blockers do not justify queue reordering.",
     "refinement_trigger": "Only start the final best-practices refinement pass after no defined eligible implementation items remain."
   },
   "current_stage": {
@@ -48,10 +48,15 @@
     "label": "Phase 0 slice 1 waiting on compile recovery",
     "requires_human_decision": false,
     "blocker_type": "compile_integrity_recovery",
-    "execution_status": "exact_repairs_identified_waiting_on_code_bearing_pass",
+    "execution_status": "exact_repairs_identified_but_current_audit_run_lacks_authenticated_checkout",
     "code_bearing_progress": "not_started_on_active_pr",
     "next_required_environment": "authenticated_checkout_of_codex/single-integration-board-2026-04-28",
-    "environment_note": "This audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before readiness status changes.",
+    "environment_note": "This audit environment does not currently provide a usable authenticated checkout of the private repository, so the Slice 1 Rust repair must still be completed from a proper checkout before readiness status changes.",
+    "environment_blocker": {
+      "type": "missing_authenticated_checkout",
+      "present_in_current_run": true,
+      "queue_reorder_allowed": false
+    },
     "active_now_queue_order": 1,
     "next_automatically_eligible_queue_order": 2,
     "fallback_if_human_decision_blocks": {
@@ -255,6 +260,7 @@
   "queue_progression_rule": {
     "default": "Advance the first queue item that is well-defined, unblocked, and independent of any active human-decision blocker.",
     "if_human_decision_blocks": "Record the blocker in the status files and promote the next eligible item on the same integration PR.",
+    "if_environment_only_blocker": "Keep the same active_now item and resume it from a proper checkout instead of silently promoting the next slice.",
     "if_no_eligible_items_remain": "Stop adding scope and run the final consistency and best-practices refinement pass."
   },
   "refinement_trigger": {
