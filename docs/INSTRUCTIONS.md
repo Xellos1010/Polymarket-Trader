@@ -4,6 +4,7 @@
 
 Before starting feature work, salvaging payload from older branches, or making a merge-readiness claim, review these files in order:
 - `docs/WORK_STATUS.md`
+- `docs/WORK_STATUS.json`
 - `docs/INTEGRATION_BOARD.md`
 - `docs/SESSION_CONTEXT.md`
 
@@ -92,12 +93,12 @@ cargo run -p pt-cli -- run-exec --config config/config.toml
 
 ### Open dashboards
 - Engine + ops dashboard: `http://127.0.0.1:8080`
-- Strategy lab/backtester: `http://127.0.0.1:9090`
+- Strategy lab or backtester: `http://127.0.0.1:9090`
 
 ### Dashboard controls available on a healthy build
-- Market dropdown now shows pair/bucket label instead of raw market id.
+- Market dropdown now shows pair or bucket label instead of raw market id.
 - `View` selector supports `Basic` and `Advanced` mode (persisted in browser localStorage and mirrored to `/ops/ui/mode`).
-- `CHART` / `BACKTESTER` tabs switch between live market charting and embedded strategy lab.
+- `CHART` or `BACKTESTER` tabs switch between live market charting and embedded strategy lab.
 - `LISTING PATTERN` tab overlays recently listed Coinbase products with configurable window, alignment, and normalization.
 - `EXPORT CSV` exports the current overlay series as row-wise CSV (`product_id,label,source,anchor_time,index,ts,value`).
 - `Parity Monitor` includes `EXPORT PARITY CSV` for route gate and audit snapshots.
@@ -157,7 +158,7 @@ Coinbase authenticated smoke test (read-only by default):
 cargo run -p pt-cli -- coinbase-smoke --timeout-ms 8000
 ```
 
-Coinbase guarded write smoke (tiny post-only create/edit/cancel):
+Coinbase guarded write smoke (tiny post-only create or edit or cancel):
 ```bash
 cargo run -p pt-cli -- coinbase-smoke --timeout-ms 8000 --write-test --confirm I_UNDERSTAND_POST_ONLY_TEST_ORDERS
 ```
