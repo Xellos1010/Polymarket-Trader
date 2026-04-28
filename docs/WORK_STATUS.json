@@ -5,7 +5,7 @@
     "id": "phase0",
     "name": "Phase 0: repo readiness"
   },
-  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, and the full visible codex branch inventory must stay explicitly classified to prevent accidental parallel integration.",
+  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, the active PR still carries tracker and control files only, and the first code-bearing recovery slice has not landed yet.",
   "audit": {
     "last_audited_on": "2026-04-28",
     "audit_source": [
@@ -32,6 +32,8 @@
     "requires_human_decision": false,
     "blocker_type": "compile_integrity_recovery",
     "execution_status": "ready_for_code_bearing_pass_from_full_checkout",
+    "code_bearing_progress": "not_started_on_active_pr",
+    "next_required_environment": "authenticated_checkout_of_codex/single-integration-board-2026-04-28",
     "environment_note": "This audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before readiness status changes.",
     "fallback_if_human_decision_blocks": {
       "label": "Compile recovery slice 2",
@@ -56,7 +58,8 @@
     "constraints": [
       "repair syntax and structure only",
       "preserve coherent newer behavior where intact",
-      "do not add queue-runtime behavior in this slice"
+      "do not add queue-runtime behavior in this slice",
+      "land the slice on the existing PR rather than opening a new PR"
     ]
   },
   "queue_summary": {
