@@ -13,7 +13,7 @@ Phase 0: repo readiness
 - PR `#51` is the only active integration PR.
 - Issue `#48` is the correct next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is recovered.
-- The visible `codex/` branch inventory is larger than the earlier short tracker list, so every visible branch now needs an explicit classification.
+- The visible `codex/` branch inventory currently contains 44 branches and the control files now classify the full set.
 - Diverged remote branches must be treated as salvage or archive context rather than active review targets.
 
 ## Validation evidence state
