@@ -1,21 +1,30 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "updated_on": "2026-04-28",
   "phase": {
     "id": "phase0",
     "name": "Phase 0: repo readiness"
   },
-  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, and the full visible codex branch inventory needs explicit classification to prevent accidental parallel integration.",
+  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, and the full visible codex branch inventory must stay explicitly classified to prevent accidental parallel integration.",
   "audit": {
     "last_audited_on": "2026-04-28",
     "audit_source": [
       "GitHub repository state",
       "open issue queue",
       "open PR queue",
-      "active integration branch documents"
+      "active integration branch documents",
+      "visible codex branch inventory"
     ],
     "validation_evidence_state": "not_rerun_from_full_private_repo_checkout",
     "truth_standard": "Tracker files may describe queue order and blockers, but they must not imply that the Phase 0 validation ladder is green without fresh local evidence."
+  },
+  "workflow_invariants": {
+    "single_active_integration_branch": true,
+    "single_active_integration_pr": true,
+    "single_ordered_queue": true,
+    "status_markdown_json_mirror_required": true,
+    "full_codex_branch_classification_required": true,
+    "tracker_truth_must_not_imply_validation": true
   },
   "current_stage": {
     "id": "phase0_slice1_waiting_on_compile_recovery",
@@ -50,10 +59,17 @@
       "do not add queue-runtime behavior in this slice"
     ]
   },
+  "queue_summary": {
+    "active_now": 1,
+    "queued_after_current_stage": 3,
+    "deferred_until_phase0_green": 3,
+    "blocked_by_phase0": 1,
+    "deferred_until_current_api_reaudit": 1
+  },
   "branch_inventory": {
     "query": "codex/",
-    "discovered_count": 43,
-    "classified_count": 43,
+    "discovered_count": 44,
+    "classified_count": 44,
     "active_branch": "codex/single-integration-board-2026-04-28",
     "compile_recovery_reference_branches": [
       "codex/fix-pt-cli-duplicate-chrono",
@@ -86,6 +102,7 @@
     "planning_or_audit_reference_branches": [
       "codex/codespaces-cloud-agent-tdd",
       "codex/consolidated-open-work-2026-04-27",
+      "codex/issue-5-phase1-product-bootstrap",
       "codex/issue-21-local-validation-ladder",
       "codex/issue-23-risk-quote-tests",
       "codex/local-validation-bounded-smoke",
@@ -171,6 +188,29 @@
       "requires_human_decision": true
     }
   ],
+  "queue_progression_rule": {
+    "default": "Advance the first queue item that is well-defined and unblocked.",
+    "if_human_decision_blocks": "Record the blocker in the status files and advance the next eligible item on the same integration PR.",
+    "if_no_eligible_items_remain": "Stop adding scope and run the final consistency and best-practices refinement pass."
+  },
+  "refinement_trigger": {
+    "run_when_remaining_items_are_only": [
+      "completed",
+      "explicitly_deferred",
+      "blocked_on_human_approval",
+      "blocked_on_missing_validation_evidence"
+    ],
+    "scope": [
+      "status files",
+      "planning files",
+      "operator-facing instructions"
+    ],
+    "must_not_expand": [
+      "runtime scope",
+      "live trading scope",
+      "risk caps"
+    ]
+  },
   "validation_commands": [
     "cargo fmt --all -- --check",
     "cargo check --workspace",
