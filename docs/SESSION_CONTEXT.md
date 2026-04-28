@@ -13,10 +13,11 @@ Phase 0: repo readiness
 - PR `#51` is the only active integration PR.
 - Issue `#48` is the correct next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is recovered.
-- Several remote branches still carry unmerged work, but they are behind `main` and must be treated as salvage/reference inputs rather than active review targets.
+- Several remote branches still carry unmerged work, but they are behind `main` and must be treated as salvage or reference inputs rather than active review targets.
 
-## Canonical status file
+## Canonical status files
 - `docs/WORK_STATUS.md`
+- `docs/WORK_STATUS.json`
 
 ## Canonical integration branch
 - `codex/single-integration-board-2026-04-28`
