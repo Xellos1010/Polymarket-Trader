@@ -46,7 +46,8 @@ Guide:
 The current repo cycle is in Phase 0: repo readiness.
 
 Before starting feature work or salvaging payload from older branches:
-- check `docs/WORK_STATUS.md` for the canonical current stage
+- check `docs/WORK_STATUS.md` for the operator-readable current stage
+- check `docs/WORK_STATUS.json` for the machine-readable current stage
 - check `docs/INTEGRATION_BOARD.md` for the ordered consolidation queue
 - keep PR `#51` as the only active integration PR for the current cycle
 - treat issue `#48` compile recovery as the next code-bearing slice
@@ -62,7 +63,7 @@ Install local git hooks:
 
 ## Environment variables
 
-Use `.env.example` as the baseline for local/dev shells.
+Use `.env.example` as the baseline for local or dev shells.
 
 | Variable | Required | Purpose |
 |---|---|---|
@@ -110,7 +111,7 @@ Use `.env.example` as the baseline for local/dev shells.
   - `cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000`
 - Live preflight gate:
   - `cargo run -p pt-cli -- preflight-live --config config/config.toml --timeout-ms 3000`
-- Wallet/execution operator shortcuts:
+- Wallet or execution operator shortcuts:
   - `cargo run -p pt-cli -- wallet-status`
   - `cargo run -p pt-cli -- wallet-plan`
   - `cargo run -p pt-cli -- wallet-approve --token-id <token_id>`
@@ -119,19 +120,19 @@ Use `.env.example` as the baseline for local/dev shells.
   - `cargo run -p pt-cli -- verify-promoted --artifact data/tuning/promoted_candidate.json --out data/output/replay_acceptance_report.json`
 - Journal comparative export:
   - `cargo run -p pt-cli -- report-variants --journal data/strategy_lab/trade_journal.sqlite --out-csv data/output/variant_report.csv --out-md data/output/variant_report.md`
-- Maker opportunity scan (live orderbook spread/entry ranking):
+- Maker opportunity scan (live orderbook spread or entry ranking):
   - `cargo run -p pt-cli -- scan-markets --config config/config.toml --limit 60 --top 15`
   - tune assumptions: `cargo run -p pt-cli -- scan-markets --config config/config.toml --adverse-sel-est 0.0025 --hedge-cost-est 0.0008 --gas-amortized-est 0.0003`
 - Extract Pine parameters:
   - `cargo run -p pt-cli -- pine-params --path pine-scripts/<script> --out data/tuning/pine_params.json`
-- Generate/tune Pine candidates:
+- Generate or tune Pine candidates:
   - `cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 100 --top-k 10`
 - Tune with bundled evaluator:
   - `PT_EVAL_OHLCV=data/ohlcv/btc_1m.csv cargo run -p pt-cli -- tune-pine --path pine-scripts/<script> --iterations 200 --top-k 20 --evaluate-cmd "python3 tools/evaluate_candidate.py --fee-bps 2.0 --slippage-bps 1.0 --fixed-trade-cost 0.00005 --price-col close --timestamp-col ts"`
 - Fetch OHLCV CSV for tuning input:
   - `python3 tools/fetch_ohlcv.py --provider coinbase --symbol BTCUSD --interval 1m --limit 300 --out data/ohlcv/btcusd_1m.csv`
   - fallback: `python3 tools/fetch_ohlcv.py --provider kraken --symbol BTCUSD --interval 1m --limit 300 --out data/ohlcv/btcusd_1m.csv`
-- Coinbase strategy lab (backtest/overlap/optimize/dashboard):
+- Coinbase strategy lab (backtest, overlap, optimize, dashboard):
   - `cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json`
   - `python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json`
   - with local server: `python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090`
@@ -160,7 +161,7 @@ Use `.env.example` as the baseline for local/dev shells.
 
 ## SDLC and architecture docs
 
-- SDLC checklist/status: `docs/SDLC_CHECKLIST.md`
+- SDLC checklist or status: `docs/SDLC_CHECKLIST.md`
 - Architecture overview: `docs/architecture/system-overview.md`
 - ADR index: `docs/adr/001-rust-first-polymarket-engine.md`
 - Operations runbook: `docs/RUNBOOK.md`
