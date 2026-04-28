@@ -9,6 +9,7 @@ The repository is still blocked in Phase 0 and the only active PR should remain 
 Grounded state as of April 28, 2026:
 - `main` already contains the earlier consolidation work from PR `#47`, PR `#49`, and PR `#50`.
 - PR `#51` is now the only active integration PR.
+- PR `#51` still changes tracker and control files only; the first code-bearing recovery slice has not landed yet.
 - Issue `#48` is still the active next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is recovered.
 - Remote branch search shows 44 visible `codex/` branches, all of which must stay explicitly classified to avoid accidental parallel integration.
@@ -36,6 +37,8 @@ Meaning:
 - stage owner: PR `#51`
 - stage source: issue `#48`
 - stage execution status: ready for a narrow code-bearing Slice 1 pass from a full repo checkout
+- code-bearing progress on the active PR: not started yet
+- next required environment: authenticated checkout of branch `codex/single-integration-board-2026-04-28`
 - environment note: this audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before any readiness claim changes
 
 ## Workflow invariants
@@ -83,6 +86,7 @@ Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 3. keep changes syntax and structure only
 4. preserve coherent newer behavior where it is already intact
 5. avoid queue-runtime behavior in this slice
+6. land the slice on the existing PR instead of starting a new branch or PR
 
 ## Queue summary
 - active now: 1 item
@@ -100,7 +104,7 @@ Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 | 4 | Phase 0 validation ladder | repo readiness gate | queued | no | run fmt, check, clippy, test, build, audit, SBOM on the consolidated branch |
 | 5 | Deterministic risk and quote failure-path tests | issue `#23` | deferred until Phase 0 green | no | continue on PR `#51` after the validation ladder passes |
 | 6 | Dashboard safety-net and read-only queue test consolidation | issue `#22` | deferred until Phase 0 green | no | replay surviving frontend or test payload onto PR `#51` after repo readiness recovers |
-| 7 | Repeatable replay and paper evidence bundle | issue `#10` | deferred until Phase 0 green | no | refresh artifacts and gate report path on PR `#51` after repo readiness recovers |
+| 7 | Repeatable replay and paper evidence bundle refresh | issue `#10` | deferred until Phase 0 green | no | refresh artifacts and gate report path on PR `#51` after repo readiness recovers |
 | 8 | Durable approval-queue persistence | issue `#9` | blocked by Phase 0 | no | resume on PR `#51` only after compile integrity and validation ladder are green |
 | 9 | Dashboard shell or UI salvage | `codex/dashboard-shell-current-api` | deferred until current API re-audit | possible later | salvage only the current-API-backed pieces onto PR `#51` after Phase 0 recovery |
 
@@ -113,6 +117,7 @@ High-value reference branches currently classified for later salvage or archive:
 
 ## Acceptance criteria for the current stage
 - one draft PR exists and remains the only active integration PR
+- the active PR still tells the truth about status and blockers while waiting for the first code-bearing slice
 - `docs/WORK_STATUS.md`, `docs/WORK_STATUS.json`, `docs/SESSION_CONTEXT.md`, `docs/PROGRESS.md`, and `docs/INTEGRATION_BOARD.md` all agree on the active stage and next slice
 - the repo no longer implies multiple active PR tracks
 - every visible `codex/` branch is classified as active, salvage, blocked, or archive context
