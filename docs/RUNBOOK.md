@@ -1,5 +1,18 @@
 # Operational Runbook
 
+## Current cycle status check
+
+Before merge, deployment, or any readiness claim, review the current cycle trackers:
+- `docs/WORK_STATUS.md`
+- `docs/INTEGRATION_BOARD.md`
+- `docs/SESSION_CONTEXT.md`
+
+Current grounded state for this cycle:
+- the repo is in Phase 0: repo readiness
+- PR `#51` is the only active integration PR
+- issue `#48` compile recovery is the next code-bearing slice
+- issue `#9` persistence work remains paused until compile integrity and the validation ladder recover
+
 ## Pre-merge validation
 
 Before merge, deployment, or any operator-readiness claim, run the canonical local-first ladder:
@@ -62,7 +75,7 @@ Interpretation:
 - `fail` means a hard gate was violated.
 - `incomplete` means evidence is missing, malformed, or not yet repeatable across three runs.
 
-## Live Readiness Gate
+## Live readiness gate
 ```bash
 cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000
 ```
@@ -72,33 +85,31 @@ Tiny live pilot guard:
 ./scripts/tiny_live_pilot.sh config/config.toml 3000
 ```
 
-## Health Checks
+## Health checks
 - `GET /health`
 - `GET /healthz`
 - `GET /ready`
 - `GET /metrics`
 
-## Operator Review Queue
+## Operator review queue
 - `GET /api/v1/approval-queue`
 - This endpoint is informational and read-only.
 - It surfaces draft and cancel-requested workstation orders that still need human review.
 - It does not approve, place, or authorize live orders.
 - Durable queue persistence remains a separate follow-up; current queue visibility is derived from runtime state.
 
-## Emergency Controls
+## Emergency controls
 - Halt quoting: `POST /ops/halt`
 - Resume: `POST /ops/resume`
 - Enter safe mode or flatten behavior: `POST /ops/flatten`
 
-## Incident Triage
+## Incident triage
 1. Check kill-switch and risk state (`/state/risk`).
 2. Inspect recent executions (`/state/executions`).
 3. Verify market feed freshness (`/state/books`, `/state/history`).
-4. If exchange or hedge is degraded, keep `halt` or `flatten` active.
-5. Preserve context snapshot:
 4. Inspect operator review state (`/api/v1/approval-queue`) for queued or cancel-requested orders.
-5. If exchange/hedge degraded, keep `halt` or `flatten` active.
-6. Preserve context snapshot:
+5. If exchange or hedge is degraded, keep `halt` or `flatten` active.
+6. Preserve a context snapshot:
    ```bash
    ./scripts/save_context.sh "incident note" docs/SESSION_CONTEXT.md config/config.toml
    ```
@@ -107,11 +118,12 @@ Tiny live pilot guard:
 - Runtime rollback: set manual halt, then restart previous binary or config.
 - Code rollback (git): `git revert <commit>` and redeploy.
 
-## Post-Incident
+## Post-incident
 - Append notes to `docs/SESSION_CONTEXT.md`.
 - Update `docs/SDLC_CHECKLIST.md` if process or tooling gaps were found.
+- Update `docs/WORK_STATUS.md` if the incident changes the active blocker or next safe slice.
 
-## External AI Handoff
+## External AI handoff
 ```bash
 ./scripts/export_prompt_bundle.sh
 ```
