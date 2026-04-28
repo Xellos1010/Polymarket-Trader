@@ -4,81 +4,63 @@
 Phase 0: repo readiness
 
 ## Current blocker
-The repository is blocked before more Phase 1 approval-queue work should continue.
+The repository is still blocked before more Phase 1 approval-queue work should continue.
 
-Grounded findings from the April 27, 2026 re-audit:
-- `main` still contains a duplicate `chrono.workspace = true` entry in `crates/pt-cli/Cargo.toml`
-- multiple Rust files remain merge-corrupted enough to break parser / format / compile steps
-- PR `#40` is still necessary, but it is not sufficient on its own
-- issue `#9` runtime wiring should stay paused until compile integrity is restored
+Grounded findings as of April 28, 2026:
+- PR `#47` already consolidated the meaningful earlier work.
+- PR `#49` already refreshed the queue-start handoff.
+- there is currently no open implementation PR
+- issue `#48` is the next code-bearing slice
+- issue `#9` must remain paused until compile integrity is restored and the validation ladder is green again
+
+## Canonical tracker
+Use `docs/WORK_STATUS.md` as the single stage tracker.
+This file keeps the ordered Phase 0 recovery ladder only.
 
 ## Recovery sequence
-
-### S0: Manifest unblocker
-- Owner: open
-- Branch: `codex/fix-pt-cli-duplicate-chrono`
-- PR: `#40`
-- Status: open / draft
-- Scope:
-  - remove the duplicate `chrono.workspace = true` entry from `crates/pt-cli/Cargo.toml`
-- Exit criteria:
-  - `cargo metadata --format-version 1` loads successfully again
-  - CI can proceed past manifest parsing
-- Evidence link:
-  - PR `#40`
 
 ### S1: Compile recovery slice 1
 - Owner: open
 - Branch: new branch from `main`
-- PR: to be opened after `#40`
-- Status: queued
+- Issue: `#48`
+- Status: ready to start
 - Scope:
   - recover `crates/pt-cli/src/main.rs`
   - recover `crates/pt-coinbase/src/lib.rs`
-  - keep scope to syntactic / compile-integrity recovery only
+  - keep scope to syntactic and compile-integrity recovery only
 - Exit criteria:
   - files are syntactically coherent
-  - `cargo fmt --all` no longer fails on these files
+  - `cargo fmt --all -- --check` no longer fails on these files
   - no Phase 1 feature expansion is mixed into the slice
-- Evidence link:
-  - use the future PR plus CI run links
 
 ### S2: Compile recovery slice 2
 - Owner: open
 - Branch: new branch from `main`
-- PR: to be opened after S1
-- Status: queued
+- Status: queued after S1
 - Scope:
   - recover `crates/pt-core/src/config.rs`
 - Exit criteria:
-  - config types / defaults / validation blocks are syntactically coherent
-  - `cargo check --workspace` can progress through config compilation
-- Evidence link:
-  - use the future PR plus CI run links
+  - config types, defaults, and validation blocks are syntactically coherent
+  - workspace validation can progress through config compilation
 
 ### S3: Compile recovery slice 3
 - Owner: open
 - Branch: new branch from `main`
-- PR: to be opened after S2
-- Status: queued
+- Status: queued after S2
 - Scope:
-  - recover remaining dashboard / contract / runtime files still failing parse or delimiter checks
+  - recover remaining dashboard, contract, and runtime files still failing parse or delimiter checks
   - expected follow-up targets include:
     - `crates/pt-dashboard/src/lib.rs`
     - `crates/pt-dashboard/tests/api_contract.rs`
     - `crates/pt-quote/src/lib.rs`
     - `crates/pt-risk/src/lib.rs`
 - Exit criteria:
-  - workspace parser / delimiter failures are cleared
+  - workspace parser and delimiter failures are cleared
   - the repo can run the local-first ladder through build
-- Evidence link:
-  - use the future PR plus CI run links
 
 ### S4: Validation ladder
 - Owner: open
-- Branch: current recovered `main`
-- PR: none; this is the gate after S0-S3 land
-- Status: blocked on S0-S3
+- Status: blocked on S1 through S3
 - Scope:
   - run the local-first validation ladder end to end
 - Exit criteria:
@@ -88,8 +70,7 @@ Grounded findings from the April 27, 2026 re-audit:
   - `cargo test --workspace`
   - `cargo build --workspace`
   - `cargo audit`
-- Evidence link:
-  - attach command output or CI links once run
+  - `./scripts/generate_sbom.sh artifacts`
 
 ## Resume rule
 Do not resume issue `#9` queue-runtime wiring until S4 is green enough to trust local and CI validation again.
@@ -101,14 +82,18 @@ Do not resume issue `#9` queue-runtime wiring until S4 is green enough to trust 
 - Do not widen approval or execution authority while Phase 0 is red.
 - Keep recovery PRs reviewable and slice-sized.
 
-## Superseded tracker PRs
-Treat these as historical handoffs, not the active execution board:
-- `#39`
+## Historical context
+Treat these as already-merged or superseded context rather than active execution boards:
+- `#37`
+- `#40`
 - `#41`
-- `#42`
 - `#44`
+- `#45`
+- `#46`
+- `#47`
+- `#49`
 
 ## Recommended next action
-1. Land PR `#40`.
-2. Open the S1 code-bearing compile-recovery PR from `main`.
-3. Keep issue `#9` paused until S4 passes.
+1. Open the S1 code-bearing PR for issue `#48`.
+2. Keep the scope limited to `pt-cli` and `pt-coinbase` compile recovery.
+3. Continue the remaining slices in order until the validation ladder is green again.
