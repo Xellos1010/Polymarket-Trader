@@ -24,13 +24,25 @@ Grounded current state:
 - PR `#51` re-established one integration branch, one canonical work board, and one machine-readable work-stage mirror.
 - The tracker set now classifies all 44 visible `codex/` branches so future work does not accidentally reopen parallel review lanes.
 - The status and progress files now distinguish tracker truth from validation evidence so the queue does not overstate repo readiness.
-- The control files now encode the single-PR progression rule, the fallback rule for human-decision gates, and the final refinement trigger.
+- The control files now encode the single-PR progression rule, the fallback rule for human-decision gates, the final refinement trigger, and the exact Slice 1 blocker signatures.
 
 ## In progress
 - Keep all current-cycle coordination in the single integration PR.
 - Keep the next code-bearing step narrowly focused on issue `#48`.
 - Hold deferred branch payload as salvage or reference material only until Phase 0 is green again.
 - Preserve the queue discipline that moves to the next eligible feature if a later stage hits a human-decision gate.
+- Carry an explicit file-level repair plan for the two Slice 1 Rust files until the code-bearing pass is landed from a proper checkout.
+
+## Exact current blockers
+### `crates/pt-cli/src/main.rs`
+- duplicate `pt_core` imports
+- duplicate `pt_engine::TradingEngine` imports
+- broken `Commands` enum boundary at `StrategyProfileLoad` to `Coinbase`
+
+### `crates/pt-coinbase/src/lib.rs`
+- merge-corrupted top-level import and header block
+- duplicated `pt_core` fragments
+- duplicated `reqwest::header` fragments
 
 ## Active execution rule
 - Work the active next slice first.
@@ -53,7 +65,7 @@ Canonical branch-classification source:
 2. Recover `crates/pt-core/src/config.rs`.
 3. Recover remaining parser-blocked dashboard and runtime files.
 4. Run the Phase 0 validation ladder end to end.
-5. Re-open deferred Phase 1 work as fresh small PRs on current `main` after repo readiness is restored.
+5. Re-open deferred Phase 1 work as fresh small PR-sized slices on current `main` after repo readiness is restored.
 6. Finish with a consistency and best-practices refinement pass once no more defined eligible features remain.
 
 ## Validation ladder
