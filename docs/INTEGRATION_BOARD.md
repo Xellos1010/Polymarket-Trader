@@ -19,6 +19,7 @@ Use it to keep one active integration PR, one truthful current stage, one `activ
 - Do not merge stale diverged branches directly.
 - Replay surviving payload from stale branches onto current `main` only after the Phase 0 validation ladder is green again.
 - If the `active_now` stage hits a human-decision gate, keep the same PR open and promote the next defined queue item that does not depend on that decision.
+- If a run is blocked only by audit-environment limitations such as missing checkout capability, keep the same `active_now` item and resume it from a proper checkout.
 - When no defined eligible implementation work remains, stop adding scope and run one best-practices refinement pass across the touched planning and status files.
 
 ## Workflow invariants
@@ -44,6 +45,7 @@ Use it to keep one active integration PR, one truthful current stage, one `activ
 ## Queue progression rule
 - Advance the first queue item that is both well-defined and unblocked.
 - If that item requires human approval, record the decision gate in the status files and promote the next eligible item on the same PR.
+- If a run is blocked only by missing checkout capability or another audit-environment limitation, keep the current `active_now` item in place and resume it from a proper checkout.
 - If no eligible implementation items remain, stop queue expansion and run the final refinement pass.
 
 ## Immediate repair plan for the active slice
@@ -153,6 +155,7 @@ Disposition:
 - Default rule: keep advancing the queue while the next item is well-defined and does not require a blocked human decision.
 - Pause only when the next remaining items all require human approval or depend on unresolved validation evidence.
 - Record the blocker and the fallback next feature in `docs/WORK_STATUS.md` and `docs/WORK_STATUS.json` whenever this happens.
+- Do not treat an audit-run environment limitation as a reason to advance the queue.
 
 ## Refinement trigger
 Run the final consistency and best-practices refinement pass when all remaining queue items are either:
