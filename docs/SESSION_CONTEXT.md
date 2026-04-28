@@ -1,9 +1,9 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1777348800`
+Generated at UNIX epoch seconds: `1777372993`
 
 ## Note
-Control-tower checkpoint after auditing current `main`, merged consolidation history, open issues, the visible `codex/` branch inventory, and the active integration PR on April 28, 2026.
+Control-tower checkpoint after auditing current `main`, merged consolidation history, open issues, the visible `codex/` branch inventory, the active integration PR, and the current branch versions of the Slice 1 Rust files on April 28, 2026.
 
 ## Current phase
 Phase 0: repo readiness
@@ -59,9 +59,31 @@ Required scope:
 - do not add queue-runtime behavior in this slice
 - do not change live-mode behavior, credentials, deployment posture, or risk caps
 
+## Exact Slice 1 blocker signatures
+### `crates/pt-cli/src/main.rs`
+- duplicate `pt_core` imports
+- duplicate `pt_engine::TradingEngine` imports
+- a broken `Commands` enum boundary where `StrategyProfileLoad` runs into `Coinbase`
+
+Immediate safe repair:
+1. merge the `pt_core` imports so one block carries `AppConfig`, `EngineMode`, `ReplayAcceptanceReport`, `RuntimeRole`, and `MarketSnapshot`
+2. keep only one `pt_engine::TradingEngine` import
+3. close `StrategyProfileLoad` cleanly and keep `Coinbase` as its own subcommand variant
+4. preserve the newer command surface already present
+
+### `crates/pt-coinbase/src/lib.rs`
+- merge-corrupted top-level import and header block
+- duplicated `pt_core` fragments
+- duplicated `reqwest::header` fragments
+
+Immediate safe repair:
+1. keep the newer auth-manager, websocket, and runtime imports intact
+2. merge the older advanced-trade imports into that same top block without duplicates
+3. remove the duplicated header fragments without changing behavior below the import section
+
 ## Environment blocker for the code-bearing slice
 - This scheduled audit environment does not currently provide a usable authenticated checkout of the private repository.
-- The Slice 1 Rust files are too large to rewrite safely through the connector alone without a full checkout.
+- Direct git clone from GitHub was not available in this environment.
 - The next code-bearing pass should therefore happen from a proper checkout of branch `codex/single-integration-board-2026-04-28`, and it should stay limited to issue `#48`.
 
 ## Acceptance criteria
