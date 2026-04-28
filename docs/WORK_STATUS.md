@@ -13,6 +13,10 @@ Grounded state as of April 28, 2026:
 - Issue `#9` remains paused until compile integrity is recovered.
 - Diverged remote branches still carry unmerged payload, but they are behind current `main` and must not be treated as parallel active review tracks.
 
+## Automation mirror
+- `docs/WORK_STATUS.json` is the machine-readable mirror of this file.
+- Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, next slice, or decision-gate state changes.
+
 ## Current stage
 Stage: `phase0_slice1_waiting_on_compile_recovery`
 
@@ -75,7 +79,7 @@ Disposition for all of the above:
 
 ## Acceptance criteria for the current stage
 - one draft PR exists and remains the only active integration PR
-- `docs/WORK_STATUS.md`, `docs/SESSION_CONTEXT.md`, `docs/PROGRESS.md`, and `docs/INTEGRATION_BOARD.md` all agree on the active stage and next slice
+- `docs/WORK_STATUS.md`, `docs/WORK_STATUS.json`, `docs/SESSION_CONTEXT.md`, `docs/PROGRESS.md`, and `docs/INTEGRATION_BOARD.md` all agree on the active stage and next slice
 - the repo no longer implies multiple active PR tracks
 - issue `#48` remains the next code-bearing slice
 - the queue includes a defined rule for what happens when a stage needs human input
@@ -119,5 +123,5 @@ Human approval is still required before:
 - Do not expand scope when the next safe action is still blocked on repo readiness.
 
 ## Status ownership
-This file is the canonical work-stage tracker.
-Update it whenever the active stage, blocker, integration branch, eligible next feature, or decision-gate state changes.
+This file is the operator-readable work-stage tracker.
+Update it together with `docs/WORK_STATUS.json` whenever the active stage, blocker, integration branch, eligible next feature, or decision-gate state changes.
