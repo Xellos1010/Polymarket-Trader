@@ -5,7 +5,7 @@
     "id": "phase0",
     "name": "Phase 0: repo readiness"
   },
-  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, and PR #51 should remain the only active integration PR until the queue is fully consolidated.",
+  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, and the full visible codex branch inventory now needs explicit classification to prevent accidental parallel integration.",
   "current_stage": {
     "id": "phase0_slice1_waiting_on_compile_recovery",
     "label": "Phase 0 slice 1 waiting on compile recovery",
@@ -35,6 +35,62 @@
       "repair syntax and structure only",
       "preserve coherent newer behavior where intact",
       "do not add queue-runtime behavior in this slice"
+    ]
+  },
+  "branch_inventory": {
+    "query": "codex/",
+    "discovered_count": 43,
+    "classified_count": 43,
+    "active_branch": "codex/single-integration-board-2026-04-28",
+    "compile_recovery_reference_branches": [
+      "codex/fix-pt-cli-duplicate-chrono",
+      "codex/phase0-compile-hotfix-execution-2026-04-27",
+      "codex/phase0-compile-recovery-2026-04-27",
+      "codex/phase0-execution-board-2026-04-27",
+      "codex/phase0-manifest-and-risk-scar-2026-04-27",
+      "codex/phase0-recovery-queue-2026-04-27",
+      "codex/phase0-slice1-compile-recovery",
+      "codex/phase0-slice1-start-2026-04-27"
+    ],
+    "frontend_or_dashboard_reference_branches": [
+      "codex/approval-queue-frontend-panel",
+      "codex/dashboard-shell-current-api",
+      "codex/frontend-fixture-tests-current-api",
+      "codex/full-scale-product-expansion",
+      "codex/set-up-portfolio-and-orders-management"
+    ],
+    "approval_queue_reference_branches": [
+      "codex/approval-queue-runtime-hydration-helpers",
+      "codex/approval-queue-runtime-store-bridge",
+      "codex/approval-queue-snapshot-reconcile",
+      "codex/approval-queue-storage-foundation",
+      "codex/issue-9-persistence-stack-brief",
+      "codex/issue-9-runtime-wiring-brief",
+      "codex/phase1-approval-queue-persistence-plan",
+      "codex/queue-helper-stack-on-main",
+      "codex/read-only-approval-queue-api"
+    ],
+    "planning_or_audit_reference_branches": [
+      "codex/codespaces-cloud-agent-tdd",
+      "codex/consolidated-open-work-2026-04-27",
+      "codex/issue-21-local-validation-ladder",
+      "codex/issue-23-risk-quote-tests",
+      "codex/local-validation-bounded-smoke",
+      "codex/phase1-canonical-next-round-2026-04-26",
+      "codex/phase1-control-tower-2026-04-26",
+      "codex/phase1-control-tower-2026-04-27",
+      "codex/phase1-evidence-bundle-starter",
+      "codex/phase1-next-round-after-pr31",
+      "codex/phase1-next-round-after-pr37-audit",
+      "codex/phase1-next-round-canonical-issue9",
+      "codex/phase1-next-round-coordination-2026-04-26",
+      "codex/phase1-next-round-start-2026-04-26",
+      "codex/phase1-queue-audit-2026-04-26",
+      "codex/phase1-queue-control-after-pr37",
+      "codex/phase1-runtime-roundup-2026-04-27",
+      "codex/phase1-runtime-wiring-execution-plan-2026-04-27",
+      "codex/project-completion-pass",
+      "codex/single-status-board-2026-04-28"
     ]
   },
   "queue": [
@@ -101,15 +157,6 @@
       "status": "deferred_until_current_api_reaudit",
       "requires_human_decision": true
     }
-  ],
-  "deferred_branches": [
-    "codex/approval-queue-frontend-panel",
-    "codex/read-only-approval-queue-api",
-    "codex/approval-queue-storage-foundation",
-    "codex/approval-queue-snapshot-reconcile",
-    "codex/approval-queue-runtime-store-bridge",
-    "codex/approval-queue-runtime-hydration-helpers",
-    "codex/dashboard-shell-current-api"
   ],
   "validation_commands": [
     "cargo fmt --all -- --check",
