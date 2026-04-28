@@ -4,6 +4,7 @@
 
 Before merge, deployment, or any readiness claim, review the current cycle trackers:
 - `docs/WORK_STATUS.md`
+- `docs/WORK_STATUS.json`
 - `docs/INTEGRATION_BOARD.md`
 - `docs/SESSION_CONTEXT.md`
 
@@ -121,7 +122,7 @@ Tiny live pilot guard:
 ## Post-incident
 - Append notes to `docs/SESSION_CONTEXT.md`.
 - Update `docs/SDLC_CHECKLIST.md` if process or tooling gaps were found.
-- Update `docs/WORK_STATUS.md` if the incident changes the active blocker or next safe slice.
+- Update `docs/WORK_STATUS.md` and `docs/WORK_STATUS.json` if the incident changes the active blocker or next safe slice.
 
 ## External AI handoff
 ```bash
