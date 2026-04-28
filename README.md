@@ -41,6 +41,17 @@ Use the canonical local-first ladder before merge or deployment decisions:
 Guide:
 - `docs/LOCAL_VALIDATION.md`
 
+## Current recovery status
+
+The current repo cycle is in Phase 0: repo readiness.
+
+Before starting feature work or salvaging payload from older branches:
+- check `docs/WORK_STATUS.md` for the canonical current stage
+- check `docs/INTEGRATION_BOARD.md` for the ordered consolidation queue
+- keep PR `#51` as the only active integration PR for the current cycle
+- treat issue `#48` compile recovery as the next code-bearing slice
+- keep issue `#9` and deferred branch salvage paused until the Phase 0 validation ladder is green again
+
 ## Developer setup
 
 Install local git hooks:
