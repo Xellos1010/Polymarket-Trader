@@ -16,6 +16,11 @@ Phase 0: repo readiness
 - The visible `codex/` branch inventory is larger than the earlier short tracker list, so every visible branch now needs an explicit classification.
 - Diverged remote branches must be treated as salvage or archive context rather than active review targets.
 
+## Validation evidence state
+- The Phase 0 validation ladder has not been rerun from a full private-repo checkout in this environment.
+- The current tracker set is a truthful queue and blocker description, not evidence that compile recovery is already complete.
+- Any readiness upgrade still requires fresh local validation on the active integration branch.
+
 ## Canonical status files
 - `docs/WORK_STATUS.md`
 - `docs/WORK_STATUS.json`
@@ -53,6 +58,11 @@ Required scope:
 - preserve coherent newer behavior where it is already intact
 - do not add queue-runtime behavior in this slice
 - do not change live-mode behavior, credentials, deployment posture, or risk caps
+
+## Environment blocker for the code-bearing slice
+- This scheduled audit environment does not currently provide a usable authenticated checkout of the private repository.
+- The Slice 1 Rust files are too large to rewrite safely through the connector alone without a full checkout.
+- The next code-bearing pass should therefore happen from a proper checkout of branch `codex/single-integration-board-2026-04-28`, and it should stay limited to issue `#48`.
 
 ## Acceptance criteria
 - `cargo fmt --all -- --check` no longer reports parser errors for the two Slice 1 files
