@@ -4,14 +4,14 @@
 Phase 0: repo readiness
 
 ## Current audit finding
-As of April 28, 2026, the repository is blocked in Phase 0 by compile-integrity failures and the work should stay consolidated into a single active integration PR.
+As of April 28, 2026, the repository is still blocked in Phase 0 by compile-integrity failures, and the work should stay consolidated into one active integration PR with one `active_now` queue item.
 
 Grounded current state:
 - PR `#47`, PR `#49`, and PR `#50` are already merged into `main`.
-- PR `#51` is now the only active integration PR.
-- Issue `#48` is the active next code-bearing slice.
-- Issue `#9` remains paused until compile integrity is restored.
-- Remote branch search shows 44 visible `codex/` branches and the control files now classify the full set.
+- PR `#51` is the only active integration PR.
+- Issue `#48` is the `active_now` code-bearing slice.
+- Issue `#9` remains paused until compile integrity is restored and the local validation ladder is green.
+- Remote branch search shows 44 visible `codex/` branches and the control files classify the full set.
 - `docs/WORK_STATUS.md` is the operator-readable stage tracker and `docs/WORK_STATUS.json` is the machine-readable mirror.
 
 ## Validation evidence status
@@ -25,6 +25,7 @@ Grounded current state:
 - The tracker set now classifies all 44 visible `codex/` branches so future work does not accidentally reopen parallel review lanes.
 - The status and progress files now distinguish tracker truth from validation evidence so the queue does not overstate repo readiness.
 - The control files now encode the single-PR progression rule, the fallback rule for human-decision gates, the final refinement trigger, and the exact Slice 1 blocker signatures.
+- The stage tracker now defines a queue-state model with a single `active_now` item and an explicit automatic fallback order.
 
 ## In progress
 - Keep all current-cycle coordination in the single integration PR.
@@ -45,9 +46,9 @@ Grounded current state:
 - duplicated `reqwest::header` fragments
 
 ## Active execution rule
-- Work the active next slice first.
-- If a stage later requires human approval, move to the next eligible queued feature instead of opening a second integration PR.
-- When no more eligible features remain, stop expanding scope and run one refinement pass for consistency and best practices.
+- Work the single `active_now` slice first.
+- If a stage later requires human approval, promote the next defined eligible feature instead of opening a second integration PR.
+- When no defined eligible features remain, stop expanding scope and run one refinement pass for consistency and best practices.
 
 ## Branch classes now tracked
 - compile recovery references
