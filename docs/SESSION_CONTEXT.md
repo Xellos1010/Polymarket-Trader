@@ -3,7 +3,7 @@
 Generated at UNIX epoch seconds: `1777348800`
 
 ## Note
-Control-tower checkpoint after auditing current `main`, merged consolidation history, open issues, diverged remote work branches, and the active integration PR on April 28, 2026.
+Control-tower checkpoint after auditing current `main`, merged consolidation history, open issues, the visible `codex/` branch inventory, and the active integration PR on April 28, 2026.
 
 ## Current phase
 Phase 0: repo readiness
@@ -13,11 +13,13 @@ Phase 0: repo readiness
 - PR `#51` is the only active integration PR.
 - Issue `#48` is the correct next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is recovered.
-- Several remote branches still carry unmerged work, but they are behind `main` and must be treated as salvage or reference inputs rather than active review targets.
+- The visible `codex/` branch inventory is larger than the earlier short tracker list, so every visible branch now needs an explicit classification.
+- Diverged remote branches must be treated as salvage or archive context rather than active review targets.
 
 ## Canonical status files
 - `docs/WORK_STATUS.md`
 - `docs/WORK_STATUS.json`
+- `docs/INTEGRATION_BOARD.md`
 
 ## Canonical integration branch
 - `codex/single-integration-board-2026-04-28`
@@ -28,19 +30,18 @@ Phase 0: repo readiness
 - if a later stage requires human approval, keep the same PR and move to the next eligible queued feature
 - when no more eligible queued features remain, finish with one refinement pass for consistency and best practices
 
-## Deferred remote work inventory
-- `codex/approval-queue-frontend-panel`: approval-queue UI and frontend tests
-- `codex/read-only-approval-queue-api`: queue API plus frontend updates and persistence brief
-- `codex/approval-queue-storage-foundation`
-- `codex/approval-queue-snapshot-reconcile`
-- `codex/approval-queue-runtime-store-bridge`
-- `codex/approval-queue-runtime-hydration-helpers`
-- `codex/dashboard-shell-current-api`
+## Branch-classification policy
+Treat every visible `codex/` branch as exactly one of:
+- active integration branch
+- compile-recovery reference
+- frontend or dashboard salvage reference
+- approval-queue persistence reference
+- planning or audit archive context
 
-Current disposition for all of the above:
-- do not merge them directly
-- do not stack new PRs on those stale branches
-- salvage any still-useful payload only after Phase 0 is green again and only onto PR `#51`
+Current rule:
+- only `codex/single-integration-board-2026-04-28` is active
+- all other visible `codex/` branches are reference-only until the current phase gates allow targeted salvage
+- the canonical classification source is `docs/INTEGRATION_BOARD.md`
 
 ## Recommended next implementation slice
 Recover compile integrity for issue `#48` on PR `#51`, limited to:
