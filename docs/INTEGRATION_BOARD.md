@@ -43,7 +43,7 @@ Use it to keep one active integration PR, one truthful current stage, and one or
 ## Decision-gate policy
 - Default rule: keep advancing the queue while the next item is well-defined and does not require a blocked human decision.
 - Pause only when the next remaining items all require human approval or depend on unresolved validation evidence.
-- Record the blocker and the fallback next feature in `docs/WORK_STATUS.md` whenever this happens.
+- Record the blocker and the fallback next feature in `docs/WORK_STATUS.md` and `docs/WORK_STATUS.json` whenever this happens.
 
 ## Validation gate before any salvage work
 ```bash
@@ -63,3 +63,4 @@ cargo audit
 - Do not bypass issue `#48` while Phase 0 remains red.
 - Do not promote Phase 1 or Phase 2 work ahead of repo readiness.
 - Do not treat tracker updates as a substitute for validation evidence.
+- Do not let the Markdown and JSON status mirrors drift.
