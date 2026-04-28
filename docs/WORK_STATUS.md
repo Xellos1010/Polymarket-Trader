@@ -34,13 +34,13 @@ Meaning:
 - status: active
 
 ## Stage execution rule
-- If the current stage does not require a human decision, continue the active next step.
-- If the current stage becomes `waiting_on_human_decision`, record the blocker here and advance the next eligible feature that does not depend on that decision and does not violate the current phase guardrails.
+- If the current stage does not require a human decision, continue the active next step on PR `#51`.
+- If the current stage becomes `waiting_on_human_decision`, record the blocker here and advance the next eligible feature on the same PR as long as it does not depend on that decision and does not violate the current phase guardrails.
 - Never open a second integration PR to keep work moving.
 - When no more defined eligible features remain, stop adding scope and do one refinement pass for clarity, consistency, and software-engineering hygiene.
 
 ## Active next step
-Open one narrow code-bearing follow-up for issue `#48` with this exact scope:
+Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 1. repair `crates/pt-cli/src/main.rs`
 2. repair `crates/pt-coinbase/src/lib.rs`
 3. keep changes syntax and structure only
@@ -49,15 +49,15 @@ Open one narrow code-bearing follow-up for issue `#48` with this exact scope:
 ## Consolidated feature queue
 | Order | Feature or slice | Source | Status | Human decision required | Next action |
 |---|---|---|---|---|---|
-| 1 | Compile recovery slice 1 (`pt-cli` + `pt-coinbase`) | issue `#48` | active next step | no | open one narrow code-bearing follow-up |
-| 2 | Compile recovery slice 2 (`pt-core/src/config.rs`) | Phase 0 recovery queue | queued | no | start after slice 1 parser recovery is confirmed |
-| 3 | Compile recovery slice 3 (remaining parser-blocked dashboard/runtime files) | Phase 0 recovery queue | queued | no | start after slice 2 |
-| 4 | Phase 0 validation ladder | repo readiness gate | queued | no | run fmt, check, clippy, test, build, audit, SBOM |
-| 5 | Deterministic risk and quote failure-path tests | issue `#23` | deferred until Phase 0 green | no | reopen as fresh small PR after validation ladder passes |
-| 6 | Dashboard safety-net and read-only queue test consolidation | issue `#22` | deferred until Phase 0 green | no | replay surviving frontend/test payload on current `main` |
-| 7 | Repeatable replay and paper evidence bundle | issue `#10` | deferred until Phase 0 green | no | refresh artifacts and gate report path after repo readiness recovers |
-| 8 | Durable approval-queue persistence | issue `#9` | blocked by Phase 0 | no | resume only after compile integrity and validation ladder are green |
-| 9 | Dashboard shell/UI salvage | `codex/dashboard-shell-current-api` | deferred until current API re-audit | possible later | salvage only the current-API-backed pieces after Phase 0 recovery |
+| 1 | Compile recovery slice 1 (`pt-cli` + `pt-coinbase`) | issue `#48` | active next step | no | continue on PR `#51` with a narrow code-bearing commit set |
+| 2 | Compile recovery slice 2 (`pt-core/src/config.rs`) | Phase 0 recovery queue | queued | no | continue on PR `#51` after slice 1 parser recovery is confirmed |
+| 3 | Compile recovery slice 3 (remaining parser-blocked dashboard/runtime files) | Phase 0 recovery queue | queued | no | continue on PR `#51` after slice 2 |
+| 4 | Phase 0 validation ladder | repo readiness gate | queued | no | run fmt, check, clippy, test, build, audit, SBOM on the consolidated branch |
+| 5 | Deterministic risk and quote failure-path tests | issue `#23` | deferred until Phase 0 green | no | continue on PR `#51` after the validation ladder passes |
+| 6 | Dashboard safety-net and read-only queue test consolidation | issue `#22` | deferred until Phase 0 green | no | replay surviving frontend/test payload onto PR `#51` after repo readiness recovers |
+| 7 | Repeatable replay and paper evidence bundle | issue `#10` | deferred until Phase 0 green | no | refresh artifacts and gate report path on PR `#51` after repo readiness recovers |
+| 8 | Durable approval-queue persistence | issue `#9` | blocked by Phase 0 | no | resume on PR `#51` only after compile integrity and validation ladder are green |
+| 9 | Dashboard shell/UI salvage | `codex/dashboard-shell-current-api` | deferred until current API re-audit | possible later | salvage only the current-API-backed pieces onto PR `#51` after Phase 0 recovery |
 
 ## Outstanding remote work to consolidate later
 - `codex/approval-queue-frontend-panel`
@@ -71,7 +71,7 @@ Open one narrow code-bearing follow-up for issue `#48` with this exact scope:
 Disposition for all of the above:
 - reference only while Phase 0 is red
 - do not merge them directly
-- replay any still-useful payload only through fresh small PRs on current `main` after repo readiness is restored
+- replay any still-useful payload onto PR `#51` after repo readiness is restored
 
 ## Acceptance criteria for the current stage
 - one draft PR exists and remains the only active integration PR
@@ -112,8 +112,8 @@ Human approval is still required before:
 ## Risks and guardrails
 - Do not enable live mode.
 - Do not add or modify credentials.
-- Do not raise risk caps.
 - Do not mix queue-runtime wiring into the Phase 0 recovery slice.
+- Do not raise risk caps.
 - Do not treat stale diverged branches as merge-ready evidence.
 - Do not resume Phase 1 work before compile integrity is restored.
 - Do not expand scope when the next safe action is still blocked on repo readiness.
