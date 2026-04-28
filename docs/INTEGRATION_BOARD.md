@@ -10,6 +10,9 @@ Use it to keep one active integration PR, one truthful current stage, and one or
 - PR: `#51`
 - phase: Phase 0: repo readiness
 - current blocker: issue `#48` compile recovery slice 1 for `crates/pt-cli/src/main.rs` and `crates/pt-coinbase/src/lib.rs`
+- current blocker signature:
+  - `pt-cli`: duplicate `pt_core` imports, duplicate `pt_engine::TradingEngine` imports, broken `StrategyProfileLoad` to `Coinbase` enum boundary
+  - `pt-coinbase`: merge-corrupted top-level import/header block with duplicated `pt_core` and `reqwest::header` fragments
 
 ## Integration rule
 - Do not open multiple parallel integration PRs.
@@ -41,6 +44,18 @@ Use it to keep one active integration PR, one truthful current stage, and one or
 - Advance the first queue item that is both well-defined and unblocked.
 - If that item requires human approval, record the decision gate in the status files and advance the next eligible item on the same PR.
 - If no eligible items remain, stop queue expansion and run the final refinement pass.
+
+## Immediate repair plan for the active slice
+### `crates/pt-cli/src/main.rs`
+1. merge the `pt_core` imports into one coherent block
+2. keep only one `pt_engine::TradingEngine` import
+3. close `StrategyProfileLoad` and preserve `Coinbase` as its own subcommand variant
+4. preserve the newer command surface already present
+
+### `crates/pt-coinbase/src/lib.rs`
+1. keep the newer auth-manager, websocket, and runtime imports intact
+2. merge the older advanced-trade imports into the same top block without duplicates
+3. remove the duplicated header fragments without changing behavior below the import section
 
 ## Full codex branch inventory status
 Remote branch search for `codex/` currently returns 44 visible branches, all of which are classified below.
