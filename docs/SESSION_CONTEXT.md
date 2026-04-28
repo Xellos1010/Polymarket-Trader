@@ -23,7 +23,7 @@ Phase 0: repo readiness
 
 ## Execution policy for this cycle
 - keep one active integration PR
-- take the next code-bearing slice from the ordered queue
+- take the next code-bearing slice from the ordered queue and land it on PR `#51`
 - if a later stage requires human approval, keep the same PR and move to the next eligible queued feature
 - when no more eligible queued features remain, finish with one refinement pass for consistency and best practices
 
@@ -39,10 +39,10 @@ Phase 0: repo readiness
 Current disposition for all of the above:
 - do not merge them directly
 - do not stack new PRs on those stale branches
-- salvage any still-useful payload only after Phase 0 is green again and only through fresh small PRs on current `main`
+- salvage any still-useful payload only after Phase 0 is green again and only onto PR `#51`
 
 ## Recommended next implementation slice
-Recover compile integrity for issue `#48` with one narrow code-bearing PR limited to:
+Recover compile integrity for issue `#48` on PR `#51`, limited to:
 - `crates/pt-cli/src/main.rs`
 - `crates/pt-coinbase/src/lib.rs`
 
@@ -54,7 +54,7 @@ Required scope:
 
 ## Acceptance criteria
 - `cargo fmt --all -- --check` no longer reports parser errors for the two Slice 1 files
-- the recovery PR remains limited to those two files
+- the recovery work stays limited to those two files
 - queue-runtime work for issue `#9` stays paused until later slices clear the remaining parser blockers
 
 ## Validation ladder
@@ -70,7 +70,7 @@ Required scope:
 - Do not enable live mode.
 - Do not add or modify credentials.
 - Do not raise risk caps.
-- Do not mix issue `#9` queue-runtime wiring into the Slice 1 compile-recovery PR.
+- Do not mix issue `#9` queue-runtime wiring into the Slice 1 compile-recovery work.
 - Do not treat diverged remote branches as current readiness evidence.
 - Do not open more than one active integration PR for this queue.
 
