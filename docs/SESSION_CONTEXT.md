@@ -3,14 +3,14 @@
 Generated at UNIX epoch seconds: `1777348800`
 
 ## Note
-Control-tower checkpoint after auditing current `main`, merged consolidation history, open issues, and diverged remote work branches on April 28, 2026.
+Control-tower checkpoint after auditing current `main`, merged consolidation history, open issues, diverged remote work branches, and the active integration PR on April 28, 2026.
 
 ## Current phase
 Phase 0: repo readiness
 
 ## Grounded repo state
 - PR `#47`, PR `#49`, and PR `#50` are already merged into `main`.
-- There is no open implementation PR on the repository right now.
+- PR `#51` is the only active integration PR.
 - Issue `#48` is the correct next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is recovered.
 - Several remote branches still carry unmerged work, but they are behind `main` and must be treated as salvage/reference inputs rather than active review targets.
@@ -20,6 +20,12 @@ Phase 0: repo readiness
 
 ## Canonical integration branch
 - `codex/single-integration-board-2026-04-28`
+
+## Execution policy for this cycle
+- keep one active integration PR
+- take the next code-bearing slice from the ordered queue
+- if a later stage requires human approval, keep the same PR and move to the next eligible queued feature
+- when no more eligible queued features remain, finish with one refinement pass for consistency and best practices
 
 ## Deferred remote work inventory
 - `codex/approval-queue-frontend-panel`: approval-queue UI and frontend tests
@@ -69,5 +75,5 @@ Required scope:
 - Do not open more than one active integration PR for this queue.
 
 ## Operator decision needed
-No approval is needed to open this integration-tracking PR.
+No approval is needed to continue PR `#51` or to start issue `#48`.
 Explicit approval is still required for merge, deployment, live mode, live credentials, or a tiny live pilot.
