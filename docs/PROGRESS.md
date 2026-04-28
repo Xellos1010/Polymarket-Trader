@@ -11,13 +11,14 @@ Grounded current state:
 - PR `#51` is now the only active integration PR.
 - Issue `#48` is the active next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is restored.
-- Several diverged remote branches still hold unmerged queue, frontend, and dashboard payload, but none of them should be treated as the active review target.
+- Remote branch search shows a larger `codex/` inventory than the earlier short tracker list, so the branch set has now been explicitly classified in the control files.
 - `docs/WORK_STATUS.md` is the operator-readable stage tracker and `docs/WORK_STATUS.json` is the machine-readable mirror.
 
 ## Completed recently
 - Earlier open-work consolidation was merged through PR `#47`.
 - Queue-start and status-tracker cleanup landed through PR `#49` and PR `#50`.
-- PR `#51` now re-establishes one integration branch, one canonical work board, and one machine-readable work-stage mirror.
+- PR `#51` re-established one integration branch, one canonical work board, and one machine-readable work-stage mirror.
+- The tracker set now classifies all visible `codex/` branches so future work does not accidentally reopen parallel review lanes.
 
 ## In progress
 - Keep all current-cycle coordination in the single integration PR.
@@ -30,15 +31,16 @@ Grounded current state:
 - If a stage later requires human approval, move to the next eligible queued feature instead of opening a second integration PR.
 - When no more eligible features remain, stop expanding scope and run one refinement pass for consistency and best practices.
 
-## Deferred remote work inventory
-These branches still contain unmerged payload and should be treated as reference material only until Phase 0 is green again:
-- `codex/approval-queue-frontend-panel`
-- `codex/read-only-approval-queue-api`
-- `codex/approval-queue-storage-foundation`
-- `codex/approval-queue-snapshot-reconcile`
-- `codex/approval-queue-runtime-store-bridge`
-- `codex/approval-queue-runtime-hydration-helpers`
-- `codex/dashboard-shell-current-api`
+## Branch classes now tracked
+- compile recovery references
+- frontend or dashboard salvage references
+- approval-queue persistence references
+- planning or audit archive references
+
+Canonical branch-classification source:
+- `docs/INTEGRATION_BOARD.md`
+- `docs/WORK_STATUS.md`
+- `docs/WORK_STATUS.json`
 
 ## Next queue
 1. Issue `#48`: repair `crates/pt-cli/src/main.rs` and `crates/pt-coinbase/src/lib.rs` only.
