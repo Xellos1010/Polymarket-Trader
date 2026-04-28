@@ -3,7 +3,7 @@
 ## Purpose
 This file is the branch-consolidation board for the current cycle.
 
-Use it to keep one active integration PR, one truthful current stage, and one ordered salvage queue for remote branches that still contain unmerged work.
+Use it to keep one active integration PR, one truthful current stage, one `active_now` queue item, and one ordered salvage queue for remote branches that still contain unmerged work.
 
 ## Active integration target
 - branch: `codex/single-integration-board-2026-04-28`
@@ -12,21 +12,22 @@ Use it to keep one active integration PR, one truthful current stage, and one or
 - current blocker: issue `#48` compile recovery slice 1 for `crates/pt-cli/src/main.rs` and `crates/pt-coinbase/src/lib.rs`
 - current blocker signature:
   - `pt-cli`: duplicate `pt_core` imports, duplicate `pt_engine::TradingEngine` imports, broken `StrategyProfileLoad` to `Coinbase` enum boundary
-  - `pt-coinbase`: merge-corrupted top-level import/header block with duplicated `pt_core` and `reqwest::header` fragments
+  - `pt-coinbase`: merge-corrupted top-level import or header block with duplicated `pt_core` and `reqwest::header` fragments
 
 ## Integration rule
 - Do not open multiple parallel integration PRs.
 - Do not merge stale diverged branches directly.
 - Replay surviving payload from stale branches onto current `main` only after the Phase 0 validation ladder is green again.
-- If the active stage hits a human-decision gate, keep the same PR open and move to the next eligible queued feature that does not depend on that decision.
-- When no more eligible queued features remain, stop adding scope and run one best-practices refinement pass across the touched planning and status files.
+- If the `active_now` stage hits a human-decision gate, keep the same PR open and promote the next defined queue item that does not depend on that decision.
+- When no defined eligible implementation work remains, stop adding scope and run one best-practices refinement pass across the touched planning and status files.
 
 ## Workflow invariants
 - Exactly one active integration branch exists for the current cycle.
 - Exactly one open integration PR exists for the current cycle.
+- Exactly one queue item is marked `active_now`.
 - `docs/WORK_STATUS.md`, `docs/WORK_STATUS.json`, `docs/SESSION_CONTEXT.md`, `docs/PROGRESS.md`, and this file agree on phase, stage, next step, and branch policy.
 - Every visible `codex/` branch is classified before any salvage decision is made.
-- No queue item behind a blocked dependency may be marked active.
+- No queue item behind a blocked dependency may be promoted to `active_now`.
 - Tracker updates must never be presented as validation evidence.
 
 ## Current execution order
@@ -42,8 +43,8 @@ Use it to keep one active integration PR, one truthful current stage, and one or
 
 ## Queue progression rule
 - Advance the first queue item that is both well-defined and unblocked.
-- If that item requires human approval, record the decision gate in the status files and advance the next eligible item on the same PR.
-- If no eligible items remain, stop queue expansion and run the final refinement pass.
+- If that item requires human approval, record the decision gate in the status files and promote the next eligible item on the same PR.
+- If no eligible implementation items remain, stop queue expansion and run the final refinement pass.
 
 ## Immediate repair plan for the active slice
 ### `crates/pt-cli/src/main.rs`
@@ -56,6 +57,16 @@ Use it to keep one active integration PR, one truthful current stage, and one or
 1. keep the newer auth-manager, websocket, and runtime imports intact
 2. merge the older advanced-trade imports into the same top block without duplicates
 3. remove the duplicated header fragments without changing behavior below the import section
+
+## Queue state legend
+- `active_now`: the one item being worked
+- `queued`: defined and eligible after the current item
+- `blocked_by_phase0`: defined but not eligible until repo readiness is green
+- `blocked_on_human_decision`: defined but waiting on explicit approval
+- `deferred_until_phase0_green`: intentionally paused behind repo readiness
+- `deferred_until_current_api_reaudit`: intentionally paused pending a backend or API fit check
+- `completed`: finished in this cycle or already merged
+- `explicitly_deferred`: intentionally left out of the current cycle
 
 ## Full codex branch inventory status
 Remote branch search for `codex/` currently returns 44 visible branches, all of which are classified below.
