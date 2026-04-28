@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "updated_on": "2026-04-28",
+  "phase": {
+    "id": "phase0",
+    "name": "Phase 0: repo readiness"
+  },
+  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, and PR #51 should remain the only active integration PR until the queue is fully consolidated.",
+  "current_stage": {
+    "id": "phase0_slice1_waiting_on_compile_recovery",
+    "label": "Phase 0 slice 1 waiting on compile recovery",
+    "requires_human_decision": false,
+    "blocker_type": "compile_integrity_recovery",
+    "fallback_if_human_decision_blocks": {
+      "label": "Compile recovery slice 2",
+      "source": "Phase 0 recovery queue",
+      "path": "crates/pt-core/src/config.rs"
+    }
+  },
+  "active_integration": {
+    "branch": "codex/single-integration-board-2026-04-28",
+    "pr_number": 51,
+    "pr_title": "[codex] Re-establish one active integration branch and canonical work board",
+    "status": "active"
+  },
+  "active_next_step": {
+    "label": "Issue #48 compile recovery slice 1",
+    "source": "issue #48",
+    "status": "active_next_step",
+    "files": [
+      "crates/pt-cli/src/main.rs",
+      "crates/pt-coinbase/src/lib.rs"
+    ],
+    "constraints": [
+      "repair syntax and structure only",
+      "preserve coherent newer behavior where intact",
+      "do not add queue-runtime behavior in this slice"
+    ]
+  },
+  "queue": [
+    {
+      "order": 1,
+      "label": "Compile recovery slice 1",
+      "source": "issue #48",
+      "status": "active_next_step",
+      "requires_human_decision": false
+    },
+    {
+      "order": 2,
+      "label": "Compile recovery slice 2",
+      "source": "Phase 0 recovery queue",
+      "status": "queued",
+      "requires_human_decision": false
+    },
+    {
+      "order": 3,
+      "label": "Compile recovery slice 3",
+      "source": "Phase 0 recovery queue",
+      "status": "queued",
+      "requires_human_decision": false
+    },
+    {
+      "order": 4,
+      "label": "Phase 0 validation ladder",
+      "source": "repo readiness gate",
+      "status": "queued",
+      "requires_human_decision": false
+    },
+    {
+      "order": 5,
+      "label": "Deterministic risk and quote failure-path tests",
+      "source": "issue #23",
+      "status": "deferred_until_phase0_green",
+      "requires_human_decision": false
+    },
+    {
+      "order": 6,
+      "label": "Dashboard safety-net and read-only queue test consolidation",
+      "source": "issue #22",
+      "status": "deferred_until_phase0_green",
+      "requires_human_decision": false
+    },
+    {
+      "order": 7,
+      "label": "Repeatable replay and paper evidence bundle refresh",
+      "source": "issue #10",
+      "status": "deferred_until_phase0_green",
+      "requires_human_decision": false
+    },
+    {
+      "order": 8,
+      "label": "Durable approval-queue persistence",
+      "source": "issue #9",
+      "status": "blocked_by_phase0",
+      "requires_human_decision": false
+    },
+    {
+      "order": 9,
+      "label": "Dashboard shell or UI salvage",
+      "source": "codex/dashboard-shell-current-api",
+      "status": "deferred_until_current_api_reaudit",
+      "requires_human_decision": true
+    }
+  ],
+  "deferred_branches": [
+    "codex/approval-queue-frontend-panel",
+    "codex/read-only-approval-queue-api",
+    "codex/approval-queue-storage-foundation",
+    "codex/approval-queue-snapshot-reconcile",
+    "codex/approval-queue-runtime-store-bridge",
+    "codex/approval-queue-runtime-hydration-helpers",
+    "codex/dashboard-shell-current-api"
+  ],
+  "validation_commands": [
+    "cargo fmt --all -- --check",
+    "cargo check --workspace",
+    "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+    "cargo test --workspace",
+    "cargo build --workspace",
+    "cargo audit",
+    "./scripts/generate_sbom.sh artifacts"
+  ],
+  "guardrails": [
+    "Do not enable live mode.",
+    "Do not add or modify credentials.",
+    "Do not raise risk caps.",
+    "Do not merge stale diverged branches directly.",
+    "Do not resume Phase 1 work before compile integrity is restored."
+  ]
+}
