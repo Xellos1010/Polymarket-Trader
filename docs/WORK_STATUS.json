@@ -1,16 +1,29 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "updated_on": "2026-04-28",
   "phase": {
     "id": "phase0",
     "name": "Phase 0: repo readiness"
   },
-  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, and the full visible codex branch inventory now needs explicit classification to prevent accidental parallel integration.",
+  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, and the full visible codex branch inventory needs explicit classification to prevent accidental parallel integration.",
+  "audit": {
+    "last_audited_on": "2026-04-28",
+    "audit_source": [
+      "GitHub repository state",
+      "open issue queue",
+      "open PR queue",
+      "active integration branch documents"
+    ],
+    "validation_evidence_state": "not_rerun_from_full_private_repo_checkout",
+    "truth_standard": "Tracker files may describe queue order and blockers, but they must not imply that the Phase 0 validation ladder is green without fresh local evidence."
+  },
   "current_stage": {
     "id": "phase0_slice1_waiting_on_compile_recovery",
     "label": "Phase 0 slice 1 waiting on compile recovery",
     "requires_human_decision": false,
     "blocker_type": "compile_integrity_recovery",
+    "execution_status": "ready_for_code_bearing_pass_from_full_checkout",
+    "environment_note": "This audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before readiness status changes.",
     "fallback_if_human_decision_blocks": {
       "label": "Compile recovery slice 2",
       "source": "Phase 0 recovery queue",
