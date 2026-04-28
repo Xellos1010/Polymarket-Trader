@@ -36,10 +36,10 @@ Stage contract:
 ## Stage execution state
 - stage owner: PR `#51`
 - stage source: issue `#48`
-- stage execution status: exact Slice 1 repairs identified and waiting on a proper code-bearing pass
+- stage execution status: exact Slice 1 repairs are identified, but this scheduled audit run still lacks the authenticated checkout needed for a code-bearing pass
 - code-bearing progress on the active PR: not started yet
 - next required environment: authenticated checkout of branch `codex/single-integration-board-2026-04-28`
-- environment note: this audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before any readiness claim changes
+- environment note: this audit environment does not currently provide a usable authenticated checkout of the private repository, so the Slice 1 Rust repair must still be completed from a proper checkout before any readiness claim changes
 
 ## Exact blocker signature for the active slice
 ### `crates/pt-cli/src/main.rs`
@@ -90,14 +90,16 @@ Allowed queue states for this cycle:
 
 ## Decision-gate tracker
 - current stage requires human decision: no
-- current blocker type: compile-integrity recovery, not operator approval
+- current blocker type: compile-integrity recovery with an environment-only checkout blocker in this scheduled run
 - current `active_now` item: issue `#48` compile recovery slice 1
 - next automatically eligible item if the current stage later becomes `blocked_on_human_decision`: compile recovery slice 2 in `crates/pt-core/src/config.rs`
+- queue-order note: do not promote Slice 2 just because this audit run lacks checkout capability; issue `#48` stays `active_now` until it is completed or reaches a real decision gate
 - canonical fallback policy: `docs/INTEGRATION_BOARD.md`
 
 ## Execution rule
 - If the current stage does not require a human decision, continue the `active_now` item on PR `#51`.
 - If the current stage becomes `blocked_on_human_decision`, record the blocker here and promote the next queue item that is both defined and independent of that decision.
+- If the current stage is blocked only by an audit-environment limitation, keep the same `active_now` item and resume it from a proper checkout instead of reordering the queue.
 - Never open a second integration PR to keep work moving.
 - When no more defined eligible implementation items remain, stop adding scope and run one refinement pass for clarity, consistency, and software-engineering hygiene.
 
