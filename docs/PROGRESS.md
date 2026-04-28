@@ -17,6 +17,7 @@ Grounded current state:
 ## Validation evidence status
 - The active tracker set is aligned, but the Phase 0 Rust validation ladder has not been rerun from a full private-repo checkout in this environment.
 - The repo should still be treated as Phase 0 red until the Slice 1 files are repaired and the ladder runs on branch `codex/single-integration-board-2026-04-28`.
+- This scheduled audit run also confirmed that an environment-only checkout blocker does not justify promoting the next slice; issue `#48` stays `active_now`.
 
 ## Completed recently
 - Earlier open-work consolidation was merged through PR `#47`.
@@ -26,12 +27,13 @@ Grounded current state:
 - The status and progress files now distinguish tracker truth from validation evidence so the queue does not overstate repo readiness.
 - The control files now encode the single-PR progression rule, the fallback rule for human-decision gates, the final refinement trigger, and the exact Slice 1 blocker signatures.
 - The stage tracker now defines a queue-state model with a single `active_now` item and an explicit automatic fallback order.
+- The tracker set now also records that environment-only audit blockers keep the same active slice in place rather than silently reordering the queue.
 
 ## In progress
 - Keep all current-cycle coordination in the single integration PR.
 - Keep the next code-bearing step narrowly focused on issue `#48`.
 - Hold deferred branch payload as salvage or reference material only until Phase 0 is green again.
-- Preserve the queue discipline that moves to the next eligible feature if a later stage hits a human-decision gate.
+- Preserve the queue discipline that moves to the next eligible feature only if a real human-decision gate appears.
 - Carry an explicit file-level repair plan for the two Slice 1 Rust files until the code-bearing pass is landed from a proper checkout.
 
 ## Exact current blockers
@@ -48,6 +50,7 @@ Grounded current state:
 ## Active execution rule
 - Work the single `active_now` slice first.
 - If a stage later requires human approval, promote the next defined eligible feature instead of opening a second integration PR.
+- If a run is blocked only by missing checkout capability or another audit-environment limitation, keep the same `active_now` feature and resume it from a proper checkout.
 - When no defined eligible features remain, stop expanding scope and run one refinement pass for consistency and best practices.
 
 ## Branch classes now tracked
