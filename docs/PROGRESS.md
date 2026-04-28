@@ -12,18 +12,18 @@ Grounded current state:
 - Issue `#48` is the active next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is restored.
 - Several diverged remote branches still hold unmerged queue, frontend, and dashboard payload, but none of them should be treated as the active review target.
-- `docs/WORK_STATUS.md` is the canonical stage tracker.
+- `docs/WORK_STATUS.md` is the operator-readable stage tracker and `docs/WORK_STATUS.json` is the machine-readable mirror.
 
 ## Completed recently
 - Earlier open-work consolidation was merged through PR `#47`.
 - Queue-start and status-tracker cleanup landed through PR `#49` and PR `#50`.
-- PR `#51` now re-establishes one integration branch and one canonical work board.
+- PR `#51` now re-establishes one integration branch, one canonical work board, and one machine-readable work-stage mirror.
 
 ## In progress
 - Keep all current-cycle coordination in the single integration PR.
 - Keep the next code-bearing step narrowly focused on issue `#48`.
 - Record the fallback execution rule so work keeps moving if a later stage requires human input.
-- Hold deferred branch payload as salvage/reference material only until Phase 0 is green again.
+- Hold deferred branch payload as salvage or reference material only until Phase 0 is green again.
 
 ## Active execution rule
 - Work the active next slice first.
