@@ -21,6 +21,12 @@ Meaning:
 - the next safe code change is still issue `#48`
 - no Phase 1 queue-runtime or frontend expansion should outrun compile recovery
 
+## Decision-gate tracker
+- current stage requires human decision: no
+- current blocker type: compile-integrity recovery, not operator approval
+- fallback next eligible feature if a later stage becomes `waiting_on_human_decision`: compile recovery slice 2 in `crates/pt-core/src/config.rs`
+- canonical fallback policy: `docs/INTEGRATION_BOARD.md`
+
 ## Single active integration branch
 - branch: `codex/single-integration-board-2026-04-28`
 - PR: `#51`
