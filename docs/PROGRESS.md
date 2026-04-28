@@ -14,11 +14,16 @@ Grounded current state:
 - Remote branch search shows a larger `codex/` inventory than the earlier short tracker list, so the branch set has now been explicitly classified in the control files.
 - `docs/WORK_STATUS.md` is the operator-readable stage tracker and `docs/WORK_STATUS.json` is the machine-readable mirror.
 
+## Validation evidence status
+- The active tracker set is aligned, but the Phase 0 Rust validation ladder has not been rerun from a full private-repo checkout in this environment.
+- The repo should still be treated as Phase 0 red until the Slice 1 files are repaired and the ladder runs on branch `codex/single-integration-board-2026-04-28`.
+
 ## Completed recently
 - Earlier open-work consolidation was merged through PR `#47`.
 - Queue-start and status-tracker cleanup landed through PR `#49` and PR `#50`.
 - PR `#51` re-established one integration branch, one canonical work board, and one machine-readable work-stage mirror.
 - The tracker set now classifies all visible `codex/` branches so future work does not accidentally reopen parallel review lanes.
+- The status and progress files now distinguish tracker truth from validation evidence so the queue does not overstate repo readiness.
 
 ## In progress
 - Keep all current-cycle coordination in the single integration PR.
