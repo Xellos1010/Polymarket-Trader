@@ -17,7 +17,7 @@ Grounded state as of April 28, 2026:
 
 ## Audit stamp
 - last audited on: April 28, 2026
-- audit source: GitHub repository, open issue queue, open PR queue, active integration branch documents, and current visible `codex/` branch inventory
+- audit source: GitHub repository, open issue queue, open PR queue, active integration branch documents, visible `codex/` branch inventory, and current branch versions of the Slice 1 Rust files
 - validation evidence state: not rerun from a full private-repo checkout in this environment
 - current truth standard: status files may claim queue order and blockers, but they must not imply that the Phase 0 Rust validation ladder is green
 
@@ -36,10 +36,30 @@ Meaning:
 ## Stage status
 - stage owner: PR `#51`
 - stage source: issue `#48`
-- stage execution status: ready for a narrow code-bearing Slice 1 pass from a full repo checkout
+- stage execution status: exact Slice 1 repairs identified and waiting on a proper code-bearing pass
 - code-bearing progress on the active PR: not started yet
 - next required environment: authenticated checkout of branch `codex/single-integration-board-2026-04-28`
 - environment note: this audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before any readiness claim changes
+
+## Exact blocker signature for the active slice
+### `crates/pt-cli/src/main.rs`
+- duplicate `pt_core` import blocks are present
+- duplicate `pt_engine::TradingEngine` imports are present
+- the `Commands` enum is broken at the `StrategyProfileLoad` to `Coinbase` boundary
+- the immediate safe repair is:
+  1. merge the `pt_core` imports so the file keeps one source of `AppConfig`, `EngineMode`, `ReplayAcceptanceReport`, `RuntimeRole`, and `MarketSnapshot`
+  2. keep only one `pt_engine::TradingEngine` import
+  3. close `StrategyProfileLoad` cleanly and keep `Coinbase` as its own subcommand variant
+  4. preserve the newer command surface already present in the file
+
+### `crates/pt-coinbase/src/lib.rs`
+- the top-level import and header block is merge-corrupted
+- duplicated `pt_core` fragments are present
+- duplicated `reqwest::header` fragments are present
+- the immediate safe repair is:
+  1. keep the newer auth-manager, websocket, and runtime imports intact
+  2. merge the older advanced-trade imports into that same top block without duplicates
+  3. remove the duplicated header fragments without changing runtime behavior below the import section
 
 ## Workflow invariants
 - one active integration branch
@@ -87,6 +107,11 @@ Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 4. preserve coherent newer behavior where it is already intact
 5. avoid queue-runtime behavior in this slice
 6. land the slice on the existing PR instead of starting a new branch or PR
+
+If those repairs land cleanly, the next immediate action is:
+1. `cargo fmt --all -- --check`
+2. `cargo check --workspace`
+3. if parser failures move on to `crates/pt-core/src/config.rs`, continue slice 2 on the same PR
 
 ## Queue summary
 - active now: 1 item
