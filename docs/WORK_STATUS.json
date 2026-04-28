@@ -1,11 +1,11 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "updated_on": "2026-04-28",
   "phase": {
     "id": "phase0",
     "name": "Phase 0: repo readiness"
   },
-  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, the active PR still carries tracker and control files only, and the first code-bearing recovery slice has not landed yet.",
+  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, the active PR still carries tracker and control files only, and the first code-bearing recovery slice is now documented with exact file-level blocker signatures.",
   "audit": {
     "last_audited_on": "2026-04-28",
     "audit_source": [
@@ -13,7 +13,8 @@
       "open issue queue",
       "open PR queue",
       "active integration branch documents",
-      "visible codex branch inventory"
+      "visible codex branch inventory",
+      "current branch versions of crates/pt-cli/src/main.rs and crates/pt-coinbase/src/lib.rs"
     ],
     "validation_evidence_state": "not_rerun_from_full_private_repo_checkout",
     "truth_standard": "Tracker files may describe queue order and blockers, but they must not imply that the Phase 0 validation ladder is green without fresh local evidence."
@@ -31,7 +32,7 @@
     "label": "Phase 0 slice 1 waiting on compile recovery",
     "requires_human_decision": false,
     "blocker_type": "compile_integrity_recovery",
-    "execution_status": "ready_for_code_bearing_pass_from_full_checkout",
+    "execution_status": "exact_repairs_identified_waiting_on_code_bearing_pass",
     "code_bearing_progress": "not_started_on_active_pr",
     "next_required_environment": "authenticated_checkout_of_codex/single-integration-board-2026-04-28",
     "environment_note": "This audit environment does not currently provide a usable authenticated checkout of the private repository, so large-file Rust recovery must still be completed from a proper checkout before readiness status changes.",
@@ -39,6 +40,33 @@
       "label": "Compile recovery slice 2",
       "source": "Phase 0 recovery queue",
       "path": "crates/pt-core/src/config.rs"
+    }
+  },
+  "exact_blocker_signature": {
+    "crates/pt-cli/src/main.rs": {
+      "problems": [
+        "duplicate pt_core import blocks are present",
+        "duplicate pt_engine::TradingEngine imports are present",
+        "the Commands enum is broken at the StrategyProfileLoad to Coinbase boundary"
+      ],
+      "safe_repair_plan": [
+        "merge the pt_core imports so the file keeps one source of AppConfig, EngineMode, ReplayAcceptanceReport, RuntimeRole, and MarketSnapshot",
+        "keep only one pt_engine::TradingEngine import",
+        "close StrategyProfileLoad cleanly and keep Coinbase as its own subcommand variant",
+        "preserve the newer command surface already present in the file"
+      ]
+    },
+    "crates/pt-coinbase/src/lib.rs": {
+      "problems": [
+        "the top-level import and header block is merge-corrupted",
+        "duplicated pt_core fragments are present",
+        "duplicated reqwest::header fragments are present"
+      ],
+      "safe_repair_plan": [
+        "keep the newer auth-manager, websocket, and runtime imports intact",
+        "merge the older advanced-trade imports into that same top block without duplicates",
+        "remove the duplicated header fragments without changing runtime behavior below the import section"
+      ]
     }
   },
   "active_integration": {
@@ -60,6 +88,11 @@
       "preserve coherent newer behavior where intact",
       "do not add queue-runtime behavior in this slice",
       "land the slice on the existing PR rather than opening a new PR"
+    ],
+    "immediate_follow_up_if_slice_lands": [
+      "cargo fmt --all -- --check",
+      "cargo check --workspace",
+      "if parser failures move to crates/pt-core/src/config.rs continue slice 2 on the same PR"
     ]
   },
   "queue_summary": {
