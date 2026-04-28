@@ -33,6 +33,7 @@ Phase 0: repo readiness
 - keep one active integration PR
 - take the next code-bearing slice from the ordered queue and land it on PR `#51`
 - if a later stage requires human approval, keep the same PR and move to the next eligible queued feature
+- if a run is blocked only by missing authenticated checkout or another audit-environment limitation, keep the same active slice and resume it from a proper checkout
 - when no more eligible queued features remain, finish with one refinement pass for consistency and best practices
 
 ## Branch-classification policy
@@ -84,6 +85,7 @@ Immediate safe repair:
 ## Environment blocker for the code-bearing slice
 - This scheduled audit environment does not currently provide a usable authenticated checkout of the private repository.
 - Direct git clone from GitHub was not available in this environment.
+- This is an execution-environment blocker, not a human-decision gate, so issue `#48` must remain the `active_now` slice.
 - The next code-bearing pass should therefore happen from a proper checkout of branch `codex/single-integration-board-2026-04-28`, and it should stay limited to issue `#48`.
 
 ## Acceptance criteria
