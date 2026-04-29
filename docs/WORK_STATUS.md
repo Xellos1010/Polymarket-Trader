@@ -6,17 +6,18 @@ Phase 0: repo readiness
 ## Current audit finding
 The repository is still blocked in Phase 0 by compile-integrity failures, and PR `#51` should remain the only active integration PR until the queue either clears or reaches a real human-decision gate.
 
-Grounded state as of April 28, 2026:
+Grounded state as of April 29, 2026:
 - `main` already contains the earlier consolidation work from PR `#47`, PR `#49`, and PR `#50`.
 - PR `#51` is the only open integration PR.
 - PR `#51` still carries tracker and control-file work only; the first code-bearing recovery slice has not landed yet.
 - Issue `#48` is still the active next code-bearing slice.
 - Issue `#9` remains paused until compile integrity is recovered and the local validation ladder is green.
 - Visible `codex/` branches remain reference-only unless they are explicitly replayed onto PR `#51`.
+- The visible Phase 0 recovery reference branches do not contain a cleaner Slice 1 payload for `crates/pt-cli/src/main.rs` or `crates/pt-coinbase/src/lib.rs`; they currently point at the same corrupted blob state now present on PR `#51`.
 
 ## Audit stamp
-- last audited on: April 28, 2026
-- audit source: GitHub repository state, open issue queue, open PR queue, active integration branch documents, visible `codex/` branch inventory, and current branch versions of the Slice 1 Rust files
+- last audited on: April 29, 2026
+- audit source: GitHub repository state, open issue queue, open PR queue, active integration branch documents, visible `codex/` branch inventory, visible Phase 0 recovery reference branches, and current branch versions of the Slice 1 Rust files
 - validation evidence state: not rerun from a full private-repo checkout in this environment
 - truth standard: tracker files may describe queue order, blockers, and execution policy, but they must not imply that the Phase 0 validation ladder is green
 
@@ -36,7 +37,7 @@ Stage contract:
 ## Stage execution state
 - stage owner: PR `#51`
 - stage source: issue `#48`
-- stage execution status: exact Slice 1 repairs are identified, but this scheduled audit run still lacks the authenticated checkout needed for a code-bearing pass
+- stage execution status: exact Slice 1 repairs are identified, the visible recovery branches do not provide a clean replay candidate, and this scheduled audit run still lacks the authenticated checkout needed for a code-bearing pass
 - code-bearing progress on the active PR: not started yet
 - next required environment: authenticated checkout of branch `codex/single-integration-board-2026-04-28`
 - environment note: this audit environment does not currently provide a usable authenticated checkout of the private repository, so the Slice 1 Rust repair must still be completed from a proper checkout before any readiness claim changes
@@ -101,6 +102,7 @@ Allowed queue states for this cycle:
 - If the current stage becomes `blocked_on_human_decision`, record the blocker here and promote the next queue item that is both defined and independent of that decision.
 - If the current stage is blocked only by an audit-environment limitation, keep the same `active_now` item and resume it from a proper checkout instead of reordering the queue.
 - Never open a second integration PR to keep work moving.
+- Do not spend another tracker-only pass on PR `#51` unless the stage truth, blocker state, queue eligibility, or validation evidence state actually changes.
 - When no more defined eligible implementation items remain, stop adding scope and run one refinement pass for clarity, consistency, and software-engineering hygiene.
 
 ## Active next step
@@ -111,6 +113,7 @@ Continue PR `#51` with the issue `#48` code-bearing slice, limited to:
 4. preserve coherent newer behavior where it is already intact
 5. avoid queue-runtime behavior in this slice
 6. land the slice on the existing PR instead of starting a new branch or PR
+7. do not spend more time searching visible recovery branches for a hidden clean replay candidate unless new evidence appears
 
 If those repairs land cleanly, the next immediate action is:
 1. `cargo fmt --all -- --check`
@@ -160,6 +163,7 @@ Current rule:
 - the queue includes a defined rule for what happens when a stage needs human input
 - the status board clearly distinguishes tracker truth from validation evidence
 - exactly one queue item is marked `active_now`
+- tracker-only refinement does not continue unless the underlying stage truth actually changes
 
 ## Integration completion rule
 Integration is complete for this cycle when:
@@ -199,6 +203,7 @@ Human approval is still required before:
 - Do not treat stale diverged branches as merge-ready evidence.
 - Do not resume Phase 1 work before compile integrity is restored.
 - Do not expand scope when the next safe action is still blocked on repo readiness.
+- Do not substitute tracker churn for the missing Slice 1 code-bearing repair.
 
 ## Status ownership
 This file is the operator-readable work-stage tracker.
