@@ -4,7 +4,7 @@
 Phase 0: repo readiness
 
 ## Current audit finding
-As of April 28, 2026, the repository is still blocked in Phase 0 by compile-integrity failures, and the work should stay consolidated into one active integration PR with one `active_now` queue item.
+As of April 29, 2026, the repository is still blocked in Phase 0 by compile-integrity failures, and the work should stay consolidated into one active integration PR with one `active_now` queue item.
 
 Grounded current state:
 - PR `#47`, PR `#49`, and PR `#50` are already merged into `main`.
@@ -13,6 +13,7 @@ Grounded current state:
 - Issue `#9` remains paused until compile integrity is restored and the local validation ladder is green.
 - Remote branch search shows 44 visible `codex/` branches and the control files classify the full set.
 - `docs/WORK_STATUS.md` is the operator-readable stage tracker and `docs/WORK_STATUS.json` is the machine-readable mirror.
+- The visible Phase 0 recovery reference branches do not contain a cleaner Slice 1 payload for the two blocked Rust files, so the next meaningful improvement still belongs directly on PR `#51`.
 
 ## Validation evidence status
 - The active tracker set is aligned, but the Phase 0 Rust validation ladder has not been rerun from a full private-repo checkout in this environment.
@@ -28,6 +29,7 @@ Grounded current state:
 - The control files now encode the single-PR progression rule, the fallback rule for human-decision gates, the final refinement trigger, and the exact Slice 1 blocker signatures.
 - The stage tracker now defines a queue-state model with a single `active_now` item and an explicit automatic fallback order.
 - The tracker set now also records that environment-only audit blockers keep the same active slice in place rather than silently reordering the queue.
+- The visible Phase 0 recovery reference branches were checked again and no cleaner Slice 1 payload was found there.
 
 ## In progress
 - Keep all current-cycle coordination in the single integration PR.
@@ -35,6 +37,7 @@ Grounded current state:
 - Hold deferred branch payload as salvage or reference material only until Phase 0 is green again.
 - Preserve the queue discipline that moves to the next eligible feature only if a real human-decision gate appears.
 - Carry an explicit file-level repair plan for the two Slice 1 Rust files until the code-bearing pass is landed from a proper checkout.
+- Avoid further tracker-only churn unless the underlying stage truth, blocker state, queue eligibility, or validation evidence actually changes.
 
 ## Exact current blockers
 ### `crates/pt-cli/src/main.rs`
@@ -51,6 +54,7 @@ Grounded current state:
 - Work the single `active_now` slice first.
 - If a stage later requires human approval, promote the next defined eligible feature instead of opening a second integration PR.
 - If a run is blocked only by missing checkout capability or another audit-environment limitation, keep the same `active_now` feature and resume it from a proper checkout.
+- Do not spend another tracker-only pass if the active-stage truth has not changed.
 - When no defined eligible features remain, stop expanding scope and run one refinement pass for consistency and best practices.
 
 ## Branch classes now tracked
@@ -90,3 +94,4 @@ cargo audit
 - Do not merge stale diverged branches directly.
 - Do not resume Phase 1 queue-runtime or dashboard expansion work before Phase 0 is green.
 - Do not treat a status doc update as proof that compile recovery is complete.
+- Do not substitute tracker churn for the missing Slice 1 code-bearing repair.
