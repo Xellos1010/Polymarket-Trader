@@ -1,23 +1,25 @@
 {
-  "schema_version": 6,
-  "updated_on": "2026-04-28",
+  "schema_version": 7,
+  "updated_on": "2026-04-29",
   "phase": {
     "id": "phase0",
     "name": "Phase 0: repo readiness"
   },
-  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, the active PR still carries tracker and control files only, and issue #48 remains the one active_now code-bearing slice.",
+  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, the active PR still carries tracker and control files only, issue #48 remains the one active_now code-bearing slice, and the visible Phase 0 recovery reference branches do not contain a cleaner Slice 1 replay payload.",
   "audit": {
-    "last_audited_on": "2026-04-28",
+    "last_audited_on": "2026-04-29",
     "audit_source": [
       "GitHub repository state",
       "open issue queue",
       "open PR queue",
       "active integration branch documents",
       "visible codex branch inventory",
+      "visible Phase 0 recovery reference branches",
       "current branch versions of crates/pt-cli/src/main.rs and crates/pt-coinbase/src/lib.rs"
     ],
     "validation_evidence_state": "not_rerun_from_full_private_repo_checkout",
-    "truth_standard": "Tracker files may describe queue order, blockers, and execution policy, but they must not imply that the Phase 0 validation ladder is green without fresh local evidence."
+    "truth_standard": "Tracker files may describe queue order, blockers, and execution policy, but they must not imply that the Phase 0 validation ladder is green without fresh local evidence.",
+    "visible_recovery_branch_replay_result": "no_clean_slice1_payload_found"
   },
   "workflow_invariants": {
     "single_active_integration_branch": true,
@@ -27,7 +29,8 @@
     "full_codex_branch_classification_required": true,
     "tracker_truth_must_not_imply_validation": true,
     "exactly_one_active_now_queue_item": true,
-    "refinement_only_after_no_eligible_implementation_items": true
+    "refinement_only_after_no_eligible_implementation_items": true,
+    "tracker_only_refinement_requires_state_change": true
   },
   "queue_state_machine": {
     "allowed_states": [
@@ -41,6 +44,7 @@
       "explicitly_deferred"
     ],
     "execution_rule": "Continue the active_now item on PR #51 unless it becomes blocked_on_human_decision; environment-only audit blockers do not justify queue reordering.",
+    "tracker_only_refinement_rule": "Do not spend another tracker-only pass on PR #51 unless stage truth, blocker state, queue eligibility, or validation evidence actually changes.",
     "refinement_trigger": "Only start the final best-practices refinement pass after no defined eligible implementation items remain."
   },
   "current_stage": {
@@ -48,7 +52,7 @@
     "label": "Phase 0 slice 1 waiting on compile recovery",
     "requires_human_decision": false,
     "blocker_type": "compile_integrity_recovery",
-    "execution_status": "exact_repairs_identified_but_current_audit_run_lacks_authenticated_checkout",
+    "execution_status": "exact_repairs_identified_visible_recovery_branches_do_not_help_and_current_audit_run_lacks_authenticated_checkout",
     "code_bearing_progress": "not_started_on_active_pr",
     "next_required_environment": "authenticated_checkout_of_codex/single-integration-board-2026-04-28",
     "environment_note": "This audit environment does not currently provide a usable authenticated checkout of the private repository, so the Slice 1 Rust repair must still be completed from a proper checkout before readiness status changes.",
@@ -110,7 +114,8 @@
       "repair syntax and structure only",
       "preserve coherent newer behavior where intact",
       "do not add queue-runtime behavior in this slice",
-      "land the slice on the existing PR rather than opening a new PR"
+      "land the slice on the existing PR rather than opening a new PR",
+      "do not keep searching visible recovery branches for a hidden clean replay candidate unless new evidence appears"
     ],
     "immediate_follow_up_if_slice_lands": [
       "cargo fmt --all -- --check",
@@ -141,6 +146,7 @@
       "codex/phase0-slice1-compile-recovery",
       "codex/phase0-slice1-start-2026-04-27"
     ],
+    "compile_recovery_reference_result": "no_clean_slice1_payload_found",
     "frontend_or_dashboard_reference_branches": [
       "codex/approval-queue-frontend-panel",
       "codex/dashboard-shell-current-api",
@@ -261,7 +267,8 @@
     "default": "Advance the first queue item that is well-defined, unblocked, and independent of any active human-decision blocker.",
     "if_human_decision_blocks": "Record the blocker in the status files and promote the next eligible item on the same integration PR.",
     "if_environment_only_blocker": "Keep the same active_now item and resume it from a proper checkout instead of silently promoting the next slice.",
-    "if_no_eligible_items_remain": "Stop adding scope and run the final consistency and best-practices refinement pass."
+    "if_no_eligible_items_remain": "Stop adding scope and run the final consistency and best-practices refinement pass.",
+    "tracker_only_refinement_guard": "Do not spend another tracker-only pass unless stage truth, blocker state, queue eligibility, or validation evidence changes."
   },
   "refinement_trigger": {
     "run_when_remaining_items_are_only": [
@@ -295,6 +302,7 @@
     "Do not add or modify credentials.",
     "Do not raise risk caps.",
     "Do not merge stale diverged branches directly.",
-    "Do not resume Phase 1 work before compile integrity is restored."
+    "Do not resume Phase 1 work before compile integrity is restored.",
+    "Do not substitute tracker churn for the missing Slice 1 code-bearing repair."
   ]
 }
