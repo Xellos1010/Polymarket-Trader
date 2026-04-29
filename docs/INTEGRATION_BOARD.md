@@ -13,6 +13,7 @@ Use it to keep one active integration PR, one truthful current stage, one `activ
 - current blocker signature:
   - `pt-cli`: duplicate `pt_core` imports, duplicate `pt_engine::TradingEngine` imports, broken `StrategyProfileLoad` to `Coinbase` enum boundary
   - `pt-coinbase`: merge-corrupted top-level import or header block with duplicated `pt_core` and `reqwest::header` fragments
+- replay-branch audit result: visible Phase 0 recovery reference branches currently point at the same corrupted Slice 1 blob state, so they are not a cleaner replay source for the active slice
 
 ## Integration rule
 - Do not open multiple parallel integration PRs.
@@ -20,6 +21,7 @@ Use it to keep one active integration PR, one truthful current stage, one `activ
 - Replay surviving payload from stale branches onto current `main` only after the Phase 0 validation ladder is green again.
 - If the `active_now` stage hits a human-decision gate, keep the same PR open and promote the next defined queue item that does not depend on that decision.
 - If a run is blocked only by audit-environment limitations such as missing checkout capability, keep the same `active_now` item and resume it from a proper checkout.
+- Do not spend another tracker-only pass on PR `#51` unless the active stage truth, blocker state, queue eligibility, or validation evidence actually changes.
 - When no defined eligible implementation work remains, stop adding scope and run one best-practices refinement pass across the touched planning and status files.
 
 ## Workflow invariants
@@ -46,6 +48,7 @@ Use it to keep one active integration PR, one truthful current stage, one `activ
 - Advance the first queue item that is both well-defined and unblocked.
 - If that item requires human approval, record the decision gate in the status files and promote the next eligible item on the same PR.
 - If a run is blocked only by missing checkout capability or another audit-environment limitation, keep the current `active_now` item in place and resume it from a proper checkout.
+- Do not let repeated audit-only refinements displace the code-bearing Slice 1 repair while the stage truth remains unchanged.
 - If no eligible implementation items remain, stop queue expansion and run the final refinement pass.
 
 ## Immediate repair plan for the active slice
@@ -91,6 +94,7 @@ Disposition:
 - use as structural reference only for issue `#48` and later Phase 0 slices
 - do not open fresh PRs from them
 - do not merge them directly
+- do not keep re-auditing them for a hidden Slice 1 replay candidate unless fresh evidence appears, because the current visible set points at the same corrupted blob state
 
 ### Frontend and dashboard references
 These branches may hold salvageable UI or test payload after Phase 0 is green again:
@@ -185,3 +189,4 @@ cargo audit
 - Do not promote Phase 1 or Phase 2 work ahead of repo readiness.
 - Do not treat tracker updates as a substitute for validation evidence.
 - Do not let the Markdown and JSON status mirrors drift.
+- Do not substitute tracker-only refinement for the missing Slice 1 repair.
