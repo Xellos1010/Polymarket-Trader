@@ -6,20 +6,18 @@ use pt_coinbase::{
     CoinbaseAuthManager, CoinbaseWalletClient, CoinbaseWsEvent, CoinbaseWsRunConfig,
 };
 use pt_core::{
-    apply_runtime_controls, ensure_rustls_crypto_provider, AppConfig, EngineMode,
+    apply_runtime_controls, ensure_rustls_crypto_provider, AppConfig, EngineMode, MarketSnapshot,
     ReplayAcceptanceReport, RuntimeRole,
 };
 use pt_engine::TradingEngine;
+use pt_market_discovery::MarketDiscoveryClient;
+use pt_polymarket::PolymarketClient;
+use pt_quote::{build_quote_intent, expected_net, CostInputs, QuoteConfig};
 use pt_strategy_lab::{
     fetch_coinbase_candles, load_profile as load_strategy_profile, optimize_random_walk_forward,
     run_backtest, save_profile, save_run as save_strategy_run, serve as serve_strategy_lab,
     StrategyLabState, StrategyProfile,
 };
-use pt_core::{AppConfig, EngineMode, MarketSnapshot};
-use pt_engine::TradingEngine;
-use pt_market_discovery::MarketDiscoveryClient;
-use pt_polymarket::PolymarketClient;
-use pt_quote::{build_quote_intent, expected_net, CostInputs, QuoteConfig};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -240,6 +238,7 @@ enum Commands {
         db: String,
         #[arg(long)]
         out: Option<String>,
+    },
     Coinbase {
         #[command(subcommand)]
         command: CoinbaseCommands,

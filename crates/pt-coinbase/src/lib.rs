@@ -8,14 +8,10 @@ use parking_lot::RwLock;
 use pt_core::{
     Asset, AuthReloadResult, CoinbaseAuthProfileConfig, CoinbaseAuthSource, CoinbaseConfig,
     CoinbaseL2Update, CoinbaseOrderBookState, EngineMode, ExecutionReport, ExecutionStatus,
-    PtError, PtResult, ResolvedCoinbaseAuth, Side, UserOrderEvent, Venue, WalletBalance,
+    OrderRoute, PtError, PtResult, ResolvedCoinbaseAuth, Side, UserOrderEvent, Venue,
+    WalletBalance,
 };
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
-    Asset, ExecutionReport, ExecutionStatus, OrderRoute, PtError, PtResult, Side, Venue,
-};
-use reqwest::header::{
-    HeaderMap, HeaderValue, AUTHORIZATION, CACHE_CONTROL, CONTENT_TYPE,
-};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CACHE_CONTROL, CONTENT_TYPE};
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
@@ -832,7 +828,9 @@ impl CoinbaseAdvancedTradeClient {
                 false,
             )
             .await?;
-        products.products.sort_by(|a, b| a.product_id.cmp(&b.product_id));
+        products
+            .products
+            .sort_by(|a, b| a.product_id.cmp(&b.product_id));
         Ok(products.products)
     }
 
@@ -892,7 +890,10 @@ impl CoinbaseAdvancedTradeClient {
         Ok(response.candles)
     }
 
-    pub async fn list_orders(&self, product_id: Option<&str>) -> PtResult<Vec<CoinbaseOrderSummary>> {
+    pub async fn list_orders(
+        &self,
+        product_id: Option<&str>,
+    ) -> PtResult<Vec<CoinbaseOrderSummary>> {
         let mut query = vec![("limit", "50".to_string())];
         if let Some(product_id) = product_id {
             if !product_id.trim().is_empty() {

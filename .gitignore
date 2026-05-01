@@ -13,3 +13,4 @@ crates/pt-dashboard/data/
 .DS_Store
 .local/
 **/node_modules/
+artifacts/*
