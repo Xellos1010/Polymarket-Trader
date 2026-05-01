@@ -1,5 +1,19 @@
 # Instructions
 
+## Current Cycle Override
+
+Before starting feature work, salvaging payload from older branches, or making a merge-readiness claim, review these files in order:
+- `docs/WORK_STATUS.md`
+- `docs/WORK_STATUS.json`
+- `docs/INTEGRATION_BOARD.md`
+- `docs/SESSION_CONTEXT.md`
+
+Current grounded state for this cycle:
+- the repo is in Phase 0: repo readiness
+- PR `#51` is the only active integration PR
+- issue `#48` compile recovery is the next code-bearing slice
+- issue `#9` and deferred branch salvage remain paused until the Phase 0 validation ladder is green again
+
 ## Local-First Rule
 
 Do not run CI/CD or deployment automation until the canonical local validation ladder passes:
@@ -24,53 +38,51 @@ The minimum ladder includes:
 
 ## Core Local Workflow
 
-1. Copy configs:
+### Prepare configs
 ```bash
 cp config/config.example.toml config/config.toml
 cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json
 cp config/prompt_bundle.example.json config/prompt_bundle.json
 ```
 
-2. Run strategy dashboard (Rust, recommended):
+### Run strategy dashboard (Rust, recommended)
 ```bash
 cargo run -p pt-cli -- strategy-lab-serve --bind 127.0.0.1:9090 --db data/strategy_lab/strategy_lab.sqlite
 ```
 
-2a. Optional Python fallback dashboard:
-2. Run Coinbase workstation:
+### Run Coinbase workstation in paper mode
 ```bash
 cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper
 ```
 
-3. Run strategy dashboard when you need offline backtest or optimization output:
+### Optional Python dashboard fallback
 ```bash
 python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090
 ```
 
-2b. Rust strategy-lab local CLI workflow:
+### Rust strategy-lab local CLI workflow
 ```bash
 cargo run -p pt-cli -- strategy-backtest --product BTC-USD --granularity-sec 300 --limit 600 --out data/output/strategy_backtest_report.json
 cargo run -p pt-cli -- strategy-optimize --product BTC-USD --granularity-sec 300 --limit 600 --iterations 200 --walk-forward-splits 4 --out data/output/strategy_optimize_report.json
 cargo run -p pt-cli -- strategy-profile-load --profile-id default --out data/output/strategy_profile_default.json
-cargo run -p pt-cli -- strategy-profile-save --path data/output/strategy_profile_default.json --note \"manual tuning update\"
+cargo run -p pt-cli -- strategy-profile-save --path data/output/strategy_profile_default.json --note "manual tuning update"
 ```
 
-3. Promote selected result to replay artifact:
-4. Promote selected result to replay artifact:
+### Promote selected result to replay artifact
 ```bash
 ./scripts/promote_strategy_lab.sh data/strategy_lab/<dashboard-or-backtest>.json BTC-USD sma_baseline
 ```
 
-5. Apply replay settings in `config/config.toml`:
+### Apply replay settings in `config/config.toml`
 - `engine.mode = "replay"`
 - `engine.replay_path = "data/replay/strategy_lab_promoted.ndjson"`
 
-6. Run Coinbase workstation in replay mode:
+### Run Coinbase workstation in replay mode
 ```bash
 cargo run -p pt-cli -- coinbase up --config config/config.toml --mode replay
 ```
 
-5a. Split runtime modes (recommended):
+### Split runtime modes (recommended)
 ```bash
 # control-plane homebase (dashboard, analytics, wallet intel)
 cargo run -p pt-cli -- run-homebase --config config/config.toml
@@ -79,34 +91,25 @@ cargo run -p pt-cli -- run-homebase --config config/config.toml
 cargo run -p pt-cli -- run-exec --config config/config.toml
 ```
 
-5b. Open dashboards:
+### Open dashboards
 - Engine + ops dashboard: `http://127.0.0.1:8080`
-- Strategy lab/backtester: `http://127.0.0.1:9090`
+- Strategy lab or backtester: `http://127.0.0.1:9090`
 
-5c. New dashboard controls (Coinbase wallet-first):
-- Market dropdown now shows pair/bucket label instead of raw market id.
+### Dashboard controls available on a healthy build
+- Market dropdown now shows pair or bucket label instead of raw market id.
 - `View` selector supports `Basic` and `Advanced` mode (persisted in browser localStorage and mirrored to `/ops/ui/mode`).
-- `CHART` / `BACKTESTER` tabs switch between live market charting and embedded strategy lab.
+- `CHART` or `BACKTESTER` tabs switch between live market charting and embedded strategy lab.
 - `LISTING PATTERN` tab overlays recently listed Coinbase products with configurable window, alignment, and normalization.
-  - `EXPORT CSV` exports the current overlay series as row-wise CSV (`product_id,label,source,anchor_time,index,ts,value`).
-- `Parity Monitor` now includes `EXPORT PARITY CSV` for route gate/audit snapshots.
+- `EXPORT CSV` exports the current overlay series as row-wise CSV (`product_id,label,source,anchor_time,index,ts,value`).
+- `Parity Monitor` includes `EXPORT PARITY CSV` for route gate and audit snapshots.
 - Granularity selector controls aggregated delta-bar rendering for selected market history.
-- `Selected Pair Orderbook Depth` shows bid/ask ladders for the selected market's mapped Coinbase product.
-- `Wallet Convert (Maker-First)`:
-  - choose wallet/account, source asset, target asset, optional amount.
-  - `PREVIEW` runs preview only.
-  - `PAPER EXEC` runs simulated execute path.
-  - `LIVE EXEC` requires live mode and explicit confirm phrase.
-- `Maker Orderbook Speed Test`:
-  - choose product, side, base size.
-  - run paper/live test to measure preview/post/cancel latency.
-- New realtime panels:
-  - `Cross-Exchange Shadow Summary`
-  - `Downturn Strategy Summary`
-  - `Capital Planner (Conservative Ramp)` with `CLOSE DAY`
-  - `Equity Universe (Paper Capability)` + `Equity Paper Runs`
+- `Selected Pair Orderbook Depth` shows bid and ask ladders for the selected market's mapped Coinbase product.
+- `Wallet Convert (Maker-First)` supports preview, paper execute, and guarded live execute.
+- `Maker Orderbook Speed Test` supports paper and guarded live timing probes.
+- Realtime summary panels include cross-exchange shadow, downturn strategy, capital planner, equity universe, and equity paper runs.
 
-6. Wallet-first operator checks (assist mode):
+## Wallet-First Operator Checks
+
 ```bash
 cargo run -p pt-cli -- wallet-status
 cargo run -p pt-cli -- wallet-plan
@@ -117,49 +120,57 @@ cargo run -p pt-cli -- routes-status
 cargo run -p pt-cli -- order-manager-status
 ```
 
-7. If a rebalance plan is pending approval:
+If a rebalance plan is pending approval:
 ```bash
 cargo run -p pt-cli -- wallet-approve --token-id <token_id>
 ```
 
-8. Replay promotion verification:
+## Replay Promotion Verification
+
 ```bash
 cargo run -p pt-cli -- verify-promoted --artifact data/tuning/promoted_candidate.json --out data/output/replay_acceptance_report.json
 ```
 
-9. Strategy-lab comparative report export:
+## Strategy-Lab Comparative Export
+
 ```bash
 cargo run -p pt-cli -- report-variants --journal data/strategy_lab/trade_journal.sqlite --out-csv data/output/variant_report.csv --out-md data/output/variant_report.md
 ```
 
-10. Edge profile tuning (local config update):
+## Edge Profile Tuning
+
 ```bash
 cargo run -p pt-cli -- set-edge-profile --strategy maker_mm_spot --min-bps 8
 cargo run -p pt-cli -- set-edge-profile --strategy conversion_cycle --min-bps 100
 ```
 
-11. Tiny live pilot start (after preflight and manual review):
+## Live and Auth Guarded Commands
+
+These commands remain gated behind successful Phase 0 and Phase 1 evidence. Do not treat them as the current next step while compile recovery is still open.
+
+Tiny live pilot start:
 ```bash
 cargo run -p pt-cli -- pilot-start --capital 20 --profile ultra-tight --timeout-ms 3000
 ```
 
-11a. Coinbase authenticated smoke test (read-only by default):
+Coinbase authenticated smoke test (read-only by default):
 ```bash
 cargo run -p pt-cli -- coinbase-smoke --timeout-ms 8000
 ```
 
-11b. Coinbase guarded write smoke (tiny post-only create/edit/cancel):
+Coinbase guarded write smoke (tiny post-only create or edit or cancel):
 ```bash
 cargo run -p pt-cli -- coinbase-smoke --timeout-ms 8000 --write-test --confirm I_UNDERSTAND_POST_ONLY_TEST_ORDERS
 ```
 
-12. Coinbase auth hot reload / profile switch (guarded):
+Coinbase auth hot reload and profile switch:
 ```bash
 cargo run -p pt-cli -- coinbase-auth-reload
 cargo run -p pt-cli -- coinbase-auth-switch --profile primary
 ```
 
-13. Listing/feed/parity API quick checks:
+## Listing, Feed, and Parity API Quick Checks
+
 ```bash
 curl -s http://127.0.0.1:8080/state/feed/health | jq
 curl -s http://127.0.0.1:8080/state/feed/diagnostics | jq
@@ -183,16 +194,15 @@ curl -s "http://127.0.0.1:8080/state/listings/candidates?window=90d&granularity_
 curl -s -X POST http://127.0.0.1:8080/state/listings/overlay -H 'content-type: application/json' -d '{"window_preset":"90d","granularity_sec":14400,"alignment_mode":"entry_aligned","normalization":"indexed","product_ids":["BTC-USD","ETH-USD"]}' | jq
 ```
 
-14. Linux ultra-tight profile + host tuning:
-```bash
-# copy profile baseline and merge into your active config as needed
-cat config/profiles/live_linux_ultra_tight.toml
+## Linux Ultra-Tight Profile and Host Tuning
 
-# Linux host baseline tuning (run on Linux execution host)
+```bash
+cat config/profiles/live_linux_ultra_tight.toml
 sudo ./scripts/linux_tune_baseline.sh
 ```
 
-15. macOS homebase service install:
+## macOS Homebase Service Install
+
 ```bash
 ./scripts/install_homebase_service.sh config/config.toml
 launchctl list | rg 'com.pt.homebase'
@@ -201,7 +211,6 @@ launchctl list | rg 'com.pt.homebase'
 ## Strategy Variant Plugins
 
 Configured in `backtest.variants[*].plugins`:
-
 - `external_bias_file`: load `{idx,bias}` or `{ts_ms,bias}` series from JSON or CSV.
 - `momentum_bias`: tanh-scaled lookback return.
 - `rsi_bias`: directional bias from RSI extremes.
@@ -210,17 +219,17 @@ Use `bias_gain` per variant to control plugin influence.
 
 ## Context Persistence
 
-- Save session checkpoint:
+Save session checkpoint:
 ```bash
 ./scripts/save_context.sh "note" docs/SESSION_CONTEXT.md config/config.toml
 ```
 
-- Export external AI bundle:
+Export external AI bundle:
 ```bash
 ./scripts/export_prompt_bundle.sh
 ```
 
-## Execution/Wallet API Surfaces
+## Execution and Wallet API Surfaces
 
 - `GET /state/execution/orders`
 - `GET /state/execution/costs`
