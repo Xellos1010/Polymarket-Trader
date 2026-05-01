@@ -207,7 +207,7 @@ trade_limit = 16
 book_levels = 10
 
 [ui]
-mode_default = "scanner"
+mode_default = "basic"
 scanner_limit = 8
 
 [live_arming]
@@ -229,9 +229,6 @@ metrics_flush_secs = 5
 market_refresh_secs = 60
 wallet_refresh_secs = 30
 risk_watchdog_ms = 100
-
-[ui]
-mode_default = "basic"
 
 [capital_plan]
 enabled = true

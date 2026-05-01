@@ -209,7 +209,6 @@ mod tests {
             max_order_age_secs: 20,
             stale_book_threshold_ms: 400,
             min_expected_net: 0.002,
-            pilot: pt_core::RiskPilotConfig::default(),
         }
     }
 
