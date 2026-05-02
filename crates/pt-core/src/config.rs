@@ -729,13 +729,19 @@ impl AppConfig {
                 "live_arming.auto_disarm_reject_rate must be in [0,1]".to_string(),
             ));
         }
-        if self.strategy.products.iter().any(|p| p.product_id.trim().is_empty()) {
+        if self
+            .strategy
+            .products
+            .iter()
+            .any(|p| p.product_id.trim().is_empty())
+        {
             return Err(PtError::Config(
                 "strategy.products[*].product_id must not be empty".to_string(),
             ));
         }
 
-        if self.venues.coinbase.auth.strict_live_auth && matches!(self.engine.mode, EngineMode::Live)
+        if self.venues.coinbase.auth.strict_live_auth
+            && matches!(self.engine.mode, EngineMode::Live)
         {
             let active_profile = self.venues.coinbase.auth.active_profile.trim();
             if !active_profile.is_empty() {

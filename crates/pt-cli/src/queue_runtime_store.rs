@@ -79,7 +79,11 @@ mod tests {
 
         let merged = hydrate_runtime_orders(
             &store,
-            &[sample_order("open-1", Some("open-1"), WorkstationOrderStatus::Open)],
+            &[sample_order(
+                "open-1",
+                Some("open-1"),
+                WorkstationOrderStatus::Open,
+            )],
         )
         .expect("hydrate runtime orders");
 
@@ -143,7 +147,10 @@ mod tests {
 
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].order_id, "remote-123");
-        assert_eq!(merged[0].status, Some(WorkstationOrderStatus::CancelRequested));
+        assert_eq!(
+            merged[0].status,
+            Some(WorkstationOrderStatus::CancelRequested)
+        );
         assert_eq!(
             merged[0].reason.as_deref(),
             Some("cancel requested from runtime")

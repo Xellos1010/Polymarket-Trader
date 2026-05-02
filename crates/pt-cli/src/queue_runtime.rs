@@ -111,11 +111,7 @@ mod tests {
                 WorkstationOrderStatus::Open,
             )],
             &[
-                sample_order(
-                    "draft-1",
-                    Some("draft-1"),
-                    WorkstationOrderStatus::Draft,
-                ),
+                sample_order("draft-1", Some("draft-1"), WorkstationOrderStatus::Draft),
                 sample_order(
                     "cancel-1",
                     Some("cancel-1"),
@@ -147,8 +143,14 @@ mod tests {
         let merged = merge_persisted_queue_orders(&[existing.clone()], &[persisted]);
 
         assert_eq!(merged.len(), 1);
-        assert_eq!(merged[0].status, Some(WorkstationOrderStatus::CancelRequested));
-        assert_eq!(merged[0].reason.as_deref(), Some("cancel requested from dashboard"));
+        assert_eq!(
+            merged[0].status,
+            Some(WorkstationOrderStatus::CancelRequested)
+        );
+        assert_eq!(
+            merged[0].reason.as_deref(),
+            Some("cancel requested from dashboard")
+        );
     }
 
     #[test]
@@ -169,6 +171,9 @@ mod tests {
 
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].order_id, "remote-123");
-        assert_eq!(merged[0].status, Some(WorkstationOrderStatus::CancelRequested));
+        assert_eq!(
+            merged[0].status,
+            Some(WorkstationOrderStatus::CancelRequested)
+        );
     }
 }

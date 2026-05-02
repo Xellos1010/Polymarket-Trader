@@ -4,8 +4,8 @@ use parking_lot::RwLock;
 use pt_core::{
     Asset, ExecutionReport, ExecutionStatus, KillSwitchState, LiveArmState, MarketHistoryPoint,
     MarketSnapshot, MetricsRegistry, ProductDetailView, ProductId, ProductStrategyConfigView,
-    RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
-    Venue, WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
+    RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility, Venue,
+    WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
 use pt_dashboard::{router, CoinbaseDashboardHandles, DashboardHandles, DashboardState};
 use serde_json::{json, Value};

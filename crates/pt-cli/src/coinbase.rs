@@ -11,7 +11,9 @@ use pt_core::{
     ScannerRow, Side, StrategyLabImportSummary, StrategyVector, TradeAction, TradingEligibility,
     Venue, WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
-use pt_dashboard::{router as dashboard_router, CoinbaseDashboardHandles, DashboardHandles, DashboardState};
+use pt_dashboard::{
+    router as dashboard_router, CoinbaseDashboardHandles, DashboardHandles, DashboardState,
+};
 use std::{
     collections::{HashMap, HashSet},
     net::TcpListener,
@@ -57,8 +59,14 @@ pub async fn coinbase_preflight(
 
     let mut checks = Vec::new();
     checks.push(check_bind("ops.dashboard_bind", &cfg.ops.dashboard_bind));
-    checks.push(check_nonempty("venues.coinbase.api_base", &cfg.venues.coinbase.api_base));
-    checks.push(check_nonempty("venues.coinbase.ws.url", &cfg.venues.coinbase.ws.url));
+    checks.push(check_nonempty(
+        "venues.coinbase.api_base",
+        &cfg.venues.coinbase.api_base,
+    ));
+    checks.push(check_nonempty(
+        "venues.coinbase.ws.url",
+        &cfg.venues.coinbase.ws.url,
+    ));
     checks.push(check_pass("mode", &mode));
 
     match client.list_public_products(8).await {
@@ -119,7 +127,10 @@ pub async fn coinbase_preflight(
         println!("[{}] {}: {}", status, check.name, check.detail);
     }
     if failures > 0 {
-        return Err(format!("coinbase preflight blocked by {} failing checks", failures));
+        return Err(format!(
+            "coinbase preflight blocked by {} failing checks",
+            failures
+        ));
     }
     Ok(())
 }
@@ -271,7 +282,11 @@ impl CoinbaseWorkstationRuntime {
         tokio::spawn(async move {
             let refresh = Duration::from_secs(self.cfg.scanner.product_refresh_secs.max(15));
             loop {
-                match self.client.list_public_products(self.cfg.scanner.max_products * 3).await {
+                match self
+                    .client
+                    .list_public_products(self.cfg.scanner.max_products * 3)
+                    .await
+                {
                     Ok(products) => {
                         let views = self.filtered_products(&products);
                         let strategies = views
@@ -392,19 +407,25 @@ impl CoinbaseWorkstationRuntime {
                 }
 
                 let instrument = instrument_for_product(product);
-                if matches!(instrument, Instrument::Derivative) && !self.cfg.scanner.include_derivatives {
+                if matches!(instrument, Instrument::Derivative)
+                    && !self.cfg.scanner.include_derivatives
+                {
                     return None;
                 }
 
-                let live_tradable =
-                    matches!(instrument, Instrument::Spot) && !product.trading_disabled && !product.cancel_only;
+                let live_tradable = matches!(instrument, Instrument::Spot)
+                    && !product.trading_disabled
+                    && !product.cancel_only;
 
                 Some(WorkstationProduct {
                     product_id: ProductId::from(product.product_id.clone()),
                     instrument: Some(instrument.clone()),
                     base_currency: product.base_currency_id.clone().unwrap_or_default(),
                     quote_currency: quote,
-                    status: product.status.clone().unwrap_or_else(|| "unknown".to_string()),
+                    status: product
+                        .status
+                        .clone()
+                        .unwrap_or_else(|| "unknown".to_string()),
                     price: parse_num(product.price.as_deref()),
                     volume_24h: parse_num(product.volume_24h.as_deref()),
                     live_tradable,
@@ -446,9 +467,17 @@ impl CoinbaseWorkstationRuntime {
         let candles = candles_res.unwrap_or_default();
 
         let strategy_cfg = self.strategy_cfg_for_product(&product_id);
-        let plugin_signal = plugin_signal_for_product(imports, &product_id, strategy_cfg.plugin_signal);
-        let (micro, momentum_score) = self.build_microstructure(&product_id, &book, &trades, &candles);
-        let strategy = self.build_strategy_vector(&product_id, &strategy_cfg, &micro, momentum_score, plugin_signal);
+        let plugin_signal =
+            plugin_signal_for_product(imports, &product_id, strategy_cfg.plugin_signal);
+        let (micro, momentum_score) =
+            self.build_microstructure(&product_id, &book, &trades, &candles);
+        let strategy = self.build_strategy_vector(
+            &product_id,
+            &strategy_cfg,
+            &micro,
+            momentum_score,
+            plugin_signal,
+        );
         let eligibility = self.build_eligibility(product, &strategy);
         let row = ScannerRow {
             product_id: ProductId::from(product_id.clone()),
@@ -507,7 +536,11 @@ impl CoinbaseWorkstationRuntime {
     ) -> (pt_core::MarketMicrostructureSnapshot, f64) {
         let bid = parse_num(book.bids.first().map(|row| row.price.as_str()));
         let ask = parse_num(book.asks.first().map(|row| row.price.as_str()));
-        let mid = if bid > 0.0 && ask > 0.0 { (bid + ask) / 2.0 } else { 0.0 };
+        let mid = if bid > 0.0 && ask > 0.0 {
+            (bid + ask) / 2.0
+        } else {
+            0.0
+        };
         let spread_bps = if mid > 0.0 {
             ((ask - bid) / mid) * 10_000.0
         } else {
@@ -813,7 +846,8 @@ impl CoinbaseWorkstationRuntime {
                                 limit_price,
                             );
                             if matches!(route, OrderRoute::Taker) {
-                                self.meta.write().taker_budget_used_usd += draft.quote_notional.max(0.0);
+                                self.meta.write().taker_budget_used_usd +=
+                                    draft.quote_notional.max(0.0);
                             }
                         }
                         Err(e) => self.reject_order(&draft.order_id, format!("submit failed: {e}")),
@@ -944,7 +978,10 @@ impl CoinbaseWorkstationRuntime {
             let now = Utc::now();
             orders.push(WorkstationOrder {
                 order_id: format!("auto-{}", now.timestamp_millis()),
-                client_order_id: Some(format!("auto-{}", now.timestamp_nanos_opt().unwrap_or_default())),
+                client_order_id: Some(format!(
+                    "auto-{}",
+                    now.timestamp_nanos_opt().unwrap_or_default()
+                )),
                 product_id: row.product_id.clone(),
                 instrument: row.instrument.clone(),
                 side: Some(side.clone()),
@@ -975,11 +1012,12 @@ impl CoinbaseWorkstationRuntime {
         let stale = rows
             .iter()
             .filter(|row| {
-                row.ts.map(|ts| {
-                    Utc::now().signed_duration_since(ts).num_milliseconds()
-                        > self.cfg.live_arming.auto_disarm_stale_data_ms as i64
-                })
-                .unwrap_or(true)
+                row.ts
+                    .map(|ts| {
+                        Utc::now().signed_duration_since(ts).num_milliseconds()
+                            > self.cfg.live_arming.auto_disarm_stale_data_ms as i64
+                    })
+                    .unwrap_or(true)
             })
             .count();
 
@@ -1039,11 +1077,12 @@ impl CoinbaseWorkstationRuntime {
         let stale_books = rows
             .iter()
             .filter(|row| {
-                row.ts.map(|ts| {
-                    Utc::now().signed_duration_since(ts).num_milliseconds()
-                        > self.cfg.live_arming.auto_disarm_stale_data_ms as i64
-                })
-                .unwrap_or(true)
+                row.ts
+                    .map(|ts| {
+                        Utc::now().signed_duration_since(ts).num_milliseconds()
+                            > self.cfg.live_arming.auto_disarm_stale_data_ms as i64
+                    })
+                    .unwrap_or(true)
             })
             .count();
         let mut risk = self.state.risk_state.write();
@@ -1121,7 +1160,10 @@ impl CoinbaseWorkstationRuntime {
         limit_price: Option<f64>,
     ) {
         let mut orders = self.state.coinbase.orders.write();
-        if let Some(order) = orders.iter_mut().find(|order| order.order_id == local_order_id) {
+        if let Some(order) = orders
+            .iter_mut()
+            .find(|order| order.order_id == local_order_id)
+        {
             order.order_id = remote_order_id.to_string();
             order.status = Some(status.clone());
             order.base_size = base_size;
@@ -1223,7 +1265,11 @@ fn trade_direction_score(trades: &[CoinbaseMarketTrade]) -> f64 {
 fn candle_stats(candles: &[CoinbaseCandle]) -> (f64, f64) {
     let closes = candles
         .iter()
-        .filter_map(|row| row.close.as_deref().and_then(|value| value.parse::<f64>().ok()))
+        .filter_map(|row| {
+            row.close
+                .as_deref()
+                .and_then(|value| value.parse::<f64>().ok())
+        })
         .collect::<Vec<_>>();
     if closes.len() < 3 {
         return (0.0, 0.0);
@@ -1273,17 +1319,18 @@ fn plugin_signal_for_product(
 ) -> f64 {
     let imported_bias = imports
         .iter()
-        .filter(|summary| summary.best_variants.iter().any(|row| row.starts_with(product_id)))
+        .filter(|summary| {
+            summary
+                .best_variants
+                .iter()
+                .any(|row| row.starts_with(product_id))
+        })
         .count() as f64
         * 0.1;
     (base_signal + imported_bias).clamp(-1.0, 1.0)
 }
 
-fn derived_limit_price_from_row(
-    row: &ScannerRow,
-    side: &Side,
-    cfg: &AppConfig,
-) -> Option<f64> {
+fn derived_limit_price_from_row(row: &ScannerRow, side: &Side, cfg: &AppConfig) -> Option<f64> {
     if row.best_bid <= 0.0 || row.best_ask <= 0.0 {
         return None;
     }
@@ -1308,7 +1355,11 @@ fn remote_status(raw: Option<&str>) -> WorkstationOrderStatus {
 
 fn execution_from_order(order: &WorkstationOrder, status: ExecutionStatus) -> ExecutionReport {
     ExecutionReport {
-        venue: if order.live { Venue::Coinbase } else { Venue::Sim },
+        venue: if order.live {
+            Venue::Coinbase
+        } else {
+            Venue::Sim
+        },
         order_id: order.order_id.clone(),
         market_id: Some(order.product_id.as_str().to_string()),
         status,

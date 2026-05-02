@@ -264,7 +264,10 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/live/arm", post(post_live_arm))
         .route("/api/v1/live/disarm", post(post_live_disarm))
         .route("/api/v1/orders/:order_id/cancel", post(post_cancel_order))
-        .route("/api/v1/strategy-lab/import", post(post_strategy_lab_import))
+        .route(
+            "/api/v1/strategy-lab/import",
+            post(post_strategy_lab_import),
+        )
         .with_state(state)
 }
 
@@ -432,7 +435,12 @@ async fn get_product_detail(
     State(state): State<DashboardState>,
     Path(product_id): Path<String>,
 ) -> Result<Json<ProductDetailResponse>, StatusCode> {
-    let existing_detail = state.coinbase.product_details.read().get(&product_id).cloned();
+    let existing_detail = state
+        .coinbase
+        .product_details
+        .read()
+        .get(&product_id)
+        .cloned();
     let current_orders = state
         .coinbase
         .orders
@@ -581,7 +589,10 @@ async fn post_live_disarm(
     let mut arm = state.coinbase.live_arm.write();
     arm.armed = false;
     arm.mode = Some(mode.clone());
-    arm.reason = payload.reason.clone().or_else(|| Some("manual disarm".to_string()));
+    arm.reason = payload
+        .reason
+        .clone()
+        .or_else(|| Some("manual disarm".to_string()));
     arm.updated_at = Some(now);
     *state.kill_switch.write() = KillSwitchState::ManualHalt;
 
@@ -620,7 +631,10 @@ async fn post_order(
     };
     let order = WorkstationOrder {
         order_id: format!("manual-{}", now.timestamp_millis()),
-        client_order_id: Some(format!("manual-{}", now.timestamp_nanos_opt().unwrap_or_default())),
+        client_order_id: Some(format!(
+            "manual-{}",
+            now.timestamp_nanos_opt().unwrap_or_default()
+        )),
         product_id: ProductId::from(payload.product_id.clone()),
         instrument: None,
         side: Some(side),
@@ -691,8 +705,8 @@ async fn post_strategy_lab_import(
 
 fn summarize_strategy_lab_import(path: &str) -> Result<StrategyLabImportSummary, String> {
     let raw = fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
-    let payload: Value =
-        serde_json::from_str(&raw).map_err(|e| format!("failed to parse strategy-lab JSON: {e}"))?;
+    let payload: Value = serde_json::from_str(&raw)
+        .map_err(|e| format!("failed to parse strategy-lab JSON: {e}"))?;
     let markets = payload
         .get("markets")
         .and_then(Value::as_object)
@@ -874,10 +888,9 @@ fn content_type_for(path: &str) -> &'static str {
 
 fn bytes_response(bytes: Vec<u8>, content_type: &'static str) -> Response {
     let mut response = bytes.into_response();
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static(content_type),
-    );
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
     response
 }
 

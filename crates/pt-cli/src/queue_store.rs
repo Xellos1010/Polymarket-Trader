@@ -34,10 +34,7 @@ impl ApprovalQueueStore {
         match queue_status_label(order.status.as_ref()) {
             Some(status) => {
                 let payload = serde_json::to_string(order).map_err(|e| e.to_string())?;
-                let created_at_ms = order
-                    .created_at
-                    .unwrap_or_else(Utc::now)
-                    .timestamp_millis();
+                let created_at_ms = order.created_at.unwrap_or_else(Utc::now).timestamp_millis();
                 let updated_at_ms = order
                     .updated_at
                     .or(order.created_at)
@@ -59,7 +56,13 @@ impl ApprovalQueueStore {
                             payload = excluded.payload,
                             updated_at_ms = excluded.updated_at_ms
                         ",
-                        params![order.order_id, status, payload, created_at_ms, updated_at_ms],
+                        params![
+                            order.order_id,
+                            status,
+                            payload,
+                            created_at_ms,
+                            updated_at_ms
+                        ],
                     )
                     .map_err(|e| e.to_string())?;
             }
@@ -272,7 +275,9 @@ mod tests {
         let store = ApprovalQueueStore::open(path.to_str().expect("path")).expect("open store");
 
         let initial = sample_order("draft-local", WorkstationOrderStatus::Draft);
-        store.sync_order(&initial).expect("persist initial draft order");
+        store
+            .sync_order(&initial)
+            .expect("persist initial draft order");
         assert_eq!(store.load_orders().expect("load orders").len(), 1);
 
         let mut submitted = initial.clone();
