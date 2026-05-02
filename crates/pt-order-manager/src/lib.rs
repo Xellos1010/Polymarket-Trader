@@ -36,6 +36,7 @@ impl OrderManager {
         Self { cfg }
     }
 
+    #[allow(clippy::too_many_arguments)] // Stable operator-facing API; grouping would churn call sites.
     pub fn decide(
         &self,
         existing: Option<&RestingOrder>,

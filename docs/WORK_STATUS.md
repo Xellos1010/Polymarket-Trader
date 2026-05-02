@@ -18,6 +18,12 @@ Grounded state as of May 2, 2026:
   - `cargo test --workspace` passed
   - `cd crates/pt-dashboard/frontend && npm run build` passed
   - `cd crates/pt-dashboard/frontend && npm test` passed after commit `95d913d`
+- Agent-reran validation on branch `codex/roadmap-workorder-closeout-packet` before PR `#62` merge (May 2, 2026):
+  - `cargo fmt --all -- --check` passed
+  - `cargo check --workspace` passed
+  - `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed after small hygiene fixes landed on the same branch
+  - `cargo test --workspace` passed
+  - `cd crates/pt-dashboard/frontend && npm test` and `npm run build` passed
 - The next active implementation lane is issue `#53`: strengthen strategy-lab handoff into Coinbase paper runtime.
 - Tracks D-F have been split into reviewable follow-up issues:
   - `#58` Rust-native strategy IR and adapter layer
@@ -27,9 +33,9 @@ Grounded state as of May 2, 2026:
 
 ## Audit stamp
 - last audited on: May 2, 2026
-- audit source: GitHub issue state, merged PR `#57`, operator-reported validation evidence, and the Coinbase strategy AI roadmap packet supplied in the current planning context
-- validation evidence state: operator-reported local validation, not rerun from this environment
-- truth standard: status files may record operator validation evidence, but must not imply this agent reran local commands unless explicitly stated
+- audit source: GitHub issue state, merged PR `#57`, operator-reported validation evidence, agent-reran PR `#62` branch validation (including Clippy), and the Coinbase strategy AI roadmap packet supplied in the current planning context
+- validation evidence state: operator-reported workstation validation plus agent-reran full ladder on the PR `#62` branch before merge
+- truth standard: status files may record operator validation evidence, and may record agent reruns when explicitly stated in this section
 
 ## Automation mirror
 - `docs/WORK_STATUS.json` is the machine-readable mirror of this file.

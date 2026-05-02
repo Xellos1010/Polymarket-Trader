@@ -1,5 +1,8 @@
 use crate::types::{Candle, MaType};
 
+/// Three aligned optional indicator series (e.g. MACD line/signal/hist or ADX components).
+type OptionSeriesTriple = (Vec<Option<f64>>, Vec<Option<f64>>, Vec<Option<f64>>);
+
 pub fn closes(candles: &[Candle]) -> Vec<f64> {
     candles.iter().map(|c| c.close).collect()
 }
@@ -71,14 +74,14 @@ pub fn wma(values: &[f64], len: usize) -> Vec<Option<f64>> {
     if values.len() < len {
         return out;
     }
-    for i in (len - 1)..values.len() {
+    for (i, out_slot) in out.iter_mut().enumerate().skip(len - 1) {
         let mut acc = 0.0;
         for w in 0..len {
             let idx = i + 1 - len + w;
             let weight = (w + 1) as f64;
             acc += values[idx] * weight;
         }
-        out[i] = Some(acc / denom);
+        *out_slot = Some(acc / denom);
     }
     out
 }
@@ -255,12 +258,7 @@ pub fn rsi(values: &[f64], len: usize) -> Vec<Option<f64>> {
     out
 }
 
-pub fn macd(
-    values: &[f64],
-    fast: usize,
-    slow: usize,
-    signal: usize,
-) -> (Vec<Option<f64>>, Vec<Option<f64>>, Vec<Option<f64>>) {
+pub fn macd(values: &[f64], fast: usize, slow: usize, signal: usize) -> OptionSeriesTriple {
     let fast_ema = ema(values, fast.max(1));
     let slow_ema = ema(values, slow.max(1));
     let mut line = vec![None; values.len()];
@@ -304,10 +302,7 @@ pub fn atr(candles: &[Candle], len: usize) -> Vec<Option<f64>> {
     rma(&tr, len)
 }
 
-pub fn adx(
-    candles: &[Candle],
-    len: usize,
-) -> (Vec<Option<f64>>, Vec<Option<f64>>, Vec<Option<f64>>) {
+pub fn adx(candles: &[Candle], len: usize) -> OptionSeriesTriple {
     let n = candles.len();
     if n == 0 {
         return (vec![], vec![], vec![]);

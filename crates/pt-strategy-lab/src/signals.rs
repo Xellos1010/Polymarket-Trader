@@ -320,9 +320,7 @@ pub fn build_decisions(candles: &[Candle], profile: &StrategyProfile) -> Vec<Fus
         let regime = regime_from_votes(&votes);
 
         for s in &signals {
-            if score > 0.0 && s.bias > 0.1 {
-                aligned += 1;
-            } else if score < 0.0 && s.bias < -0.1 {
+            if (score > 0.0 && s.bias > 0.1) || (score < 0.0 && s.bias < -0.1) {
                 aligned += 1;
             }
         }

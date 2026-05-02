@@ -509,7 +509,7 @@ impl CoinbaseAdvancedTradeClient {
     ) -> PtResult<CoinbasePriceBook> {
         let response = self
             .get_json::<CoinbaseProductBookResponse>(
-                &format!("/market/product_book"),
+                "/market/product_book",
                 &[
                     ("product_id", product_id.to_string()),
                     ("limit", limit.max(1).to_string()),
