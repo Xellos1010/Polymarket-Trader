@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Coinbase Workstation Operator API
   version: 0.2.0
-  description: Legacy operator endpoints plus Coinbase-native workstation APIs exposed by pt-dashboard.
+  description: Slim dashboard and Coinbase workstation APIs exposed by pt-dashboard.
 servers:
   - url: http://127.0.0.1:8080
 paths:
