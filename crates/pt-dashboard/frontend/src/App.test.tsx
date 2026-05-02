@@ -128,6 +128,99 @@ const productDetail = {
   imports: [{ path: "data/strategy_lab/dashboard-btc.json", best_variants: ["microstructure_v2"] }],
 };
 
+const listingRows = [
+  {
+    product_id: "BTC-USD",
+    asset_symbol: "BTC",
+    base_currency: "BTC",
+    quote_currency: "USD",
+    stage: "monitor",
+    headline: "Liquidity stable and strategy aligned.",
+    composite_score: 0.79,
+    liquidity_score: 0.66,
+    sentiment_score: 0.52,
+    unlock_risk_score: 0.2,
+    route_ready: true,
+    live_tradable: true,
+    scan_only: false,
+    priority_fill: true,
+    tags: ["coinbase", "momentum"],
+  },
+];
+
+const listingDetail = {
+  product: {
+    product_id: "BTC-USD",
+    base_currency: "BTC",
+    quote_currency: "USD",
+    status: "online",
+    live_tradable: true,
+    scan_only: false,
+  },
+  stage: "monitor",
+  headline: "Liquidity stable and strategy aligned.",
+  summary: "Listing Radar is aggregating venue state, strategy evidence, and route readiness.",
+  composite_score: 0.79,
+  liquidity_score: 0.66,
+  sentiment_score: 0.52,
+  unlock_risk_score: 0.2,
+  route_ready: true,
+  priority_fill: true,
+  catalysts: ["Wallet momentum improving"],
+  insights: [
+    {
+      provider: "signal-fusion",
+      category: "microstructure",
+      summary: "Order-flow tilt remains constructive.",
+      freshness_label: "fresh",
+      status: "ok",
+    },
+  ],
+  routes: [
+    {
+      venue: "coinbase",
+      route_type: "maker",
+      readiness: "ready",
+      tradable: true,
+      notes: "Spread capture lane available.",
+    },
+  ],
+  eligibility: productDetail.eligibility,
+  imports: productDetail.imports,
+};
+
+const riskOverview = {
+  killswitch: "running",
+  daily_pnl: 12.4,
+  open_notional: 25,
+  unhedged_delta: 0,
+  blocked_markets: 1,
+  live_eligible_markets: 0,
+  queued_notional: 25,
+  live_orders: 0,
+  taker_orders: 0,
+  policy_breaches: ["daily loss limit near threshold"],
+};
+
+const agentConsole = {
+  autonomy_tier: "recommend_only",
+  live_arm: strategiesResponse.live_arm,
+  next_action: "Review BTC-USD chart and import lineage.",
+  blocked_markets: 1,
+  imports_loaded: 1,
+  recommended_products: ["BTC-USD"],
+  approvals: [
+    {
+      id: "approval-1",
+      title: "Hold for policy review",
+      description: "BTC-USD remains paper only while the daily loss threshold is close.",
+      severity: "medium",
+      status: "open",
+      product_id: "BTC-USD",
+    },
+  ],
+};
+
 function installFetchMock(overrides?: Record<string, Response>) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -155,8 +248,20 @@ function installFetchMock(overrides?: Record<string, Response>) {
     if (url === "/api/v1/orders") {
       return Promise.resolve(jsonResponse(ordersResponse));
     }
+    if (url === "/api/v1/listings") {
+      return Promise.resolve(jsonResponse(listingRows));
+    }
+    if (url === "/api/v1/risk/overview") {
+      return Promise.resolve(jsonResponse(riskOverview));
+    }
+    if (url === "/api/v1/agent/console") {
+      return Promise.resolve(jsonResponse(agentConsole));
+    }
     if (url === "/api/v1/products/BTC-USD") {
       return Promise.resolve(jsonResponse(productDetail));
+    }
+    if (url === "/api/v1/listings/BTC-USD") {
+      return Promise.resolve(jsonResponse(listingDetail));
     }
     return Promise.reject(new Error(`unexpected fetch: ${url}`));
   });
@@ -171,16 +276,17 @@ afterEach(() => {
 });
 
 describe("App", () => {
-  it("renders the current workstation surface from fixture data", async () => {
+  it("renders the chart-first workstation surface from fixture data", async () => {
     installFetchMock();
 
     render(<App />);
 
-    expect(await screen.findByText("Scanner-first entry and exit control.")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Selected Market" })).toBeInTheDocument();
-    expect((await screen.findAllByText("BTC-USD")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "Selected product review surface" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Paper-state lineage and guardrails" })).toBeInTheDocument();
     expect(screen.getByText("daily loss limit near threshold")).toBeInTheDocument();
-    expect(screen.getByText("data/strategy_lab/dashboard-btc.json")).toBeInTheDocument();
+    expect(screen.getAllByText("data/strategy_lab/dashboard-btc.json").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByLabelText("Selected product price chart")).toBeInTheDocument();
   });
 
   it("submits a manual order against the current API route", async () => {
@@ -189,6 +295,7 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Selected Market" });
+    await screen.findByPlaceholderText("Quote notional");
     fireEvent.change(screen.getByPlaceholderText("Quote notional"), {
       target: { value: "40" },
     });

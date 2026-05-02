@@ -51,7 +51,13 @@ select {
 .workspace-stack,
 .candidate-grid,
 .provider-grid,
-.agent-grid {
+.agent-grid,
+.workstation-grid,
+.chart-shell,
+.chart-stage__meta,
+.contract-stack,
+.rail-stack,
+.rail-metrics {
   display: grid;
   gap: 20px;
 }
@@ -93,7 +99,9 @@ select {
 .signal-card,
 .panel,
 .mini-stat,
-.workspace-tab {
+.workspace-tab,
+.chart-stage,
+.strategy-rail {
   border: 1px solid var(--line);
   border-radius: 18px;
   background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
@@ -127,7 +135,11 @@ select {
 .candidate-card p,
 .provider-card p,
 .timeline-card p,
-.timeline-card small {
+.timeline-card small,
+.chart-stage__meta span,
+.rail-card span,
+.rail-metric span,
+.volume-caption span {
   color: var(--muted);
 }
 
@@ -213,20 +225,31 @@ select {
   grid-template-columns: 1.2fr 0.8fr;
 }
 
-.panel {
+.panel,
+.chart-stage,
+.strategy-rail {
   padding: 20px;
 }
 
-.panel-title {
+.panel-title,
+.chart-stage__header,
+.strategy-rail__header,
+.pane-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+}
+
+.panel-title {
   margin-bottom: 16px;
 }
 
 .panel-title h2,
-.spotlight-band h2 {
+.spotlight-band h2,
+.chart-stage__header h3,
+.strategy-rail__header h3,
+.pane-header strong {
   margin: 0;
   font-size: 1.06rem;
 }
@@ -234,7 +257,8 @@ select {
 .panel-title span,
 .muted,
 .scanner-meta span,
-.strategy-card small {
+.strategy-card small,
+.pane-header span {
   color: var(--muted);
 }
 
@@ -247,7 +271,8 @@ select {
 .strategy-list,
 .reason-stack,
 .import-timeline,
-.spotlight-stats {
+.spotlight-stats,
+.volume-bars {
   display: grid;
   gap: 12px;
 }
@@ -317,7 +342,8 @@ button.ghost {
 .candidate-card strong,
 .provider-card strong,
 .timeline-card strong,
-.agent-card strong {
+.agent-card strong,
+.rail-card strong {
   display: block;
 }
 
@@ -359,7 +385,8 @@ button.ghost {
 .metric-strip,
 .vector-grid,
 .mission-stats,
-.spotlight-stats {
+.spotlight-stats,
+.rail-metrics {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -375,7 +402,10 @@ button.ghost {
 .provider-card,
 .agent-card,
 .reason-card,
-.timeline-card {
+.timeline-card,
+.rail-card,
+.rail-metric,
+.chart-stage__meta div {
   border: 1px solid rgba(146, 169, 184, 0.12);
   border-radius: 14px;
   padding: 14px;
@@ -383,7 +413,9 @@ button.ghost {
 }
 
 .metric-strip strong,
-.vector-card strong {
+.vector-card strong,
+.chart-stage__meta strong,
+.rail-metric strong {
   display: block;
   margin-top: 6px;
   font-size: 1.14rem;
@@ -396,16 +428,6 @@ button.ghost {
 
 .ticket-row {
   grid-template-columns: repeat(3, minmax(0, 1fr)) 1.2fr auto;
-}
-
-.eligibility h3 {
-  margin: 0 0 10px;
-}
-
-.eligibility ul {
-  margin: 0;
-  padding-left: 18px;
-  color: var(--muted);
 }
 
 .table-shell {
@@ -488,7 +510,10 @@ th {
 .provider-card p,
 .agent-card p,
 .reason-card p,
-.timeline-card p {
+.timeline-card p,
+.rail-card p,
+.volume-caption,
+.volume-caption span {
   margin: 10px 0 0;
   line-height: 1.55;
 }
@@ -500,6 +525,136 @@ th {
 .import-timeline {
   max-height: 520px;
   overflow: auto;
+}
+
+.workstation-grid {
+  grid-template-columns: 1.45fr 0.9fr;
+  align-items: start;
+}
+
+.chart-stage__meta {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.contract-stack {
+  grid-auto-flow: column;
+  gap: 10px;
+}
+
+.contract-chip {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(146, 169, 184, 0.16);
+}
+
+.contract-chip--current {
+  color: var(--accent-2);
+  background: rgba(142, 245, 191, 0.12);
+}
+
+.contract-chip--fixture {
+  color: var(--accent-3);
+  background: rgba(255, 203, 143, 0.12);
+}
+
+.chart-shell {
+  grid-template-columns: 1fr;
+}
+
+.price-pane,
+.volume-pane {
+  border: 1px solid rgba(146, 169, 184, 0.12);
+  border-radius: 16px;
+  padding: 16px;
+  background: rgba(6, 16, 25, 0.62);
+}
+
+.price-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-backdrop {
+  fill: rgba(8, 19, 29, 0.92);
+}
+
+.grid-line {
+  stroke: rgba(136, 211, 255, 0.1);
+  stroke-width: 1;
+}
+
+.wick-line {
+  stroke: rgba(211, 236, 247, 0.8);
+  stroke-width: 2;
+}
+
+.candle {
+  stroke-width: 1;
+}
+
+.candle--up {
+  fill: rgba(142, 245, 191, 0.8);
+  stroke: rgba(142, 245, 191, 1);
+}
+
+.candle--down {
+  fill: rgba(255, 178, 127, 0.82);
+  stroke: rgba(255, 178, 127, 1);
+}
+
+.close-line {
+  fill: none;
+  stroke: rgba(119, 230, 255, 0.75);
+  stroke-width: 2.5;
+}
+
+.marker-dot {
+  fill: rgba(119, 230, 255, 1);
+}
+
+.marker-label {
+  fill: rgba(239, 247, 251, 0.92);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.volume-bars {
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  align-items: end;
+  height: 120px;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.volume-bar-wrap {
+  display: flex;
+  align-items: end;
+  min-height: 100%;
+}
+
+.volume-bar {
+  width: 100%;
+  border-radius: 999px 999px 6px 6px;
+  background: linear-gradient(180deg, rgba(119, 230, 255, 0.86), rgba(142, 245, 191, 0.34));
+}
+
+.rail-card ul {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.rail-card--guardrail {
+  border-color: rgba(255, 178, 127, 0.2);
+}
+
+.rail-card--contract {
+  border-style: dashed;
 }
 
 .error-banner {
@@ -516,7 +671,9 @@ th {
   .workspace-grid,
   .workspace-grid.tertiary,
   .bottom-grid,
-  .spotlight-band {
+  .spotlight-band,
+  .workstation-grid,
+  .chart-stage__meta {
     grid-template-columns: 1fr;
   }
 
@@ -526,7 +683,8 @@ th {
   .provider-grid,
   .agent-grid,
   .mission-stats,
-  .spotlight-stats {
+  .spotlight-stats,
+  .rail-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -544,7 +702,17 @@ th {
   .provider-grid,
   .agent-grid,
   .mission-stats,
-  .spotlight-stats {
+  .spotlight-stats,
+  .rail-metrics,
+  .contract-stack {
     grid-template-columns: 1fr;
+  }
+
+  .contract-stack {
+    grid-auto-flow: row;
+  }
+
+  .volume-bars {
+    gap: 6px;
   }
 }
