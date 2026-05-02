@@ -1,0 +1,9 @@
+# Default owners
+* @evanmccall
+
+# Domain owners
+/crates/pt-engine/ @evanmccall
+/crates/pt-polymarket/ @evanmccall
+/crates/pt-coinbase/ @evanmccall
+/docs/ @evanmccall
+/tools/ @evanmccall

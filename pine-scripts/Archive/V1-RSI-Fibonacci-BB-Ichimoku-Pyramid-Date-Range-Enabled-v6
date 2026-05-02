@@ -1,0 +1,307 @@
+ //@version=6
+
+// Author:          @Virtu-Tea - EvanMcCall
+strategy(title = 'V1-RSI-Fibonacci-BB-Pyramid-Date-Range-Enabled-v6', shorttitle = 'V1-RSI-FibonacciBB-Pyramid-v6', overlay = true, precision = 8, max_bars_back = 200, pyramiding = 1, initial_capital = 100, default_qty_type = strategy.percent_of_equity, default_qty_value = 100, commission_type = strategy.commission.percent, commission_value = 0.05)
+
+// Toggles for plots
+showMA = input.bool(true, title = 'Show Moving Average')
+showRSI = input.bool(true, title = 'Show RSI')
+showFibBB = input.bool(true, title = 'Show Fibonacci Bollinger Bands')
+showIchimoku = input.bool(true, title = 'Show Ichimoku')
+
+//Plotting 
+// Create an input to select the type of moving average
+maType = input.string('SMA', title = 'Select Moving Average for Bull/Bear Market', options = ['EMA', 'SMA', 'WMA', 'HMA', 'DEMA', 'TEMA', 'VWMA', 'RMA', 'ZLEMA'])
+
+// Function to calculate DEMA
+dema(src, length) =>
+    ema1 = ta.ema(src, length)
+    ema2 = ta.ema(ema1, length)
+    2 * ema1 - ema2
+
+// Function to calculate TEMA
+tema(src, length) =>
+    ema1 = ta.ema(src, length)
+    ema2 = ta.ema(ema1, length)
+    ema3 = ta.ema(ema2, length)
+    3 * (ema1 - ema2) + ema3
+
+// Function to calculate ZLEMA
+zlema(src, length) =>
+    lag = (length - 1) / 2
+    ta.ema(2 * src - ta.valuewhen(not na(src[lag]), src[lag], 0), length)
+
+// Calculate the selected moving average
+var float ma = na
+if maType == 'EMA'
+    ma := ta.ema(close, 200)
+    ma
+if maType == 'SMA'
+    ma := ta.sma(close, 200)
+    ma
+if maType == 'WMA'
+    ma := ta.wma(close, 200)
+    ma
+if maType == 'HMA'
+    ma := ta.hma(close, 200)
+    ma
+if maType == 'DEMA'
+    ma := dema(close, 200)
+    ma
+if maType == 'TEMA'
+    ma := tema(close, 200)
+    ma
+if maType == 'VWMA'
+    ma := ta.vwma(close, 200)
+    ma
+if maType == 'RMA'
+    ma := ta.rma(close, 200)
+    ma
+if maType == 'ZLEMA'
+    ma := zlema(close, 200)
+    ma
+
+// Determine bull and bear markets
+isBullMarket = close > ma
+isBearMarket = close < ma
+
+// Plot Bull and Bear Markets
+bgcolor(isBullMarket ? color.new(color.green, 80) : na, title = 'Bull Market Background')
+bgcolor(isBearMarket ? color.new(color.red, 90) : na, title = 'Bear Market Background')
+
+// Plot the selected moving average
+plot(ma, title = 'Selected Moving Average', color = color.blue, linewidth = 2)
+
+//Strategies
+
+// === INPUT RSI STRATEGY ===
+// Input for the overbought RSI level
+RSIOverBought = input.int(80, minval = 50) // This level may be used for a potential exit strategy conditional for short positions
+// Input for the oversold RSI level
+RSIOverSold = input.int(19, maxval = 50) // These levels are used as entry strategy indicators based on oversold conditions, and price may increase based on interest
+// Calculate the middle value dynamically
+RSIMiddle = (RSIOverBought + RSIOverSold) / 2
+// Input for the source of RSI calculation (typically close price)
+src_rsi = input(close)
+// Input for the length of RSI calculation
+len_rsi = input.int(10, minval = 1, title = 'RSI Length')
+// Calculate the upward changes in the source using the RMA (Relative Moving Average)
+up = ta.rma(math.max(ta.change(src_rsi), 0), len_rsi)
+// Calculate the downward changes in the source using the RMA (Relative Moving Average)
+down = ta.rma(-math.min(ta.change(src_rsi), 0), len_rsi)
+// Calculate the RSI (Relative Strength Index) based on the upward and downward changes
+// If 'down' is zero, set RSI to 100; if 'up' is zero, set RSI to 0; otherwise, calculate RSI using the formula
+rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - 100 / (1 + up / down)
+// Plot RSI
+plot(rsi, title = 'RSI', color = color.blue, linewidth = 2)
+hline(RSIOverBought, 'Overbought', color = color.yellow)
+hline(RSIOverSold, 'Oversold', color = color.yellow)
+hline(RSIMiddle, 'Middle', color = color.yellow)
+period = 100
+
+//scale
+hh = ta.highest(high, period)
+ll = ta.lowest(low, period)
+scale = hh - ll
+// === RSI Trading Strategy ===
+//Long Buy Indicator
+rsi_long = rsi <= RSIOverSold ? 5 : na //Is RSI <= OverSold Inventory Limit to enter longBuy
+//Short Sell Indicator
+rsi_short = rsi >= RSIOverBought ? 5 : na //Is RSI >= OverBought Inventory Limit to exitLong
+
+plotshape(series = rsi_long, title = 'Buy Signal RSI', location = location.belowbar, color = color.fuchsia, style = shape.labelup, text = 'Buy Signal RSI')
+plotshape(series = rsi_short, title = 'Sell Signal RSI', location = location.abovebar, color = color.orange, style = shape.labeldown, text = 'Sell Signal RSI')
+
+// Fibonacci Bollinger Bands Indicator
+// Input for the length of the Bollinger Bands calculation
+bbLength = input.int(200, minval = 1)
+
+// Input for the source of Bollinger Bands calculation (typically hlc3)
+bb_src = input(hlc3, title = 'Fibonacci BB Source')
+
+// Input for the multiplier used to calculate the Bollinger Bands deviation
+mult = input.float(3.0, minval = 0.001, maxval = 50)
+
+// Calculate the basis of the Bollinger Bands using Volume Weighted Moving Average (VWMA)
+basis = ta.vwma(bb_src, bbLength)
+
+// Calculate the deviation of the Bollinger Bands based on the multiplier and standard deviation
+dev = mult * ta.stdev(bb_src, bbLength)
+
+// Calculate the upper Bollinger Bands based on Fibonacci levels and the deviation
+upper_1 = basis + 0.236 * dev
+upper_2 = basis + 0.382 * dev
+upper_3 = basis + 0.5 * dev
+upper_4 = basis + 0.618 * dev
+upper_5 = basis + 0.764 * dev
+upper_6 = basis + 1 * dev
+
+// Calculate the lower Bollinger Bands based on Fibonacci levels and the deviation
+lower_1 = basis - 0.236 * dev
+lower_2 = basis - 0.382 * dev
+lower_3 = basis - 0.5 * dev
+lower_4 = basis - 0.618 * dev
+lower_5 = basis - 0.764 * dev
+lower_6 = basis - 1 * dev
+
+
+// Plot Fibinacchi Bollinger Bands
+plot(basis, color = color.fuchsia, linewidth = 2)
+p1_fib_bb = plot(upper_1, color = color.white, linewidth = 1, title = '0.236')
+p2_fib_bb = plot(upper_2, color = color.white, linewidth = 1, title = '0.382')
+p3_fib_bb = plot(upper_3, color = color.white, linewidth = 1, title = '0.5')
+p4_fib_bb = plot(upper_4, color = color.white, linewidth = 1, title = '0.618')
+p5_fib_bb = plot(upper_5, color = color.white, linewidth = 1, title = '0.764')
+p6_fib_bb = plot(upper_6, color = color.red, linewidth = 2, title = '1')
+p13_fib_bb = plot(lower_1, color = color.white, linewidth = 1, title = '0.236')
+p14_fib_bb = plot(lower_2, color = color.white, linewidth = 1, title = '0.382')
+p15_fib_bb = plot(lower_3, color = color.white, linewidth = 1, title = '0.5')
+p16_fib_bb = plot(lower_4, color = color.white, linewidth = 1, title = '0.618')
+p17_fib_bb = plot(lower_5, color = color.white, linewidth = 1, title = '0.764')
+p18_fib_bb = plot(lower_6, color = color.green, linewidth = 2, title = '1')
+
+
+// Buy signal on BB lower crossover
+bbLowerCrossOver = ta.crossover(close, lower_6)
+
+bbLongEntryCondition = close < lower_6 and isBullMarket
+bbShortEntryCondition = close > upper_6
+
+bbLongEntryCondition_6th_Cross = ta.crossunder(close, lower_6)
+
+plotshape(series = bbLongEntryCondition, title = 'Buy Signal Fib BB', location = location.belowbar, color = color.green, style = shape.labelup, text = 'Buy Signal Fib BB')
+plotshape(series = bbShortEntryCondition, title = 'Sell Signal Fib BB', location = location.abovebar, color = color.red, style = shape.labeldown, text = 'Sell Signal Fib BB')
+// plotshape(series=bbLowerCrossOver, title="Buy Signal Fib BB Cross Lower", location=location.belowbar, color=color.yellow, style=shape.labeldown, text="Buy Signal Fib BB Cross Over")
+plotshape(series = bbLongEntryCondition_6th_Cross, title = 'Buy Signal BB Lower Cross Under', location = location.belowbar, color = color.yellow, style = shape.labeldown, text = 'Buy Signal BB Lower Cross')
+
+// Ichimoku Strategy
+// Input Parameters
+conversionPeriods = input.int(9, minval = 1, title = 'Conversion Line Length')
+basePeriods = input.int(26, minval = 1, title = 'Base Line Length')
+laggingSpan2Periods = input.int(52, minval = 1, title = 'Leading Span B Length')
+displacement = input.int(26, minval = 1, title = 'Lagging Span')
+
+// Donchian Channel Calculation
+donchian(len) =>
+    math.avg(ta.lowest(len), ta.highest(len))
+conversionLine = donchian(conversionPeriods)
+baseLine = donchian(basePeriods)
+leadLine1 = math.avg(conversionLine, baseLine)
+leadLine2 = donchian(laggingSpan2Periods)
+laggingSpan = close[displacement - 1]
+
+// Plotting with Vibrant Colors
+plot(conversionLine, color = color.rgb(255, 0, 0), title = 'Conversion Line') // Bright Red
+plot(baseLine, color = color.rgb(0, 0, 255), title = 'Base Line') // Bright Blue
+plot(laggingSpan, color = color.rgb(255, 165, 0), title = 'Lagging Span') // Bright Orange
+p1_ichi = plot(leadLine1, offset = displacement - 1, color = color.rgb(75, 0, 130), title = 'Leading Span A') // Bright Indigo
+p2_ichi = plot(leadLine2, offset = displacement - 1, color = color.rgb(0, 255, 0), title = 'Leading Span B') // Bright Green
+
+// Cloud fill with contrasting colors
+fill(p1_ichi, p2_ichi, color = leadLine1 > leadLine2 ? color.rgb(255, 215, 0, 90) : color.rgb(128, 0, 128, 90)) // Bright Yellow for positive, Bright Purple for negative
+
+// // Buy Sell Indicators Ichmoku
+// // Buy Signal
+// buySignal_ichi = close > leadLine1 and close > leadLine2 and conversionLine > baseLine and laggingSpan > close
+
+// // Sell Signal
+// sellSignal_ichi = close < leadLine1 and close < leadLine2 and conversionLine < baseLine and laggingSpan < close
+
+
+// plotshape(series=buySignal_ichi, title="Buy Signal ichimoku", location=location.belowbar, color=color.green, style=shape.labelup, text="Buy Signal ichimoku")
+// plotshape(series=sellSignal_ichi, title="Sell Signal ichimoku", location=location.abovebar, color=color.red, style=shape.labeldown, text="Sell Signal ichimoku")
+//based on https://www.tradingview.com/script/7NNJ0sXB-Pyramiding-Entries-On-Early-Trends-by-Coinrule/
+//=== PROFIT EXIT STRATEGY
+rsi_LongProfitTarget_Percent = input.float(6.0) //set take profit
+rsi_LongProfitTicks = close * (rsi_LongProfitTarget_Percent / 100) / syminfo.mintick
+bb_LongProfitTarget_Percent = input.float(13.0) //set take profit
+bb_LongProfitTicks = close * (bb_LongProfitTarget_Percent / 100) / syminfo.mintick
+//===LOSS EXIT STRATEGY 
+rsi_LongLossTarget_Percent = input.float(3.0) //set Stop Loss Percentage
+rsi_LongLossTicks = close * (rsi_LongLossTarget_Percent / 100) / syminfo.mintick //Ticks in the market to base losing percent period
+bb_LongLossTarget_Percent = input.float(2.0) //set Stop Loss Percentage
+bb_LongLossTicks = close * (bb_LongLossTarget_Percent / 100) / syminfo.mintick //Ticks in the market to base losing percent period
+// === Date Range Selection Utility +++
+// Make input options that configure backtest date range
+startDate = input.int(title = 'Start Date', defval = 1, minval = 1, maxval = 31)
+startMonth = input.int(title = 'Start Month', defval = 5, minval = 1, maxval = 12)
+startYear = input.int(title = 'End Year', defval = 2024, minval = 2021, maxval = 2025)
+
+endDate = input.int(title = 'End Date', defval = 6, minval = 1, maxval = 31)
+endMonth = input.int(title = 'End Month', defval = 9, minval = 1, maxval = 12)
+endYear = input.int(title = 'End Year', defval = 2024, minval = 2021, maxval = 2025)
+
+// STEP 2:
+// Look if the close time of the current bar
+// falls inside the date range
+inDateRange = time >= timestamp(syminfo.timezone, startYear, startMonth, startDate, 0, 0) and time < timestamp(syminfo.timezone, endYear, endMonth, endDate, 0, 0)
+
+// // Plot labels for Bull and Bear Markets
+// if (isBullMarket and not na(isBullMarket[1]))
+//     label.new(x=bar_index, y=high, text="Bull Market", color=color.green, textcolor=color.white, style=label.style_label_down, size=size.small)
+// if (isBearMarket and not na(isBearMarket[1]))
+//     label.new(x=bar_index, y=low, text="Bear Market", color=color.red, textcolor=color.white, style=label.style_label_up, size=size.small)
+
+// STEP 3:
+// Submit entry orders, but only when bar is inside date range
+// Priority is given to indicators but may there can be some experiments run where you close a strategy or hold a strategy based on other indications.
+//Order Placing
+if inDateRange
+    if bbLongEntryCondition and isBullMarket
+        strategy.entry('bb_LongEntry', strategy.long)
+    if bbLongEntryCondition_6th_Cross and isBearMarket
+        strategy.entry('bb_LongEntry', strategy.long)
+    // if(bbLongEntryCondition_5th)
+    //     strategy.entry("bb_LongEntry_5th", strategy.long)
+    if bbShortEntryCondition
+        strategy.close('bb_LongEntry')
+    // strategy.close("bb_LongEntry_5th")
+    if bool(rsi_long)
+        alert('Long Buy Signal RSI')
+        alert('{"botId":"230050","action":"BUY"}')
+        strategy.entry('rsi_LongEntry', strategy.long, alert_message = '{"botId":"230050","action":"BUY"}', comment = 'RSI Buy Signal. Open Entry Order')
+    if bool(rsi_short)
+        alert('Short Sell Signal RSI')
+        strategy.close(id = 'rsi_LongEntry', alert_message = '{"botId":"230050","action":"SELL"}', comment = 'RSI Short Signaled. Close Entry Order.')
+        strategy.close('bb_LongEntry')
+
+// currency_tick_size = syminfo.pointvalue * syminfo.mintick
+// rsi_LongProfitsTickCurrencySize = currency_tick_size * rsi_LongProfitTicks
+// rsi_LongLossTickCurrencySize = currency_tick_size * rsi_LongLossTicks
+
+if inDateRange
+    if strategy.position_size > 0
+        // TODO in the future is implement a hard exit strategy
+        //if strategy.netprofit >= rsi_LongProfitsTickCurrencySize 
+        //    alert("Profit Target Reached - exiting Long RSI")
+        //    alert("{\"botId\":\"230048\",\"action\":\"SELL\"}")//,\"amount\":"+tostring(strategy.position_size)+"}")
+        //if strategy.netprofit <= rsi_LongLossTickCurrencySize 
+        //    alert("Profit Loss Reached - exiting Long RSI")
+        //    alert("{\"botId\":\"230048\",\"action\":\"SELL\"}")//,\"amount\":"+tostring(strategy.position_size)+"}")
+        strategy.exit(id = 'rsi_LongExit', from_entry = 'rsi_LongEntry', profit = rsi_LongProfitTicks, loss = rsi_LongLossTicks, alert_message = '{"botId":"230050","action":"SELL"}', comment_profit = 'Profit Made RSI Strategy', comment_loss = 'Loss averted RSI Strategy')
+        strategy.exit(id = 'bb_LongExit', from_entry = 'bb_LongEntry', profit = bb_LongProfitTicks, loss = bb_LongLossTicks, alert_message = '{"botId":"230050","action":"SELL"}', comment_profit = 'Profit Made BB Strategy', comment_loss = 'Loss averted BB Strategy')
+
+// STEP 4:
+// Exit open market position when date range ends
+if not inDateRange
+    strategy.close_all()
+
+// === GUI PLOT DRAWS ===
+// === EQUITY PLOT ===
+// plot(series=strategy.equity, color=color.blue)
+// === RSI Band GUI ===
+// bandmx = hline(100)
+// bandmn = hline(0)
+
+//band1 = hline(RSIOverBought)
+//band0 = hline(RSIOverSold)
+//band50 = hline(50, color=color.black, linewidth=1)
+//fill(band1, band0, color=color.purple, transp=98)
+
+// === Add Alerts based on Indicator Buy Sell Loss Conditions ===
+//Quadency Buy Formatted Message 
+//action - BUY/SELL - action for  // Note - if your first action is SELL, an amount must be specified. // If buy amoutn not defined whole captiol is placed at position
+// price - To place a limit order, include the price parameter - 
+//**{"action": "BUY","price": 0.00002190,"amount": 10,"botId": "1234"}
+//alertcondition(RSIOverBought, title="RSI Sell Short Alert!", message="{\"botId\":\"1376\",\"action\":\"BUY\",\"amount\":"+tostring(strategy.position_size)+"}") // Entry RSI Alert Condition
+//alertcondition(RSIOverSold, title = "RSI Buy Long ALERT", message="{\"botId\":\"1376\",\"action\":\"SELL\",\"amount\":"+tostring(strategy.position_size)+"}") // Exit RSI Indicator Alert Condition

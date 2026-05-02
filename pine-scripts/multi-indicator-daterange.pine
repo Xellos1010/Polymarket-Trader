@@ -1,0 +1,385 @@
+//@version=6
+strategy(
+     title = "Crypto TA Pro - RSI + Fibonacci BB + Regime Risk v6",
+     shorttitle = "CTAPv6",
+     overlay = true,
+     precision = 8,
+     max_bars_back = 500,
+     pyramiding = 1,
+     initial_capital = 100,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 100,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.05,
+     slippage = 1,
+     margin_long = 100,
+     margin_short = 100
+)
+
+// -----------------------------------------------------------------------------
+//  Crypto TA Pro v6
+//  RSI + Fibonacci Bollinger Bands + MA/HTF regime filter + ATR/percent risk
+//  Notes:
+//  - Designed for standard candles. Avoid synthetic charts for realistic tests.
+//  - RSI is kept in the Data Window so it does not distort the price scale.
+//  - Entries use setup + confirmation instead of buying every oversold tick.
+// -----------------------------------------------------------------------------
+
+// === INPUT GROUPS ===
+const string G_EXEC   = "01. Execution"
+const string G_IND    = "02. Indicator Activation"
+const string G_REGIME = "03. Trend MA / Regime"
+const string G_RSI    = "04. RSI"
+const string G_BB     = "05. Fibonacci Bollinger Bands"
+const string G_ICHI   = "06. Ichimoku"
+const string G_RISK   = "07. Risk Management"
+const string G_VIS    = "08. Visuals"
+const string G_ALERT  = "09. Alerts"
+
+// === EXECUTION INPUTS ===
+tradeDirection = input.string("Long only", "Trade direction", options = ["Long only", "Long + Short"], group = G_EXEC)
+startTime      = input.time(1767225600000, "Backtest start", group = G_EXEC)   // 2026-01-01 00:00 UTC
+endTime        = input.time(1798761540000, "Backtest end", group = G_EXEC)     // 2026-12-31 23:59 UTC
+confirmedOnly  = input.bool(true, "Only act after confirmed bar close", group = G_EXEC)
+setupLookback  = input.int(5, "Setup lookback bars", minval = 1, maxval = 50, group = G_EXEC)
+entryMode      = input.string("RSI + BB setup", "Entry setup requirement", options = ["RSI + BB setup", "RSI or BB setup"], group = G_EXEC)
+confirmMode    = input.string("Either", "Entry confirmation", options = ["BB reclaim", "RSI reclaim", "Either", "Both"], group = G_EXEC)
+
+// === INDICATOR ACTIVATION ===
+enableRSI       = input.bool(true, "Enable RSI", group = G_IND)
+enableFibBB     = input.bool(false, "Enable Fibonacci Bollinger Bands", group = G_IND)
+enableTrendMA   = input.bool(false, "Enable trend MA / regime filter", group = G_IND)
+enableIchimoku  = input.bool(false, "Enable Ichimoku", group = G_IND)
+
+// === REGIME INPUTS ===
+maType   = input.string("EMA", "Trend MA type", options = ["EMA", "SMA", "WMA", "HMA", "DEMA", "TEMA", "VWMA", "RMA", "ZLEMA"], group = G_REGIME)
+trendLen = input.int(200, "Trend MA length", minval = 20, maxval = 1000, group = G_REGIME)
+trendFilter = input.string("Chart + HTF", "Regime filter", options = ["Off", "Chart MA", "Chart + HTF"], group = G_REGIME)
+htfTf = input.timeframe("240", "Higher timeframe", group = G_REGIME)
+useVolumeFilter = input.bool(true, "Require volume expansion", group = G_REGIME)
+volumeLen = input.int(20, "Volume SMA length", minval = 1, group = G_REGIME)
+volumeMult = input.float(0.80, "Min volume x SMA", minval = 0.0, step = 0.05, group = G_REGIME)
+useAtrFilter = input.bool(true, "Filter abnormal volatility", group = G_REGIME)
+minAtrPct = input.float(0.20, "Min ATR %", minval = 0.0, step = 0.05, group = G_REGIME)
+maxAtrPct = input.float(12.0, "Max ATR %", minval = 0.1, step = 0.25, group = G_REGIME)
+
+// === RSI INPUTS ===
+rsiSrc = input.source(close, "RSI source", group = G_RSI)
+rsiLen = input.int(10, "RSI length", minval = 2, maxval = 100, group = G_RSI)
+rsiOS = input.float(19.0, "Oversold", minval = 1, maxval = 50, step = 0.5, group = G_RSI)
+rsiOB = input.float(80.0, "Overbought", minval = 50, maxval = 99, step = 0.5, group = G_RSI)
+
+// === FIBONACCI BB INPUTS ===
+bbLen = input.int(200, "BB length", minval = 10, maxval = 1000, group = G_BB)
+bbSrc = input.source(hlc3, "BB source", group = G_BB)
+bbMult = input.float(3.0, "Deviation multiplier", minval = 0.1, maxval = 50, step = 0.1, group = G_BB)
+bbBasisType = input.string("VWMA", "BB basis type", options = ["EMA", "SMA", "WMA", "HMA", "DEMA", "TEMA", "VWMA", "RMA", "ZLEMA"], group = G_BB)
+
+// === ICHIMOKU INPUTS ===
+// Ichimoku activation is controlled from Indicator Activation.
+conversionPeriods = input.int(9, "Conversion line length", minval = 1, group = G_ICHI)
+basePeriods = input.int(26, "Base line length", minval = 1, group = G_ICHI)
+spanBPeriods = input.int(52, "Leading Span B length", minval = 1, group = G_ICHI)
+displacement = input.int(26, "Displacement", minval = 1, group = G_ICHI)
+
+// === RISK INPUTS ===
+riskModel = input.string("Tighter of % / ATR", "Stop model", options = ["Percent", "ATR", "Tighter of % / ATR", "Wider of % / ATR"], group = G_RISK)
+stopPct = input.float(3.0, "Stop loss %", minval = 0.1, step = 0.1, group = G_RISK)
+atrLen = input.int(14, "ATR length", minval = 1, group = G_RISK)
+atrStopMult = input.float(2.0, "ATR stop multiplier", minval = 0.1, step = 0.1, group = G_RISK)
+useTakeProfit = input.bool(true, "Use take profit", group = G_RISK)
+rewardRisk = input.float(2.0, "Reward:risk target", minval = 0.1, step = 0.1, group = G_RISK)
+useBreakeven = input.bool(true, "Move stop to breakeven", group = G_RISK)
+breakevenAtR = input.float(1.0, "Breakeven trigger in R", minval = 0.1, step = 0.1, group = G_RISK)
+breakevenOffsetPct = input.float(0.05, "Breakeven offset %", minval = 0.0, step = 0.01, group = G_RISK)
+exitOnOpposite = input.bool(true, "Exit on opposite/extreme signal", group = G_RISK)
+
+// === VISUAL INPUTS ===
+showMA = input.bool(true, "Show trend MA when active", group = G_VIS)
+showHTFMA = input.bool(false, "Show HTF trend MA when active", group = G_VIS)
+showFibBB = input.bool(true, "Show Fibonacci BB when active", group = G_VIS)
+showFibFill = input.bool(true, "Fill Fibonacci BB envelope when active", group = G_VIS)
+showIchimoku = input.bool(true, "Show Ichimoku when active", group = G_VIS)
+showSignals = input.bool(true, "Show entry/exit labels", group = G_VIS)
+showRiskLines = input.bool(true, "Show active stop/target", group = G_VIS)
+showRegimeBg = input.bool(true, "Show regime background when trend MA is active", group = G_VIS)
+colorBars = input.bool(false, "Color bars by regime", group = G_VIS)
+showDashboard = input.bool(true, "Show dashboard", group = G_VIS)
+
+// === ALERT INPUTS ===
+botId = input.string("230050", "Bot ID", group = G_ALERT)
+
+// === FUNCTIONS ===
+f_dema(series float src, simple int length) =>
+    float ema1 = ta.ema(src, length)
+    float ema2 = ta.ema(ema1, length)
+    2.0 * ema1 - ema2
+
+f_tema(series float src, simple int length) =>
+    float ema1 = ta.ema(src, length)
+    float ema2 = ta.ema(ema1, length)
+    float ema3 = ta.ema(ema2, length)
+    3.0 * (ema1 - ema2) + ema3
+
+f_zlema(series float src, simple int length) =>
+    int lag = math.max(1, int(math.floor((length - 1) / 2)))
+    ta.ema(src + (src - nz(src[lag], src)), length)
+
+f_ma(series float src, simple int length, simple string kind) =>
+    switch kind
+        "EMA"   => ta.ema(src, length)
+        "SMA"   => ta.sma(src, length)
+        "WMA"   => ta.wma(src, length)
+        "HMA"   => ta.hma(src, length)
+        "DEMA"  => f_dema(src, length)
+        "TEMA"  => f_tema(src, length)
+        "VWMA"  => ta.vwma(src, length)
+        "RMA"   => ta.rma(src, length)
+        "ZLEMA" => f_zlema(src, length)
+        => ta.ema(src, length)
+
+f_donchian(simple int length) =>
+    math.avg(ta.lowest(low, length), ta.highest(high, length))
+
+f_recent(bool condition, simple int lookback) =>
+    int bars = ta.barssince(condition)
+    not na(bars) and bars <= lookback
+
+f_json(string action) =>
+    '{"botId":"' + botId + '","action":"' + action + '","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, format.mintick) + '}'
+
+// === CORE CALCULATIONS ===
+inDateRange = time >= startTime and time <= endTime
+signalGate = not confirmedOnly or barstate.isconfirmed
+
+trendMA = f_ma(close, trendLen, maType)
+htfMA = request.security(syminfo.tickerid, htfTf, f_ma(close, trendLen, maType), barmerge.gaps_off, barmerge.lookahead_off)
+
+trendBull = close > trendMA and trendMA >= trendMA[1]
+trendBear = close < trendMA and trendMA <= trendMA[1]
+htfBull = close > htfMA and htfMA >= htfMA[1]
+htfBear = close < htfMA and htfMA <= htfMA[1]
+
+longRegimeOK = not enableTrendMA or trendFilter == "Off" or (trendBull and (trendFilter != "Chart + HTF" or htfBull))
+shortRegimeOK = not enableTrendMA or trendFilter == "Off" or (trendBear and (trendFilter != "Chart + HTF" or htfBear))
+
+rsi = ta.rsi(rsiSrc, rsiLen)
+rsiMid = math.avg(rsiOS, rsiOB)
+
+basis = f_ma(bbSrc, bbLen, bbBasisType)
+dev = bbMult * ta.stdev(bbSrc, bbLen)
+upper1 = basis + 0.236 * dev
+upper2 = basis + 0.382 * dev
+upper3 = basis + 0.500 * dev
+upper4 = basis + 0.618 * dev
+upper5 = basis + 0.764 * dev
+upper6 = basis + 1.000 * dev
+lower1 = basis - 0.236 * dev
+lower2 = basis - 0.382 * dev
+lower3 = basis - 0.500 * dev
+lower4 = basis - 0.618 * dev
+lower5 = basis - 0.764 * dev
+lower6 = basis - 1.000 * dev
+
+atr = ta.atr(atrLen)
+atrPct = close == 0.0 ? na : atr / close * 100.0
+volumeSma = ta.sma(volume, volumeLen)
+volumeOK = not useVolumeFilter or volume >= volumeSma * volumeMult
+volatilityOK = not useAtrFilter or (atrPct >= minAtrPct and atrPct <= maxAtrPct)
+filtersOK = volumeOK and volatilityOK
+
+// === ICHIMOKU ===
+conversionLine = f_donchian(conversionPeriods)
+baseLine = f_donchian(basePeriods)
+leadLine1 = math.avg(conversionLine, baseLine)
+leadLine2 = f_donchian(spanBPeriods)
+ichiBull = close > math.max(leadLine1, leadLine2) and conversionLine > baseLine
+ichiBear = close < math.min(leadLine1, leadLine2) and conversionLine < baseLine
+ichiLongOK = not enableIchimoku or ichiBull
+ichiShortOK = not enableIchimoku or ichiBear
+
+// === SETUPS AND CONFIRMATIONS ===
+recentLongBB = f_recent(low <= lower6, setupLookback)
+recentShortBB = f_recent(high >= upper6, setupLookback)
+recentLongRSI = f_recent(rsi <= rsiOS, setupLookback)
+recentShortRSI = f_recent(rsi >= rsiOB, setupLookback)
+
+longBBReclaim = ta.crossover(close, lower5)
+shortBBReclaim = ta.crossunder(close, upper5)
+longRSIReclaim = ta.crossover(rsi, rsiOS)
+shortRSIReclaim = ta.crossunder(rsi, rsiOB)
+closeCrossUnderBasis = ta.crossunder(close, basis)
+closeCrossOverBasis = ta.crossover(close, basis)
+
+activePrimaryIndicators = (enableRSI ? 1 : 0) + (enableFibBB ? 1 : 0)
+
+rsiLongSetupOK = not enableRSI or recentLongRSI
+rsiShortSetupOK = not enableRSI or recentShortRSI
+bbLongSetupOK = not enableFibBB or recentLongBB
+bbShortSetupOK = not enableFibBB or recentShortBB
+
+longBBConfirmOK = enableFibBB and longBBReclaim
+shortBBConfirmOK = enableFibBB and shortBBReclaim
+longRSIConfirmOK = enableRSI and longRSIReclaim
+shortRSIConfirmOK = enableRSI and shortRSIReclaim
+
+bool longSetup = false
+bool shortSetup = false
+bool longConfirm = false
+bool shortConfirm = false
+
+if activePrimaryIndicators > 0
+    if entryMode == "RSI + BB setup"
+        longSetup := rsiLongSetupOK and bbLongSetupOK
+        shortSetup := rsiShortSetupOK and bbShortSetupOK
+    else
+        longSetup := (enableRSI and recentLongRSI) or (enableFibBB and recentLongBB)
+        shortSetup := (enableRSI and recentShortRSI) or (enableFibBB and recentShortBB)
+
+if confirmMode == "BB reclaim"
+    longConfirm := longBBConfirmOK
+    shortConfirm := shortBBConfirmOK
+else if confirmMode == "RSI reclaim"
+    longConfirm := longRSIConfirmOK
+    shortConfirm := shortRSIConfirmOK
+else if confirmMode == "Both"
+    longConfirm := activePrimaryIndicators > 0 and (not enableFibBB or longBBReclaim) and (not enableRSI or longRSIReclaim)
+    shortConfirm := activePrimaryIndicators > 0 and (not enableFibBB or shortBBReclaim) and (not enableRSI or shortRSIReclaim)
+else
+    longConfirm := longBBConfirmOK or longRSIConfirmOK
+    shortConfirm := shortBBConfirmOK or shortRSIConfirmOK
+
+flat = strategy.position_size == 0
+allowShorts = tradeDirection == "Long + Short"
+
+longSignal = inDateRange and signalGate and flat and filtersOK and longRegimeOK and ichiLongOK and longSetup and longConfirm
+shortSignal = inDateRange and signalGate and flat and allowShorts and filtersOK and shortRegimeOK and ichiShortOK and shortSetup and shortConfirm
+
+// === ALERT STRINGS ===
+buyLongMsg = f_json("BUY")
+sellLongMsg = f_json("SELL")
+sellShortMsg = f_json("SELL_SHORT")
+buyCoverMsg = f_json("BUY_TO_COVER")
+
+// === ORDERS ===
+if longSignal
+    strategy.entry("L", strategy.long, alert_message = buyLongMsg, comment = "Long: RSI/FibBB confirmed")
+
+if shortSignal
+    strategy.entry("S", strategy.short, alert_message = sellShortMsg, comment = "Short: RSI/FibBB confirmed")
+
+// === RISK ENGINE ===
+avg = strategy.position_avg_price
+
+longPctStop = avg * (1.0 - stopPct / 100.0)
+longAtrStop = avg - atr * atrStopMult
+longStopBase = switch riskModel
+    "Percent"          => longPctStop
+    "ATR"              => longAtrStop
+    "Wider of % / ATR" => math.min(longPctStop, longAtrStop)
+    => math.max(longPctStop, longAtrStop)
+longRisk = avg - longStopBase
+longTarget = avg + longRisk * rewardRisk
+longBEActive = useBreakeven and strategy.position_size > 0 and longRisk > 0 and high >= avg + longRisk * breakevenAtR
+longStop = longBEActive ? math.max(longStopBase, avg * (1.0 + breakevenOffsetPct / 100.0)) : longStopBase
+
+shortPctStop = avg * (1.0 + stopPct / 100.0)
+shortAtrStop = avg + atr * atrStopMult
+shortStopBase = switch riskModel
+    "Percent"          => shortPctStop
+    "ATR"              => shortAtrStop
+    "Wider of % / ATR" => math.max(shortPctStop, shortAtrStop)
+    => math.min(shortPctStop, shortAtrStop)
+shortRisk = shortStopBase - avg
+shortTarget = avg - shortRisk * rewardRisk
+shortBEActive = useBreakeven and strategy.position_size < 0 and shortRisk > 0 and low <= avg - shortRisk * breakevenAtR
+shortStop = shortBEActive ? math.min(shortStopBase, avg * (1.0 - breakevenOffsetPct / 100.0)) : shortStopBase
+
+if strategy.position_size > 0 and longRisk > 0
+    strategy.exit("XL Risk", from_entry = "L", stop = longStop, limit = useTakeProfit ? longTarget : na, alert_message = sellLongMsg, comment_profit = "Long TP", comment_loss = "Long SL")
+
+if strategy.position_size < 0 and shortRisk > 0
+    strategy.exit("XS Risk", from_entry = "S", stop = shortStop, limit = useTakeProfit ? shortTarget : na, alert_message = buyCoverMsg, comment_profit = "Short TP", comment_loss = "Short SL")
+
+longSignalExit = exitOnOpposite and strategy.position_size > 0 and ((enableFibBB and closeCrossUnderBasis) or (enableRSI and rsi >= rsiOB) or shortSetup)
+shortSignalExit = exitOnOpposite and strategy.position_size < 0 and ((enableFibBB and closeCrossOverBasis) or (enableRSI and rsi <= rsiOS) or longSetup)
+
+if longSignalExit
+    strategy.close("L", alert_message = sellLongMsg, comment = "Long signal exit")
+
+if shortSignalExit
+    strategy.close("S", alert_message = buyCoverMsg, comment = "Short signal exit")
+
+if not inDateRange and strategy.position_size != 0
+    strategy.close_all(alert_message = strategy.position_size > 0 ? sellLongMsg : buyCoverMsg, comment = "Outside date range")
+
+// === PLOTS ===
+regimeColor = trendBull ? color.new(color.lime, 0) : trendBear ? color.new(color.red, 0) : color.new(color.gray, 0)
+bgcolor(enableTrendMA and showRegimeBg ? trendBull ? color.new(color.green, 92) : trendBear ? color.new(color.red, 94) : na : na, title = "Regime background")
+barcolor(enableTrendMA and colorBars ? regimeColor : na)
+
+plot(enableTrendMA and showMA ? trendMA : na, "Trend MA", color = regimeColor, linewidth = 2)
+plot(enableTrendMA and showHTFMA ? htfMA : na, "HTF Trend MA", color = color.new(color.orange, 0), linewidth = 2)
+
+plot(enableRSI ? rsi : na, "RSI data-window only", display = display.data_window)
+
+bbBasisPlot = plot(enableFibBB and showFibBB ? basis : na, "Fib BB Basis", color = color.new(color.fuchsia, 0), linewidth = 2)
+u1 = plot(enableFibBB and showFibBB ? upper1 : na, "Fib BB +0.236", color = color.new(color.white, 55))
+u2 = plot(enableFibBB and showFibBB ? upper2 : na, "Fib BB +0.382", color = color.new(color.white, 50))
+u3 = plot(enableFibBB and showFibBB ? upper3 : na, "Fib BB +0.500", color = color.new(color.white, 45))
+u4 = plot(enableFibBB and showFibBB ? upper4 : na, "Fib BB +0.618", color = color.new(color.white, 40))
+u5 = plot(enableFibBB and showFibBB ? upper5 : na, "Fib BB +0.764", color = color.new(color.white, 35))
+u6 = plot(enableFibBB and showFibBB ? upper6 : na, "Fib BB +1.000", color = color.new(color.red, 0), linewidth = 2)
+l1 = plot(enableFibBB and showFibBB ? lower1 : na, "Fib BB -0.236", color = color.new(color.white, 55))
+l2 = plot(enableFibBB and showFibBB ? lower2 : na, "Fib BB -0.382", color = color.new(color.white, 50))
+l3 = plot(enableFibBB and showFibBB ? lower3 : na, "Fib BB -0.500", color = color.new(color.white, 45))
+l4 = plot(enableFibBB and showFibBB ? lower4 : na, "Fib BB -0.618", color = color.new(color.white, 40))
+l5 = plot(enableFibBB and showFibBB ? lower5 : na, "Fib BB -0.764", color = color.new(color.white, 35))
+l6 = plot(enableFibBB and showFibBB ? lower6 : na, "Fib BB -1.000", color = color.new(color.green, 0), linewidth = 2)
+fill(u6, l6, color = enableFibBB and showFibBB and showFibFill ? color.new(color.gray, 96) : na, title = "Fib BB envelope")
+
+plot(showRiskLines and strategy.position_size > 0 ? longStop : na, "Long stop", color = color.new(color.red, 0), linewidth = 2, style = plot.style_linebr)
+plot(showRiskLines and strategy.position_size > 0 and useTakeProfit ? longTarget : na, "Long target", color = color.new(color.green, 0), linewidth = 2, style = plot.style_linebr)
+plot(showRiskLines and strategy.position_size < 0 ? shortStop : na, "Short stop", color = color.new(color.red, 0), linewidth = 2, style = plot.style_linebr)
+plot(showRiskLines and strategy.position_size < 0 and useTakeProfit ? shortTarget : na, "Short target", color = color.new(color.green, 0), linewidth = 2, style = plot.style_linebr)
+
+plot(enableIchimoku and showIchimoku ? conversionLine : na, "Ichimoku Conversion", color = color.new(color.red, 0))
+plot(enableIchimoku and showIchimoku ? baseLine : na, "Ichimoku Base", color = color.new(color.blue, 0))
+plot(enableIchimoku and showIchimoku ? close : na, "Ichimoku Lagging Span", color = color.new(color.orange, 0), offset = -displacement + 1)
+ichiA = plot(enableIchimoku and showIchimoku ? leadLine1 : na, "Ichimoku Leading Span A", color = color.new(color.purple, 0), offset = displacement - 1)
+ichiB = plot(enableIchimoku and showIchimoku ? leadLine2 : na, "Ichimoku Leading Span B", color = color.new(color.lime, 0), offset = displacement - 1)
+fill(ichiA, ichiB, color = enableIchimoku and showIchimoku ? leadLine1 > leadLine2 ? color.new(color.green, 88) : color.new(color.red, 88) : na, title = "Ichimoku Cloud")
+
+plotshape(showSignals and longSignal, title = "Long entry", location = location.belowbar, style = shape.labelup, text = "LONG", color = color.new(color.green, 0), textcolor = color.white, size = size.tiny)
+plotshape(showSignals and shortSignal, title = "Short entry", location = location.abovebar, style = shape.labeldown, text = "SHORT", color = color.new(color.red, 0), textcolor = color.white, size = size.tiny)
+plotshape(showSignals and longSignalExit, title = "Long signal exit", location = location.abovebar, style = shape.labeldown, text = "XL", color = color.new(color.orange, 0), textcolor = color.white, size = size.tiny)
+plotshape(showSignals and shortSignalExit, title = "Short signal exit", location = location.belowbar, style = shape.labelup, text = "XS", color = color.new(color.orange, 0), textcolor = color.white, size = size.tiny)
+
+// === ALERTCONDITIONS ===
+alertcondition(longSignal, title = "Long signal", message = "Long signal on {{ticker}} at {{close}}")
+alertcondition(shortSignal, title = "Short signal", message = "Short signal on {{ticker}} at {{close}}")
+alertcondition(longSignalExit, title = "Long signal exit", message = "Exit long on {{ticker}} at {{close}}")
+alertcondition(shortSignalExit, title = "Short signal exit", message = "Exit short on {{ticker}} at {{close}}")
+
+// === DASHBOARD ===
+var table dash = table.new(position.top_right, 2, 7, border_width = 1)
+if showDashboard and barstate.islast
+    string regimeTxt = trendBull ? "Bull" : trendBear ? "Bear" : "Neutral"
+    string htfTxt = htfBull ? "HTF Bull" : htfBear ? "HTF Bear" : "HTF Neutral"
+    string posTxt = strategy.position_size > 0 ? "Long" : strategy.position_size < 0 ? "Short" : "Flat"
+    string setupTxt = longSetup ? "Long setup" : shortSetup ? "Short setup" : "None"
+    string filterTxt = filtersOK ? "OK" : "Blocked"
+    table.cell(dash, 0, 0, "Regime", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 0, regimeTxt + " / " + htfTxt, text_color = color.white, bgcolor = trendBull ? color.new(color.green, 20) : trendBear ? color.new(color.red, 20) : color.new(color.gray, 20))
+    table.cell(dash, 0, 1, "Position", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 1, posTxt, text_color = color.white, bgcolor = strategy.position_size > 0 ? color.new(color.green, 20) : strategy.position_size < 0 ? color.new(color.red, 20) : color.new(color.gray, 20))
+    table.cell(dash, 0, 2, "Setup", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 2, setupTxt, text_color = color.white, bgcolor = color.new(color.gray, 20))
+    table.cell(dash, 0, 3, "RSI", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 3, str.tostring(rsi, "#.##") + " / Mid " + str.tostring(rsiMid, "#.##"), text_color = color.white, bgcolor = rsi <= rsiOS ? color.new(color.green, 20) : rsi >= rsiOB ? color.new(color.red, 20) : color.new(color.gray, 20))
+    table.cell(dash, 0, 4, "ATR %", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 4, str.tostring(atrPct, "#.##") + "%", text_color = color.white, bgcolor = volatilityOK ? color.new(color.green, 35) : color.new(color.red, 25))
+    table.cell(dash, 0, 5, "Volume", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 5, volumeOK ? "OK" : "Low", text_color = color.white, bgcolor = volumeOK ? color.new(color.green, 35) : color.new(color.red, 25))
+    table.cell(dash, 0, 6, "Filters", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 6, filterTxt, text_color = color.white, bgcolor = filtersOK ? color.new(color.green, 35) : color.new(color.red, 25))

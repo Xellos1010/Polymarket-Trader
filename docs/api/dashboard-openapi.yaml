@@ -1,0 +1,688 @@
+openapi: 3.0.3
+info:
+  title: Coinbase Workstation Operator API
+  version: 0.2.0
+  description: Slim dashboard and Coinbase workstation APIs exposed by pt-dashboard.
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /health:
+    get:
+      summary: Health and kill-switch status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /ready:
+    get:
+      summary: Readiness probe
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses:
+        '200':
+          description: Prometheus exposition format
+          content:
+            text/plain:
+              schema:
+                type: string
+  /state/risk:
+    get:
+      summary: Current risk state
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskState'
+  /state/books:
+    get:
+      summary: Latest market snapshots
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketSnapshot'
+  /state/markets:
+    get:
+      summary: Market summary rows for legacy UI selector
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketView'
+  /state/history:
+    get:
+      summary: Rolling history points for a selected market
+      parameters:
+        - in: query
+          name: market_id
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 10
+            maximum: 1200
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketHistoryResponse'
+  /state/executions:
+    get:
+      summary: Recent execution reports
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExecutionReport'
+  /state/bias:
+    get:
+      summary: Current fused asset bias
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BiasView'
+  /state/inventory:
+    get:
+      summary: Inventory notional
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryView'
+  /ops/halt:
+    post:
+      summary: Set manual halt
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /ops/resume:
+    post:
+      summary: Resume running mode
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /ops/flatten:
+    post:
+      summary: Enter safe mode / flatten behavior
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/v1/products:
+    get:
+      summary: Coinbase product catalog in scope for the workstation
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkstationProduct'
+  /api/v1/scanner:
+    get:
+      summary: Ranked scanner output across Coinbase products
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScannerRow'
+  /api/v1/products/{product_id}:
+    get:
+      summary: Detailed view for a specific Coinbase product
+      parameters:
+        - in: path
+          name: product_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetailResponse'
+  /api/v1/orders:
+    get:
+      summary: Manual and automatic workstation orders
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkstationOrder'
+    post:
+      summary: Queue a manual workstation order
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkstationOrder'
+  /api/v1/strategies:
+    get:
+      summary: Strategy config, imports, live-arm state, and active import mapping
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategiesResponse'
+  /api/v1/mode:
+    post:
+      summary: Change workstation mode
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModeResponse'
+  /api/v1/live/arm:
+    post:
+      summary: Arm live routing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModeResponse'
+  /api/v1/live/disarm:
+    post:
+      summary: Disarm live routing
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModeResponse'
+  /api/v1/orders/{order_id}/cancel:
+    post:
+      summary: Request cancellation for a queued or open order
+      parameters:
+        - in: path
+          name: order_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResponse'
+  /api/v1/strategy-lab/import:
+    post:
+      summary: Import a strategy-lab JSON output
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyLabImportSummary'
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, kill_switch]
+      properties:
+        status: { type: string }
+        kill_switch: { type: string }
+    RiskState:
+      type: object
+      required: [killswitch, daily_pnl, max_daily_loss, open_notional, unhedged_delta, open_markets, stale_books, last_update_ms]
+      properties:
+        killswitch: { type: string }
+        daily_pnl: { type: number }
+        max_daily_loss: { type: number }
+        open_notional: { type: number }
+        unhedged_delta: { type: number }
+        open_markets: { type: integer }
+        stale_books: { type: integer }
+        last_update_ms: { type: integer }
+    MarketSnapshot:
+      type: object
+      required: [market_id, token_id, bid, ask, spread, liquidity, ts]
+      properties:
+        market_id: { type: string }
+        token_id: { type: string }
+        bid: { type: number }
+        ask: { type: number }
+        spread: { type: number }
+        liquidity: { type: number }
+        ts:
+          type: string
+          format: date-time
+    MarketView:
+      type: object
+      required: [market_id, token_id, bid, ask, spread, mid, ts]
+      properties:
+        market_id: { type: string }
+        token_id: { type: string }
+        bid: { type: number }
+        ask: { type: number }
+        spread: { type: number }
+        mid: { type: number }
+        ts:
+          type: string
+          format: date-time
+    MarketHistoryPoint:
+      type: object
+      required: [market_id, mid, spread, bid, ask, ts]
+      properties:
+        market_id: { type: string }
+        mid: { type: number }
+        spread: { type: number }
+        bid: { type: number }
+        ask: { type: number }
+        ts:
+          type: string
+          format: date-time
+    MarketHistoryResponse:
+      type: object
+      required: [points]
+      properties:
+        market_id:
+          type: string
+          nullable: true
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketHistoryPoint'
+    ExecutionReport:
+      type: object
+      required: [venue, order_id, status, side, filled_qty, avg_px, ts]
+      properties:
+        venue: { type: string }
+        order_id: { type: string }
+        market_id:
+          type: string
+          nullable: true
+        status: { type: string }
+        side: { type: string }
+        filled_qty: { type: number }
+        avg_px: { type: number }
+        ts:
+          type: string
+          format: date-time
+        details:
+          type: string
+          nullable: true
+    BiasView:
+      type: object
+      required: [asset, bias]
+      properties:
+        asset: { type: string }
+        bias: { type: number }
+    InventoryView:
+      type: object
+      required: [inventory_usd]
+      properties:
+        inventory_usd: { type: number }
+    LiveArmState:
+      type: object
+      required: [armed]
+      properties:
+        armed: { type: boolean }
+        mode:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        auto_disarm_reason:
+          type: string
+          nullable: true
+        armed_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    TradingEligibility:
+      type: object
+      required: [product_id, live_tradable, scan_only, eligible, reasons]
+      properties:
+        product_id: { type: string }
+        live_tradable: { type: boolean }
+        scan_only: { type: boolean }
+        eligible: { type: boolean }
+        reasons:
+          type: array
+          items: { type: string }
+    WorkstationProduct:
+      type: object
+      required: [product_id, base_currency, quote_currency, status, price, volume_24h, live_tradable, scan_only, trading_disabled]
+      properties:
+        product_id: { type: string }
+        instrument:
+          type: string
+          nullable: true
+        base_currency: { type: string }
+        quote_currency: { type: string }
+        status: { type: string }
+        price: { type: number }
+        volume_24h: { type: number }
+        live_tradable: { type: boolean }
+        scan_only: { type: boolean }
+        trading_disabled: { type: boolean }
+    ScannerRow:
+      type: object
+      required: [product_id, live_tradable, scan_only, spread_bps, imbalance, tape_direction, realized_volatility, fill_rate_estimate, active_strategy, score, current_risk_eligibility, best_bid, best_ask, mid_price, priority_fill, one_way_persistence]
+      properties:
+        product_id: { type: string }
+        instrument:
+          type: string
+          nullable: true
+        live_tradable: { type: boolean }
+        scan_only: { type: boolean }
+        spread_bps: { type: number }
+        imbalance: { type: number }
+        tape_direction: { type: number }
+        realized_volatility: { type: number }
+        fill_rate_estimate: { type: number }
+        active_strategy: { type: string }
+        score: { type: number }
+        current_risk_eligibility:
+          $ref: '#/components/schemas/TradingEligibility'
+        best_bid: { type: number }
+        best_ask: { type: number }
+        mid_price: { type: number }
+        action:
+          type: string
+          nullable: true
+        priority_fill: { type: boolean }
+        one_way_persistence: { type: integer }
+        ts:
+          type: string
+          format: date-time
+          nullable: true
+    MarketMicrostructureSnapshot:
+      type: object
+      required: [product_id, best_bid, best_ask, mid_price, spread_bps, imbalance, tape_direction, realized_volatility, fill_rate_estimate, one_way_persistence]
+      properties:
+        product_id: { type: string }
+        instrument:
+          type: string
+          nullable: true
+        best_bid: { type: number }
+        best_ask: { type: number }
+        mid_price: { type: number }
+        spread_bps: { type: number }
+        imbalance: { type: number }
+        tape_direction: { type: number }
+        realized_volatility: { type: number }
+        fill_rate_estimate: { type: number }
+        one_way_persistence: { type: integer }
+        ts:
+          type: string
+          format: date-time
+          nullable: true
+    StrategyVector:
+      type: object
+      required: [product_id, strategy_name, microstructure_score, momentum_score, volatility_score, plugin_score, composite_score, priority_fill]
+      properties:
+        product_id: { type: string }
+        strategy_name: { type: string }
+        microstructure_score: { type: number }
+        momentum_score: { type: number }
+        volatility_score: { type: number }
+        plugin_score: { type: number }
+        composite_score: { type: number }
+        action:
+          type: string
+          nullable: true
+        priority_fill: { type: boolean }
+    WorkstationOrder:
+      type: object
+      required: [order_id, product_id, live, post_only, base_size, quote_notional, expected_net_bps]
+      properties:
+        order_id: { type: string }
+        client_order_id:
+          type: string
+          nullable: true
+        product_id: { type: string }
+        instrument:
+          type: string
+          nullable: true
+        side:
+          type: string
+          nullable: true
+        route:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        live: { type: boolean }
+        post_only: { type: boolean }
+        limit_price:
+          type: number
+          nullable: true
+        base_size: { type: number }
+        quote_notional: { type: number }
+        expected_net_bps: { type: number }
+        reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    ProductStrategyConfigView:
+      type: object
+      required: [product_id, strategy_name, enabled, live_enabled, score_threshold, quote_size_usd, plugin_signal]
+      properties:
+        product_id: { type: string }
+        strategy_name: { type: string }
+        enabled: { type: boolean }
+        live_enabled: { type: boolean }
+        score_threshold: { type: number }
+        quote_size_usd: { type: number }
+        plugin_signal: { type: number }
+    StrategyLabImportSummary:
+      type: object
+      required: [import_id, path, markets, best_variants, promotion_status]
+      properties:
+        import_id: { type: string }
+        artifact_id:
+          type: string
+          nullable: true
+        path: { type: string }
+        imported_at:
+          type: string
+          format: date-time
+          nullable: true
+        markets:
+          type: array
+          items: { type: string }
+        best_variants:
+          type: array
+          items: { type: string }
+        source_run_id:
+          type: string
+          nullable: true
+        promotion_status: { type: string }
+        replay_acceptance_status:
+          type: string
+          nullable: true
+        objective_score:
+          type: number
+          nullable: true
+        confidence:
+          type: number
+          nullable: true
+        timeframe:
+          type: string
+          nullable: true
+    ActiveImportView:
+      type: object
+      required: [import_id, path, product_id, market, variant, promotion_status]
+      properties:
+        import_id: { type: string }
+        artifact_id:
+          type: string
+          nullable: true
+        path: { type: string }
+        product_id: { type: string }
+        market: { type: string }
+        variant: { type: string }
+        imported_at:
+          type: string
+          format: date-time
+          nullable: true
+        source_run_id:
+          type: string
+          nullable: true
+        promotion_status: { type: string }
+        replay_acceptance_status:
+          type: string
+          nullable: true
+        objective_score:
+          type: number
+          nullable: true
+    ProductImportActivationView:
+      type: object
+      required: [product_id, imports]
+      properties:
+        product_id: { type: string }
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActiveImportView'
+    ProductDetailResponse:
+      type: object
+      required: [product, microstructure, strategy, eligibility, orders, imports, active_imports]
+      properties:
+        product:
+          $ref: '#/components/schemas/WorkstationProduct'
+        microstructure:
+          $ref: '#/components/schemas/MarketMicrostructureSnapshot'
+        strategy:
+          $ref: '#/components/schemas/StrategyVector'
+        eligibility:
+          $ref: '#/components/schemas/TradingEligibility'
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkstationOrder'
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyLabImportSummary'
+        active_imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActiveImportView'
+    ModeResponse:
+      type: object
+      required: [mode, live_arm]
+      properties:
+        mode: { type: string }
+        live_arm:
+          $ref: '#/components/schemas/LiveArmState'
+    StrategiesResponse:
+      type: object
+      required: [mode, live_arm, strategies, imports, active_imports]
+      properties:
+        mode: { type: string }
+        live_arm:
+          $ref: '#/components/schemas/LiveArmState'
+        strategies:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductStrategyConfigView'
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyLabImportSummary'
+        active_imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImportActivationView'
+    ActionResponse:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }

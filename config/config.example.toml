@@ -1,0 +1,269 @@
+[engine]
+mode = "paper"
+loop_ms = 500
+portfolio_id = "default"
+replay_path = "data/replay/sample.ndjson"
+
+[venues.polymarket]
+gamma_api = "https://gamma-api.polymarket.com"
+data_api = "https://data-api.polymarket.com"
+clob_api = "https://clob.polymarket.com"
+clob_ws = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+private_key = ""
+use_server_time = true
+chain_id = 137
+
+[venues.polymarket.filters]
+tag_id = 21
+max_spread = 0.02
+min_liquidity = 8000.0
+min_volume24h = 10.0
+require_fee_enabled = true
+require_orderbook = true
+allowed_slugs = ["updown-5m", "updown-15m"]
+assets = ["BTC", "ETH", "SOL", "XRP"]
+
+[venues.coinbase]
+api_base = "https://api.coinbase.com/api/v3/brokerage"
+api_key = ""
+api_secret = ""
+passphrase = ""
+products = ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD"]
+hedge_threshold_usd = 5.0
+hedge_max_slippage_bps = 10.0
+
+[venues.coinbase.auth]
+active_profile = "primary"
+allow_hot_reload = true
+strict_live_auth = false
+
+[venues.coinbase.auth.profiles.primary]
+cdp_key_file = "config/cdp_api_key.json"
+cdp_secret_id = ""
+expected_key_id = "replace-with-cdp-key-id"
+strategy_tags = ["maker_mm_spot", "conversion_cycle", "coinbase_workstation"]
+
+[venues.coinbase.ws]
+url = "wss://advanced-trade-ws.coinbase.com"
+channels = ["heartbeats", "level2", "user"]
+heartbeat_timeout_ms = 8000
+resync_on_gap = true
+
+[venues.kraken]
+enabled = false
+api_base = "https://api.kraken.com"
+ws_url = "wss://ws.kraken.com/v2"
+api_key = ""
+api_secret = ""
+passphrase = ""
+products = ["BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD"]
+
+[venues.gemini]
+enabled = false
+api_base = "https://api.gemini.com"
+ws_url = "wss://api.gemini.com/v2/marketdata"
+api_key = ""
+api_secret = ""
+passphrase = ""
+products = ["BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD"]
+
+[signals.wallet]
+refresh_secs = 30
+top_n = 100
+allowlist_path = "config/wallet_allowlist.txt"
+enforce_allowlist = false
+
+[signals.tradingview]
+enabled = true
+bind_addr = "127.0.0.1:8090"
+endpoint_secret = "replace-me"
+k_wallet = 0.7
+k_tv = 0.3
+
+[risk]
+daily_loss_limit_pct = 0.01
+max_notional_per_market = 2.5
+max_total_open_notional = 10.0
+max_markets_quoted_simultaneously = 1
+max_unhedged_delta = 10.0
+max_order_age_secs = 20
+stale_book_threshold_ms = 400
+min_expected_net = 0.002
+
+[execution]
+mode = "maker_first"
+allow_taker_on_unwind_only = true
+post_only = true
+cancel_replace_cooldown_ms = 250
+min_rest_ms = 400
+stale_book_ms = 400
+
+[execution.vectors]
+entry_max_slippage_bps = 8.0
+exit_max_slippage_bps = 10.0
+entry_offset_bps = 2.0
+exit_offset_bps = 2.0
+max_cross_bps_unwind = 20.0
+
+[execution.fees.coinbase]
+maker_bps = 6.0
+taker_bps = 12.0
+rebate_bps_est = 0.0
+
+[execution.fees.kraken]
+maker_bps = 16.0
+taker_bps = 26.0
+rebate_bps_est = 0.0
+
+[execution.fees.gemini]
+maker_bps = 20.0
+taker_bps = 35.0
+rebate_bps_est = 0.0
+
+[execution.fees.polymarket]
+maker_bps = 0.0
+taker_bps = 5.0
+rebate_bps_est = 1.0
+
+[execution.edge_profiles]
+maker_mm_spot_min_bps = 8.0
+conversion_cycle_min_bps = 100.0
+position_reentry_min_bps = 40.0
+
+[execution.edge_profiles.per_asset_overrides_bps]
+
+[execution.order_manager]
+preview_required = true
+max_reprice_attempts = 3
+edit_vs_replace_threshold_bps = 5.0
+cancel_replace_cooldown_ms = 250
+min_rest_ms = 400
+
+[wallet]
+enabled = true
+mode = "assist"
+sync_secs = 10
+
+[wallet.targets]
+btc = 0.25
+eth = 0.20
+sol = 0.10
+xrp = 0.05
+usd = 0.40
+
+[wallet.rebalance]
+drift_trigger_pct = 0.03
+min_order_usd = 5.0
+max_order_usd = 25.0
+max_slippage_bps = 10.0
+max_orders_per_cycle = 3
+
+[wallet.approval]
+required = true
+token_ttl_secs = 300
+
+[acceptance.replay]
+max_reject_error_rate = 0.05
+max_effective_fee_bps_avg = 25.0
+max_unhedged_delta = 10.0
+require_killswitch_running = true
+[strategy]
+default_strategy_name = "coinbase_microstructure"
+imbalance_weight = 0.45
+momentum_weight = 0.35
+volatility_weight = 0.15
+plugin_weight = 0.20
+score_threshold = 0.35
+priority_fill_threshold = 0.75
+momentum_window = 12
+realized_vol_window = 24
+
+[[strategy.products]]
+product_id = "BTC-USD"
+enabled = true
+live_enabled = true
+strategy_name = "coinbase_microstructure"
+quote_size_usd = 25.0
+score_threshold = 0.35
+plugin_signal = 0.10
+
+[scanner]
+max_products = 24
+top_n = 8
+quote_currencies = ["USD", "USDC"]
+include_derivatives = true
+refresh_ms = 2500
+product_refresh_secs = 60
+candle_granularity_sec = 300
+candle_limit = 48
+trade_limit = 16
+book_levels = 10
+
+[ui]
+mode_default = "basic"
+scanner_limit = 8
+
+[live_arming]
+require_manual_arm = true
+taker_budget_usd = 75.0
+one_way_confirmation_ticks = 3
+auto_disarm_reject_rate = 0.25
+auto_disarm_stale_data_ms = 8000
+
+[storage]
+sqlite_path = "data/output/engine.sqlite"
+parquet_dir = "data/output/parquet"
+snapshot_roll_secs = 60
+
+[ops]
+log_level = "info"
+dashboard_bind = "127.0.0.1:8080"
+metrics_flush_secs = 5
+market_refresh_secs = 60
+wallet_refresh_secs = 30
+risk_watchdog_ms = 100
+
+[capital_plan]
+enabled = true
+daily_contribution_usd = 10.0
+tiers = [
+  { min_equity_usd = 0.0, reserve_pct = 0.0 },
+  { min_equity_usd = 250.0, reserve_pct = 0.20 },
+  { min_equity_usd = 500.0, reserve_pct = 0.30 },
+]
+
+[equities]
+products = []
+
+[equities.paper]
+enabled = true
+
+[equities.live]
+enabled = false
+
+[runtime.affinity]
+enabled = false
+feed_cores = [0, 1]
+strategy_cores = [2, 3]
+execution_cores = [4, 5]
+persistence_cores = [6, 7]
+
+[runtime.jitter_controls]
+enabled = false
+nic_polling = true
+disable_cpu_powersave = true
+isolate_cores = true
+rcu_nocbs = true
+nohz_full = true
+
+[wallet_intel]
+enabled = true
+top_wallets = 50
+refresh_secs = 60
+include_coinbase = true
+include_polymarket = true
+
+[benchmark.hotpath]
+enabled = false
+sample_size = 10000
+warmup_iters = 1000

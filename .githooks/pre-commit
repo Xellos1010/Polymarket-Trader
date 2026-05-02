@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '[pre-commit] cargo fmt --all --check\n'
+cargo fmt --all -- --check
+
+printf '[pre-commit] cargo clippy --workspace --all-targets --all-features -- -D warnings\n'
+cargo clippy --workspace --all-targets --all-features -- -D warnings

@@ -1,0 +1,75 @@
+[engine]
+mode = "live"
+loop_ms = 100
+portfolio_id = "pilot_ultra_tight"
+
+[risk]
+daily_loss_limit_pct = 0.01
+max_notional_per_market = 2.5
+max_total_open_notional = 10.0
+max_markets_quoted_simultaneously = 1
+max_unhedged_delta = 10.0
+max_order_age_secs = 20
+stale_book_threshold_ms = 400
+min_expected_net = 0.002
+
+[risk.pilot]
+enforce_ultra_tight_live = true
+ultra_tight_daily_loss_limit_pct = 0.01
+ultra_tight_max_notional_per_market = 2.5
+ultra_tight_max_total_open_notional = 10.0
+ultra_tight_max_markets_quoted = 1
+
+[execution]
+mode = "maker_first"
+allow_taker_on_unwind_only = true
+post_only = true
+cancel_replace_cooldown_ms = 250
+min_rest_ms = 400
+stale_book_ms = 400
+
+[execution.vectors]
+entry_max_slippage_bps = 8.0
+exit_max_slippage_bps = 10.0
+entry_offset_bps = 2.0
+exit_offset_bps = 2.0
+max_cross_bps_unwind = 20.0
+
+[execution.edge_profiles]
+maker_mm_spot_min_bps = 8.0
+conversion_cycle_min_bps = 100.0
+position_reentry_min_bps = 40.0
+
+[execution.order_manager]
+preview_required = true
+max_reprice_attempts = 3
+edit_vs_replace_threshold_bps = 5.0
+cancel_replace_cooldown_ms = 250
+min_rest_ms = 400
+
+[runtime.affinity]
+enabled = true
+feed_cores = [0, 1]
+strategy_cores = [2, 3]
+execution_cores = [4, 5]
+persistence_cores = [6, 7]
+
+[runtime.jitter_controls]
+enabled = true
+nic_polling = true
+disable_cpu_powersave = true
+isolate_cores = true
+rcu_nocbs = true
+nohz_full = true
+
+[wallet]
+enabled = true
+mode = "assist"
+sync_secs = 10
+
+[wallet_intel]
+enabled = true
+top_wallets = 50
+refresh_secs = 60
+include_coinbase = true
+include_polymarket = true

@@ -1,0 +1,117 @@
+# Operational Runbook
+
+## Maintainer status (optional)
+
+Program status, boards, and session notes live in `docs/WORK_STATUS.md`, `docs/WORK_STATUS.json`, `docs/archive/program-history-2026/INTEGRATION_BOARD.md` (historical snapshot), and `docs/SESSION_CONTEXT.md`. Timelines there may lag the default procedures below; prefer this runbook plus [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md) and [api/dashboard-openapi.yaml](api/dashboard-openapi.yaml) for “what to run now.”
+
+## Pre-merge validation
+
+Before merge, deployment, or any operator-readiness claim, run the canonical local-first ladder:
+
+```bash
+./scripts/local_validation_ladder.sh
+```
+
+Reference guide:
+- `docs/LOCAL_VALIDATION.md`
+
+## Startup
+```bash
+cargo run -p pt-cli -- coinbase up --config config/config.toml --mode paper
+```
+
+Strategy lab dashboard (Coinbase local workflow):
+```bash
+python3 tools/coinbase_strategy_lab.py dashboard --config config/coinbase_strategy_lab.json --serve 9090
+```
+
+Promote strategy-lab result to replay artifact:
+```bash
+./scripts/promote_strategy_lab.sh data/strategy_lab/<report>.json BTC-USD sma_baseline
+```
+
+Replay acceptance check:
+```bash
+./scripts/replay_acceptance.sh data/replay/strategy_lab_promoted.ndjson data/tuning/strategy_lab_promoted.json data/output/engine.sqlite
+```
+
+Phase 1 evidence bundle:
+```bash
+./scripts/phase1_evidence_bundle.sh \
+  --bundle-dir data/evidence/phase1/20260426 \
+  --run-label run-001 \
+  --replay data/replay/strategy_lab_promoted.ndjson \
+  --promotion data/tuning/strategy_lab_promoted.json \
+  --sqlite data/output/engine.sqlite \
+  --paper-soak data/soak/paper-soak-20260426-010203.json \
+  --metrics data/evidence/run-001-metrics.json
+```
+
+Phase 1 gate report:
+```bash
+python3 tools/phase1_gate_report.py \
+  --bundle-dir data/evidence/phase1/20260426 \
+  --min-runs 3 \
+  --out-json data/evidence/phase1/20260426/report.json \
+  --out-md data/evidence/phase1/20260426/report.md
+```
+
+Phase 1 evidence self-check:
+```bash
+python3 -m unittest discover -s tests -p 'test_phase1_gate_report.py'
+```
+
+Interpretation:
+- `pass` means at least three independent runs were present, aggregate net PnL after costs stayed positive, and no hard risk breach was detected.
+- `fail` means a hard gate was violated.
+- `incomplete` means evidence is missing, malformed, or not yet repeatable across three runs.
+
+## Live readiness gate
+```bash
+cargo run -p pt-cli -- coinbase preflight --config config/config.toml --mode live --timeout-ms 3000
+```
+
+Tiny live pilot guard:
+```bash
+./scripts/tiny_live_pilot.sh config/config.toml 3000
+```
+
+## Health checks
+- `GET /health`
+- `GET /healthz`
+- `GET /ready`
+- `GET /metrics`
+
+## Operator review (workstation orders)
+
+Use **`GET /api/v1/orders`** (and related OpenAPI paths) for current workstation order visibility. The HTTP contract is defined in [api/dashboard-openapi.yaml](api/dashboard-openapi.yaml); do not rely on endpoints that are not listed there.
+
+## Emergency controls
+- Halt quoting: `POST /ops/halt`
+- Resume: `POST /ops/resume`
+- Enter safe mode or flatten behavior: `POST /ops/flatten`
+
+## Incident triage
+1. Check kill-switch and risk state (`/state/risk`).
+2. Inspect recent executions (`/state/executions`).
+3. Verify market feed freshness (`/state/books`, `/state/history`).
+4. Inspect workstation orders via `GET /api/v1/orders` (see OpenAPI).
+5. If exchange or hedge is degraded, keep `halt` or `flatten` active.
+6. Preserve a context snapshot:
+   ```bash
+   ./scripts/save_context.sh "incident note" docs/SESSION_CONTEXT.md config/config.toml
+   ```
+
+## Rollback
+- Runtime rollback: set manual halt, then restart previous binary or config.
+- Code rollback (git): `git revert <commit>` and redeploy.
+
+## Post-incident
+- Append notes to `docs/SESSION_CONTEXT.md`.
+- Update `docs/SDLC_CHECKLIST.md` if process or tooling gaps were found.
+- Update `docs/WORK_STATUS.md` and `docs/WORK_STATUS.json` if the incident changes the active blocker or next safe slice.
+
+## External AI handoff
+```bash
+./scripts/export_prompt_bundle.sh
+```

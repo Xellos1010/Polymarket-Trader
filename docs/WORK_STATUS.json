@@ -1,0 +1,173 @@
+{
+  "schema_version": 8,
+  "updated_on": "2026-05-02",
+  "phase": {
+    "id": "phase1",
+    "name": "Phase 1: sandbox trading / paper ROI preparation"
+  },
+  "current_audit_finding": "Issue #48 is closed, PR #57 merged the Coinbase visual workstation foundation, Track B issues #54/#55/#56 are closed, PR #62 carries roadmap closeout plus workspace Clippy hygiene, and issue #53 is the next active strategy-artifact handoff lane.",
+  "audit": {
+    "last_audited_on": "2026-05-02",
+    "audit_source": [
+      "GitHub issue state",
+      "merged PR #57",
+      "operator-reported validation evidence",
+      "agent-reran PR #62 branch validation including clippy",
+      "Coinbase strategy AI roadmap packet"
+    ],
+    "validation_evidence_state": "operator_reported_workstation_validation_plus_agent_reran_pr62_branch_may_2_2026",
+    "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
+  },
+  "workflow_invariants": {
+    "single_active_implementation_lane": true,
+    "single_active_pr_per_lane": true,
+    "sandbox_and_paper_only": true,
+    "frontend_chart_not_source_of_truth": true,
+    "strategy_artifacts_before_optimizer_widening": true,
+    "ai_behind_artifact_promotion_and_risk_controls": true,
+    "status_markdown_json_mirror_required": true
+  },
+  "current_stage": {
+    "id": "phase1_strategy_artifact_handoff",
+    "label": "Strategy-lab handoff into Coinbase paper runtime",
+    "requires_human_decision": false,
+    "blocker_type": null,
+    "execution_status": "ready_for_next_pr",
+    "active_now_queue_order": 5,
+    "active_issue": 53,
+    "environment_note": "After PR #62 merges to main, start issue #53 from updated main. This status update records issue and queue state plus agent validation on the PR #62 branch."
+  },
+  "completed_evidence": {
+    "phase0_compile_recovery": {
+      "issue": 48,
+      "status": "closed_completed",
+      "operator_reported_commit": "7dfb650"
+    },
+    "coinbase_visual_workstation_foundation": {
+      "pr": 57,
+      "status": "merged",
+      "head_sha": "95d913d6fc10a8e9e9dcb541b218499b95dc5a68",
+      "merge_commit_sha": "0a4af223cf7a342f17d7dbdd9982d406d629657a",
+      "closed_issues": [54, 55, 56],
+      "operator_reported_validation": [
+        "cargo check --workspace passed",
+        "cargo test --workspace passed",
+        "cd crates/pt-dashboard/frontend && npm run build passed",
+        "cd crates/pt-dashboard/frontend && npm test passed after commit 95d913d"
+      ]
+    }
+  },
+  "active_next_step": {
+    "label": "Strengthen strategy-lab handoff into Coinbase paper runtime",
+    "source": "issue #53",
+    "queue_state": "active_now",
+    "constraints": [
+      "sandbox and paper only",
+      "do not enable live mode",
+      "do not add or modify credentials",
+      "do not raise risk caps",
+      "do not let AI bypass risk controls",
+      "do not treat chart-derived fixture bars as replay or paper evidence"
+    ],
+    "required_outputs": [
+      "strategy artifact schema or hardened model",
+      "active artifact traceability in Coinbase paper runtime",
+      "dashboard/API active artifact exposure",
+      "replay and paper evidence linked to exact artifact ids"
+    ]
+  },
+  "queue_summary": {
+    "completed": 4,
+    "active_now": 1,
+    "queued_after_current_stage": 4,
+    "blocked_on_human_decision": 0
+  },
+  "queue": [
+    {
+      "order": 1,
+      "label": "Compile recovery slice 1",
+      "source": "issue #48",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 2,
+      "label": "Coinbase visual workstation contract",
+      "source": "issue #54 / PR #57",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 3,
+      "label": "Chart-first Coinbase product detail surface",
+      "source": "issue #55 / PR #57",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 4,
+      "label": "Strategy review rail with import lineage",
+      "source": "issue #56 / PR #57",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 5,
+      "label": "Strategy-lab handoff into Coinbase paper runtime",
+      "source": "issue #53",
+      "status": "active_now",
+      "requires_human_decision": false
+    },
+    {
+      "order": 6,
+      "label": "Rust-native strategy IR and adapter layer",
+      "source": "issue #58",
+      "status": "queued",
+      "requires_human_decision": false
+    },
+    {
+      "order": 7,
+      "label": "Bounded AI optimizer objective and candidate sweep lane",
+      "source": "issue #59",
+      "status": "queued",
+      "requires_human_decision": false
+    },
+    {
+      "order": 8,
+      "label": "Strategy AI review surfaces",
+      "source": "issue #60",
+      "status": "queued",
+      "requires_human_decision": false
+    },
+    {
+      "order": 9,
+      "label": "Visual and strategy benchmark harnesses",
+      "source": "issue #61",
+      "status": "queued",
+      "requires_human_decision": false
+    }
+  ],
+  "validation_commands": [
+    "cargo fmt --all -- --check",
+    "cargo check --workspace",
+    "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+    "cargo test --workspace",
+    "cargo build --workspace",
+    "cd crates/pt-dashboard/frontend && npm test",
+    "cd crates/pt-dashboard/frontend && npm run build",
+    "python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json",
+    "python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery",
+    "python3 tools/coinbase_strategy_lab.py optimize --config config/coinbase_strategy_lab.json",
+    "cargo run -p pt-cli -- run --config config/config.toml",
+    "./scripts/paper_soak.sh 86400 30 config/config.toml"
+  ],
+  "guardrails": [
+    "Do not enable live mode.",
+    "Do not add or modify credentials.",
+    "Do not raise risk caps.",
+    "Do not let strategy artifacts bypass replay or paper validation.",
+    "Do not let AI directly mutate live or paper positions outside bounded policy controls.",
+    "Do not treat chart-derived fixture bars as replay, backtest, or paper evidence.",
+    "Do not build a Pine clone before the typed strategy artifact and IR lanes are stable."
+  ]
+}

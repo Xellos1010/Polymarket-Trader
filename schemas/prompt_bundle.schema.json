@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polymarket-trader.local/schemas/prompt_bundle.schema.json",
+  "title": "Prompt Bundle Export Config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "include_globs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "exclude_globs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "max_file_bytes": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 20000000
+    },
+    "max_total_bytes": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 100000000
+    },
+    "collapse_blank_runs": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,63 @@
+# DEPRECATED: Disabled pending local reliability inspection before recommissioning.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust-checks:
+    if: ${{ false }} # Deprecated: do not invoke until recommissioned.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Build
+        run: cargo build --workspace
+
+  security:
+    if: ${{ false }} # Deprecated: do not invoke until recommissioned.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install security tooling
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-cyclonedx --locked
+
+      - name: Dependency vulnerability scan
+        run: cargo audit
+
+      - name: Generate SBOM
+        run: ./scripts/generate_sbom.sh artifacts
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: artifacts/*

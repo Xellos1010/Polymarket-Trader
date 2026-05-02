@@ -1,0 +1,26 @@
+> cargo test --workspace
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.66s
+     Running unittests src/main.rs (target/debug/deps/pt_cli-869fac3ef94c8756)
+
+running 2 tests
+test tests::resolve_config_keeps_explicit_cli_path ... ok
+test tests::resolve_config_uses_env_when_default_is_passed ... FAILED
+
+failures:
+
+---- tests::resolve_config_uses_env_when_default_is_passed stdout ----
+
+thread 'tests::resolve_config_uses_env_when_default_is_passed' (992424) panicked at crates/pt-cli/src/main.rs:947:9:
+assertion `left == right` failed
+  left: "config/config.toml"
+ right: "config/alt.toml"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::resolve_config_uses_env_when_default_is_passed
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p pt-cli --bin pt-cli`

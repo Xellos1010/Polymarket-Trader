@@ -1,0 +1,298 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polymarket-trader.local/schemas/coinbase_strategy_lab.schema.json",
+  "title": "Coinbase Strategy Lab Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["provider", "granularity_sec", "backtest", "overlap"],
+  "definitions": {
+    "plugin": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": ["external_bias_file", "momentum_bias", "rsi_bias"]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": -10,
+          "maximum": 10
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lookback": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "window": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 1000
+        },
+        "oversold": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 99
+        },
+        "overbought": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 99
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": ["coinbase", "kraken"]
+    },
+    "granularity_sec": {
+      "type": "integer",
+      "minimum": 60
+    },
+    "backtest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["markets", "limit", "strategy"],
+      "properties": {
+        "markets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]+-[A-Z0-9]+$"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 5000
+        },
+        "strategy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "short_window", "long_window", "trade_fee_bps", "slippage_bps", "starting_equity"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["sma_crossover"]
+            },
+            "short_window": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 400
+            },
+            "long_window": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 800
+            },
+            "trade_fee_bps": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 200.0
+            },
+            "slippage_bps": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 200.0
+            },
+            "starting_equity": {
+              "type": "number",
+              "exclusiveMinimum": 0.0
+            }
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "bias_gain": {
+                "type": "number",
+                "minimum": -5,
+                "maximum": 5
+              },
+              "plugins": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/plugin"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "optimize": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "short_windows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 400
+          }
+        },
+        "long_windows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 800
+          }
+        },
+        "min_gap": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "top_n": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "drawdown_penalty": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10.0
+        },
+        "turnover_penalty": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 10.0
+        }
+      }
+    },
+    "overlap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candles_before", "candles_after", "markets"],
+      "properties": {
+        "candles_before": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "candles_after": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "markets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["product_id"],
+            "properties": {
+              "product_id": {
+                "type": "string",
+                "pattern": "^[A-Z0-9]+-[A-Z0-9]+$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "anchor_time": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            }
+          }
+        },
+        "auto_discovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "quote_currencies": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 10
+              }
+            },
+            "lookback_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            },
+            "discovery_granularity_sec": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 604800
+            },
+            "max_products_scan": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            },
+            "max_results": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "min_candles": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "min_gap_from_window_start_candles": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 500
+            }
+          }
+        }
+      }
+    },
+    "journal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "sqlite_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

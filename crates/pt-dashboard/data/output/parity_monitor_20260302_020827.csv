@@ -1,0 +1,2 @@
+route_id,strategy_class,gross_edge_bps,expected_net_bps,cost_bps,min_required_bps,expected_usd_profit,capital_required_usd,pass,reasons,ts,path
+route-1,ConversionCycle,110.000000,101.000000,9.000000,100.000000,0.200000,2.500000,FAIL,feed_stale,2026-03-02T02:08:27.288102+00:00,-

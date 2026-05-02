@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polymarket-trader.local/schemas/tradingview-webhook.schema.json",
+  "title": "TradingViewWebhook",
+  "description": "JSON payload format accepted by pt-signal parse_tradingview_bias",
+  "type": "object",
+  "properties": {
+    "strategy_name": { "type": "string" },
+    "order_action": {
+      "type": "string",
+      "enum": ["BUY", "SELL", "buy", "sell"]
+    },
+    "contracts": {
+      "type": "string",
+      "pattern": "^-?\\d+(\\.\\d+)?$"
+    },
+    "position_size": {
+      "type": "string",
+      "pattern": "^-?\\d+(\\.\\d+)?$"
+    },
+    "ticker": { "type": "string" }
+  },
+  "required": ["order_action"],
+  "additionalProperties": true
+}

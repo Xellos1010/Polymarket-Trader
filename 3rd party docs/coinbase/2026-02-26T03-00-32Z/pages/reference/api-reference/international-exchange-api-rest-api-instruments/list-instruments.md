@@ -1,0 +1,59 @@
+# list instruments
+
+```
+[
+  {
+    "instrument_id": 22653087021498350,
+    "instrument_uuid": "97645486-8058-4d98-aa1e-5ab2685d09c8",
+    "symbol": "BTC-USDC",
+    "type": "PERP",
+    "mode": "STANDARD",
+    "base_asset_id": 2919822098049565,
+    "base_asset_uuid": "592a8039-db3e-45ed-b752-ffd1983eead2",
+    "base_asset_name": "BTC",
+    "quote_asset_id": 45922259775510770,
+    "quote_asset_uuid": "a96dc949-7650-4a70-8227-955366a22297",
+    "quote_asset_name": "USDC",
+    "base_increment": 0.000001,
+    "quote_increment": 0.01,
+    "price_band_percent": 0.02,
+    "market_order_percent": 0.015,
+    "qty_24hr": 4318.12,
+    "notional_24hr": 86362400,
+    "avg_daily_qty": 5741.531,
+    "avg_daily_notional": 109430620,
+    "previous_day_qty": 5741.531,
+    "open_interest": 100,
+    "position_limit_qty": "<string>",
+    "position_limit_adq_pct": 0.03,
+    "position_notional_limit": "57509393.1183",
+    "open_interest_notional_limit": "299974395.974",
+    "replacement_cost": 421.31,
+    "base_imf": 0.1,
+    "default_imf": 0.2,
+    "min_notional_value": 10,
+    "min_quantity": 0.0001,
+    "funding_interval": 36000000000,
+    "trading_state": "TRADING",
+    "quote": {
+      "best_bid_price": 20000.5,
+      "best_bid_size": 3.541424,
+      "best_ask_price": 20001.75,
+      "best_ask_size": 2.8754,
+      "trade_price": 20000.63,
+      "trade_qty": 0.73,
+      "index_price": 20001.45,
+      "mark_price": 20000.63,
+      "settlement_price": 20000.23,
+      "limit_up": 21056.35,
+      "limit_down": 19531.5,
+      "predicted_funding": 0.1543,
+      "timestamp": "2023-11-07T05:31:56Z"
+    },
+    "base_asset_multiplier": 1,
+    "underlying_type": "SPOT",
+    "rfq_maker_fee_rate": 0.01,
+    "execution_exchange": "COINBASE_INTERNATIONAL_EXCHANGE"
+  }
+]
+```

@@ -1,0 +1,67 @@
+# --- Rust / Cargo ---
+/target/
+**/*.rs.bk
+*.profraw
+*.profdata
+
+# --- Secrets & local configuration (commit *.example.* templates only) ---
+.env
+.env.*
+!.env.example
+.envrc
+.direnv/
+
+config/config.toml
+config/coinbase_strategy_lab.json
+config/prompt_bundle.json
+config/*api_key*.json
+config/*secret*.json
+config/*credentials*.json
+config/*_token.json
+
+*.pem
+*.p12
+*.pfx
+*.key.pem
+*-private-key.pem
+credentials.json
+service-account*.json
+*credentials*.json
+
+# --- Runtime outputs & local databases ---
+data/output/
+data/strategy_lab/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db-wal
+*.db-shm
+
+crates/pt-dashboard/data/
+
+# --- Frontend (Vite / Node) ---
+**/node_modules/
+**/.vite/
+
+# --- Build & analysis artifacts ---
+artifacts/
+.local/
+
+# --- Logs, coverage, temp ---
+*.log
+logs/
+coverage/
+lcov.info
+.tarpaulin_output.json
+*.tmp
+*.temp
+*.swp
+*~
+*.orig
+
+# --- OS & editors ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+*.iml
