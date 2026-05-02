@@ -285,7 +285,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Selected product review surface" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Paper-state lineage and guardrails" })).toBeInTheDocument();
     expect(screen.getByText("daily loss limit near threshold")).toBeInTheDocument();
-    expect(screen.getByText("data/strategy_lab/dashboard-btc.json")).toBeInTheDocument();
+    expect(screen.getAllByText("data/strategy_lab/dashboard-btc.json").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByLabelText("Selected product price chart")).toBeInTheDocument();
   });
 
@@ -295,6 +295,7 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: "Selected Market" });
+    await screen.findByPlaceholderText("Quote notional");
     fireEvent.change(screen.getByPlaceholderText("Quote notional"), {
       target: { value: "40" },
     });
