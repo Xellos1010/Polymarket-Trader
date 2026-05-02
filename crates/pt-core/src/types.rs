@@ -416,13 +416,55 @@ pub struct ProductStrategyConfigView {
     pub plugin_signal: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+fn default_strategy_import_promotion_status() -> String {
+    "imported_only".to_string()
+}
+
+/// Summary of a strategy-lab JSON file imported into the Coinbase paper workstation.
+///
+/// `import_id` is assigned at import time. `artifact_id` (when present) is the stable
+/// trace handle operators should correlate with replay and paper evidence; it may match
+/// `import_id` or come from the lab JSON (`artifact_id` / `meta.artifact_id`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyLabImportSummary {
     pub import_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_id: Option<String>,
     pub path: String,
     pub imported_at: Option<DateTime<Utc>>,
     pub markets: Vec<String>,
     pub best_variants: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_run_id: Option<String>,
+    #[serde(default = "default_strategy_import_promotion_status")]
+    pub promotion_status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replay_acceptance_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub objective_score: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeframe: Option<String>,
+}
+
+impl Default for StrategyLabImportSummary {
+    fn default() -> Self {
+        Self {
+            import_id: String::new(),
+            artifact_id: None,
+            path: String::new(),
+            imported_at: None,
+            markets: Vec::new(),
+            best_variants: Vec::new(),
+            source_run_id: None,
+            promotion_status: default_strategy_import_promotion_status(),
+            replay_acceptance_status: None,
+            objective_score: None,
+            confidence: None,
+            timeframe: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -152,10 +152,17 @@ fn fixture_state() -> DashboardState {
     }];
     *coinbase.imports.write() = vec![StrategyLabImportSummary {
         import_id: "import-1".to_string(),
+        artifact_id: Some("artifact-1".to_string()),
         path: "data/strategy_lab/sample.json".to_string(),
         imported_at: Some(now),
         markets: vec!["BTC-USD".to_string()],
         best_variants: vec!["BTC-USD:sma_baseline".to_string()],
+        source_run_id: Some("jr-fixture-1".to_string()),
+        promotion_status: "imported_only".to_string(),
+        replay_acceptance_status: None,
+        objective_score: Some(0.42),
+        confidence: None,
+        timeframe: Some("300s_candles".to_string()),
     }];
     *coinbase.product_details.write() = HashMap::from([(
         "BTC-USD".to_string(),
@@ -350,7 +357,7 @@ async fn state_endpoints_match_openapi_contract() {
     let import_fixture = std::env::temp_dir().join("pt-dashboard-import.json");
     fs::write(
         &import_fixture,
-        r#"{"markets":{"BTC-USD":{"default_variant":"sma_baseline"}}}"#,
+        r#"{"artifact_id":"lab-artifact-contract-1","meta":{"granularity_sec":300,"journal_run_id":"jr-contract-1"},"markets":{"BTC-USD":{"default_variant":"sma_baseline","variants":{"sma_baseline":{"metrics":{"sharpe_like":1.25,"total_return":0.05}}}}}}"#,
     )
     .expect("write import fixture");
     let import_body = format!(r#"{{"path":"{}"}}"#, import_fixture.display());

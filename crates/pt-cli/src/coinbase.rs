@@ -465,6 +465,24 @@ impl CoinbaseWorkstationRuntime {
         let strategy_cfg = self.strategy_cfg_for_product(&product_id);
         let plugin_signal =
             plugin_signal_for_product(imports, &product_id, strategy_cfg.plugin_signal);
+        let lab_artifacts: Vec<&str> = imports
+            .iter()
+            .filter(|summary| import_matches_product(summary, &product_id))
+            .map(|summary| {
+                summary
+                    .artifact_id
+                    .as_deref()
+                    .unwrap_or(summary.import_id.as_str())
+            })
+            .collect();
+        if !lab_artifacts.is_empty() {
+            info!(
+                product_id = %product_id,
+                plugin_signal,
+                ?lab_artifacts,
+                "strategy-lab artifact handoff influencing plugin signal"
+            );
+        }
         let (micro, momentum_score) =
             self.build_microstructure(&product_id, &book, &trades, &candles);
         let strategy = self.build_strategy_vector(
@@ -1311,22 +1329,32 @@ fn direction_sign(value: f64) -> i8 {
     }
 }
 
+fn import_matches_product(summary: &StrategyLabImportSummary, product_id: &str) -> bool {
+    summary.best_variants.iter().any(|row| {
+        row.split_once(':')
+            .map(|(market, _)| market.eq_ignore_ascii_case(product_id))
+            .unwrap_or(false)
+    })
+}
+
 fn plugin_signal_for_product(
     imports: &[StrategyLabImportSummary],
     product_id: &str,
     base_signal: f64,
 ) -> f64 {
-    let imported_bias = imports
+    let mut bias = 0.0;
+    for summary in imports
         .iter()
-        .filter(|summary| {
-            summary
-                .best_variants
-                .iter()
-                .any(|row| row.starts_with(product_id))
-        })
-        .count() as f64
-        * 0.1;
-    (base_signal + imported_bias).clamp(-1.0, 1.0)
+        .filter(|s| import_matches_product(s, product_id))
+    {
+        bias += 0.1;
+        if let Some(score) = summary.objective_score {
+            bias += (score.clamp(-3.0, 3.0) / 30.0).clamp(-0.15, 0.15);
+        } else if let Some(c) = summary.confidence {
+            bias += (c.clamp(0.0, 1.0) / 40.0).clamp(0.0, 0.1);
+        }
+    }
+    (base_signal + bias).clamp(-1.0, 1.0)
 }
 
 fn derived_limit_price_from_row(row: &ScannerRow, side: &Side, cfg: &AppConfig) -> Option<f64> {

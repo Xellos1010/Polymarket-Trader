@@ -60,8 +60,16 @@ type WorkstationOrder = {
 };
 
 type ProductImport = {
+  import_id?: string;
   path: string;
   best_variants: string[];
+  artifact_id?: string | null;
+  source_run_id?: string | null;
+  promotion_status?: string;
+  replay_acceptance_status?: string | null;
+  objective_score?: number | null;
+  confidence?: number | null;
+  timeframe?: string | null;
 };
 
 type ProductDetail = {
@@ -112,7 +120,19 @@ type StrategiesResponse = {
     quote_size_usd: number;
     plugin_signal: number;
   }>;
-  imports: Array<{ import_id: string; path: string; markets: string[]; best_variants: string[] }>;
+  imports: Array<{
+    import_id: string;
+    path: string;
+    markets: string[];
+    best_variants: string[];
+    artifact_id?: string | null;
+    source_run_id?: string | null;
+    promotion_status?: string;
+    replay_acceptance_status?: string | null;
+    objective_score?: number | null;
+    confidence?: number | null;
+    timeframe?: string | null;
+  }>;
 };
 
 type ListingRadarRow = {
@@ -438,6 +458,22 @@ function VisualWorkstation({ detail, selection }: { detail: ProductDetail; selec
             <span>Imported lineage</span>
             <strong>{detail.imports[0]?.best_variants[0] ?? "No imported variant active"}</strong>
             <p>{detail.imports[0]?.path ?? "This product is currently running without imported strategy-lab lineage."}</p>
+            {detail.imports[0] ? (
+              <p className="muted">
+                Artifact <code>{detail.imports[0].artifact_id ?? detail.imports[0].import_id ?? "—"}</code>
+                {detail.imports[0].source_run_id ? (
+                  <>
+                    {" "}
+                    · run <code>{detail.imports[0].source_run_id}</code>
+                  </>
+                ) : null}
+                {" · "}
+                {(detail.imports[0].promotion_status ?? "imported_only").replace(/_/g, " ")}
+                {detail.imports[0].objective_score != null && detail.imports[0].objective_score !== undefined
+                  ? ` · lab preview ${detail.imports[0].objective_score.toFixed(3)}`
+                  : null}
+              </p>
+            ) : null}
           </div>
 
           <div className="rail-metrics">

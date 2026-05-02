@@ -166,11 +166,20 @@ struct ModeResponse {
 #[derive(Debug, Clone, Serialize)]
 struct ActiveImportView {
     import_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    artifact_id: Option<String>,
     path: String,
     product_id: String,
     market: String,
     variant: String,
     imported_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_run_id: Option<String>,
+    promotion_status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    replay_acceptance_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    objective_score: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -703,6 +712,108 @@ async fn post_strategy_lab_import(
     Ok(Json(summary))
 }
 
+fn lab_json_str<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
+    value.get(key).and_then(Value::as_str)
+}
+
+fn lab_meta_object(payload: &Value) -> Option<&serde_json::Map<String, Value>> {
+    payload.get("meta").and_then(Value::as_object)
+}
+
+fn extract_source_run_id(payload: &Value) -> Option<String> {
+    lab_json_str(payload, "source_run_id")
+        .map(str::to_string)
+        .or_else(|| {
+            lab_meta_object(payload)?
+                .get("journal_run_id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .or_else(|| {
+            lab_meta_object(payload)?
+                .get("run_id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+}
+
+fn extract_artifact_id_from_lab(payload: &Value) -> Option<String> {
+    lab_json_str(payload, "artifact_id")
+        .map(str::to_string)
+        .or_else(|| {
+            lab_meta_object(payload)?
+                .get("artifact_id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+}
+
+fn extract_timeframe(payload: &Value) -> Option<String> {
+    let meta = lab_meta_object(payload)?;
+    let g = meta
+        .get("granularity_sec")
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            meta.get("granularity_sec")
+                .and_then(|v| v.as_i64())
+                .map(|n| n as u64)
+        })
+        .or_else(|| {
+            meta.get("granularity_sec")
+                .and_then(Value::as_f64)
+                .map(|f| f as u64)
+        })?;
+    Some(format!("{g}s_candles"))
+}
+
+fn extract_objective_preview(payload: &Value) -> Option<f64> {
+    let markets = payload.get("markets").and_then(Value::as_object)?;
+    let mut best: Option<f64> = None;
+    for mv in markets.values() {
+        let default_variant = mv.get("default_variant").and_then(Value::as_str)?;
+        let metrics = mv
+            .get("variants")?
+            .get(default_variant)?
+            .get("metrics")?
+            .as_object()?;
+        let score = metrics
+            .get("sharpe_like")
+            .and_then(Value::as_f64)
+            .or_else(|| metrics.get("total_return").and_then(Value::as_f64))?;
+        best = Some(best.map(|b| b.max(score)).unwrap_or(score));
+    }
+    best
+}
+
+fn extract_promotion_status(payload: &Value) -> String {
+    lab_json_str(payload, "promotion_status")
+        .map(str::to_string)
+        .or_else(|| {
+            payload
+                .get("promotion")
+                .and_then(|p| p.get("status"))
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "imported_only".to_string())
+}
+
+fn extract_replay_acceptance_status(payload: &Value) -> Option<String> {
+    payload
+        .get("replay_acceptance")
+        .and_then(|r| r.get("status"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| lab_json_str(payload, "replay_acceptance_status").map(str::to_string))
+}
+
+fn extract_confidence_preview(payload: &Value) -> Option<f64> {
+    lab_meta_object(payload)?
+        .get("confidence")
+        .and_then(Value::as_f64)
+        .or_else(|| lab_json_str(payload, "confidence").and_then(|s| s.parse().ok()))
+}
+
 fn summarize_strategy_lab_import(path: &str) -> Result<StrategyLabImportSummary, String> {
     let raw = fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
     let payload: Value = serde_json::from_str(&raw)
@@ -728,12 +839,22 @@ fn summarize_strategy_lab_import(path: &str) -> Result<StrategyLabImportSummary,
         }
     }
 
+    let import_id = format!("import-{}", Utc::now().timestamp_millis());
+    let artifact_id = extract_artifact_id_from_lab(&payload).or_else(|| Some(import_id.clone()));
+
     Ok(StrategyLabImportSummary {
-        import_id: format!("import-{}", Utc::now().timestamp_millis()),
+        import_id,
+        artifact_id,
         path: path.to_string(),
         imported_at: Some(Utc::now()),
         markets,
         best_variants,
+        source_run_id: extract_source_run_id(&payload),
+        promotion_status: extract_promotion_status(&payload),
+        replay_acceptance_status: extract_replay_acceptance_status(&payload),
+        objective_score: extract_objective_preview(&payload),
+        confidence: extract_confidence_preview(&payload),
+        timeframe: extract_timeframe(&payload),
     })
 }
 
@@ -750,11 +871,16 @@ fn active_imports_for_product(
             if market.eq_ignore_ascii_case(product_id) {
                 rows.push(ActiveImportView {
                     import_id: summary.import_id.clone(),
+                    artifact_id: summary.artifact_id.clone(),
                     path: summary.path.clone(),
                     product_id: product_id.to_string(),
                     market: market.to_string(),
                     variant: variant.to_string(),
                     imported_at: summary.imported_at,
+                    source_run_id: summary.source_run_id.clone(),
+                    promotion_status: summary.promotion_status.clone(),
+                    replay_acceptance_status: summary.replay_acceptance_status.clone(),
+                    objective_score: summary.objective_score,
                 });
             }
         }

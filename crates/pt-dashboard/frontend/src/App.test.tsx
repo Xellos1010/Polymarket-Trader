@@ -64,7 +64,11 @@ const strategiesResponse = {
       import_id: "imp-1",
       path: "data/strategy_lab/dashboard-btc.json",
       markets: ["BTC-USD"],
-      best_variants: ["microstructure_v2"],
+      best_variants: ["BTC-USD:microstructure_v2"],
+      artifact_id: "artifact-imp-1",
+      source_run_id: "jr-test-1",
+      promotion_status: "imported_only",
+      objective_score: 0.55,
     },
   ],
 };
@@ -125,7 +129,17 @@ const productDetail = {
     reasons: ["daily loss limit near threshold"],
   },
   orders: ordersResponse,
-  imports: [{ path: "data/strategy_lab/dashboard-btc.json", best_variants: ["microstructure_v2"] }],
+  imports: [
+    {
+      import_id: "imp-detail-1",
+      path: "data/strategy_lab/dashboard-btc.json",
+      best_variants: ["BTC-USD:microstructure_v2"],
+      artifact_id: "artifact-imp-1",
+      source_run_id: "jr-test-1",
+      promotion_status: "imported_only",
+      objective_score: 0.55,
+    },
+  ],
 };
 
 const listingRows = [

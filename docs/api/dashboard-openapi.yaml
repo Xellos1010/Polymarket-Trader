@@ -562,9 +562,12 @@ components:
         plugin_signal: { type: number }
     StrategyLabImportSummary:
       type: object
-      required: [import_id, path, markets, best_variants]
+      required: [import_id, path, markets, best_variants, promotion_status]
       properties:
         import_id: { type: string }
+        artifact_id:
+          type: string
+          nullable: true
         path: { type: string }
         imported_at:
           type: string
@@ -576,11 +579,30 @@ components:
         best_variants:
           type: array
           items: { type: string }
+        source_run_id:
+          type: string
+          nullable: true
+        promotion_status: { type: string }
+        replay_acceptance_status:
+          type: string
+          nullable: true
+        objective_score:
+          type: number
+          nullable: true
+        confidence:
+          type: number
+          nullable: true
+        timeframe:
+          type: string
+          nullable: true
     ActiveImportView:
       type: object
-      required: [import_id, path, product_id, market, variant]
+      required: [import_id, path, product_id, market, variant, promotion_status]
       properties:
         import_id: { type: string }
+        artifact_id:
+          type: string
+          nullable: true
         path: { type: string }
         product_id: { type: string }
         market: { type: string }
@@ -588,6 +610,16 @@ components:
         imported_at:
           type: string
           format: date-time
+          nullable: true
+        source_run_id:
+          type: string
+          nullable: true
+        promotion_status: { type: string }
+        replay_acceptance_status:
+          type: string
+          nullable: true
+        objective_score:
+          type: number
           nullable: true
     ProductImportActivationView:
       type: object
