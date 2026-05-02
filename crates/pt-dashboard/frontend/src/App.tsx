@@ -3,6 +3,7 @@ import { formatBps, scoreTone } from "./format";
 
 type Tone = "buy" | "sell" | "flat";
 type WorkspaceId = "command" | "listing" | "risk" | "strategy" | "agent";
+type ContractMode = "current-api" | "fixture-backed";
 
 type LiveArmState = {
   armed: boolean;
@@ -58,6 +59,11 @@ type WorkstationOrder = {
   updated_at?: string | null;
 };
 
+type ProductImport = {
+  path: string;
+  best_variants: string[];
+};
+
 type ProductDetail = {
   product: {
     product_id: string;
@@ -91,7 +97,7 @@ type ProductDetail = {
   };
   eligibility: TradingEligibility;
   orders: WorkstationOrder[];
-  imports: Array<{ path: string; best_variants: string[] }>;
+  imports: ProductImport[];
 };
 
 type StrategiesResponse = {
@@ -165,7 +171,7 @@ type ListingRadarDetail = {
   insights: ProviderInsight[];
   routes: ListingVenueRoute[];
   eligibility: TradingEligibility;
-  imports: Array<{ path: string; best_variants: string[] }>;
+  imports: ProductImport[];
 };
 
 type RiskOverview = {
@@ -206,6 +212,17 @@ type WorkspaceTab = {
   kicker: string;
 };
 
+type SyntheticBar = {
+  label: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  spread: number;
+  marker?: string;
+};
+
 const INITIAL_DETAIL: ProductDetail | null = null;
 const WORKSPACES: WorkspaceTab[] = [
   { id: "command", label: "Command Center", kicker: "Operate" },
@@ -225,6 +242,244 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatCompactPrice(value: number): string {
+  if (value >= 1000) {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  }
+  if (value >= 1) {
+    return value.toFixed(2);
+  }
+  return value.toFixed(4);
+}
+
+function contractLabel(mode: ContractMode): string {
+  return mode === "current-api" ? "current API" : "fixture backed";
+}
+
+function buildSyntheticBars(detail: ProductDetail, selection: ScannerRow | null): SyntheticBar[] {
+  const base = detail.product.price || selection?.mid_price || detail.microstructure.best_bid || 1;
+  const spreadPx = Math.max(base * (detail.microstructure.spread_bps / 10000), base * 0.00018);
+  const directionalBias = (detail.strategy.composite_score - 0.5) * 2.4;
+  const rhythm = detail.microstructure.tape_direction * 0.7;
+
+  return Array.from({ length: 18 }, (_, index) => {
+    const wave = Math.sin(index * 0.55 + rhythm) * spreadPx * 4.6;
+    const drift = directionalBias * spreadPx * index * 0.4;
+    const anchor = base + drift + wave;
+    const open = anchor - spreadPx * (0.8 + Math.cos(index * 0.33));
+    const close = anchor + spreadPx * (0.55 + Math.sin(index * 0.49));
+    const high = Math.max(open, close) + spreadPx * (1.5 + (index % 3) * 0.3);
+    const low = Math.min(open, close) - spreadPx * (1.1 + (index % 4) * 0.24);
+    const volume = detail.product.volume_24h / 48 + index * 320 + Math.abs(detail.microstructure.imbalance) * 1000;
+
+    let marker: string | undefined;
+    if (index === 5) {
+      marker = "Bias inflection";
+    } else if (index === 11 && detail.strategy.priority_fill) {
+      marker = "Priority fill";
+    } else if (index === 16 && detail.imports[0]?.best_variants[0]) {
+      marker = detail.imports[0].best_variants[0];
+    }
+
+    return {
+      label: `${index + 1}`,
+      open,
+      high,
+      low,
+      close,
+      volume,
+      spread: detail.microstructure.spread_bps,
+      marker,
+    };
+  });
+}
+
+function VisualWorkstation({ detail, selection }: { detail: ProductDetail; selection: ScannerRow | null }) {
+  const bars = useMemo(() => buildSyntheticBars(detail, selection), [detail, selection]);
+  const highMax = Math.max(...bars.map((bar) => bar.high));
+  const lowMin = Math.min(...bars.map((bar) => bar.low));
+  const volumeMax = Math.max(...bars.map((bar) => bar.volume));
+  const priceRange = Math.max(highMax - lowMin, detail.product.price * 0.001);
+
+  return (
+    <div className="workstation-grid">
+      <section className="chart-stage">
+        <div className="chart-stage__header">
+          <div>
+            <p className="eyebrow">Visual workstation</p>
+            <h3>Selected product review surface</h3>
+          </div>
+          <div className="contract-stack">
+            <span className="contract-chip contract-chip--current">{contractLabel("current-api")}</span>
+            <span className="contract-chip contract-chip--fixture">{contractLabel("fixture-backed")}</span>
+          </div>
+        </div>
+
+        <div className="chart-stage__meta">
+          <div>
+            <span>Source contract</span>
+            <strong>`/api/v1/products/{detail.product.product_id}`</strong>
+          </div>
+          <div>
+            <span>History lane</span>
+            <strong>derived bars until product-history wiring lands</strong>
+          </div>
+          <div>
+            <span>Overlay source</span>
+            <strong>strategy, spread, import lineage</strong>
+          </div>
+        </div>
+
+        <div className="chart-shell">
+          <div className="price-pane">
+            <div className="pane-header">
+              <strong>{detail.product.product_id}</strong>
+              <span>{formatCompactPrice(detail.product.price)} {detail.product.quote_currency}</span>
+            </div>
+            <svg viewBox="0 0 760 310" className="price-chart" role="img" aria-label="Selected product price chart">
+              <defs>
+                <linearGradient id="chartGlow" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(119, 230, 255, 0.2)" />
+                  <stop offset="100%" stopColor="rgba(119, 230, 255, 0)" />
+                </linearGradient>
+              </defs>
+              <rect x="0" y="0" width="760" height="310" rx="18" className="chart-backdrop" />
+              {Array.from({ length: 4 }).map((_, index) => {
+                const y = 42 + index * 58;
+                return <line key={y} x1="28" y1={y} x2="732" y2={y} className="grid-line" />;
+              })}
+              {bars.map((bar, index) => {
+                const step = 700 / bars.length;
+                const x = 44 + index * step;
+                const yHigh = 245 - ((bar.high - lowMin) / priceRange) * 180;
+                const yLow = 245 - ((bar.low - lowMin) / priceRange) * 180;
+                const yOpen = 245 - ((bar.open - lowMin) / priceRange) * 180;
+                const yClose = 245 - ((bar.close - lowMin) / priceRange) * 180;
+                const up = bar.close >= bar.open;
+                const bodyY = Math.min(yOpen, yClose);
+                const bodyHeight = Math.max(Math.abs(yClose - yOpen), 3);
+                return (
+                  <g key={`${bar.label}-${index}`}>
+                    <line x1={x} y1={yHigh} x2={x} y2={yLow} className="wick-line" />
+                    <rect
+                      x={x - 9}
+                      y={bodyY}
+                      width="18"
+                      height={bodyHeight}
+                      rx="4"
+                      className={up ? "candle candle--up" : "candle candle--down"}
+                    />
+                    {bar.marker ? (
+                      <g>
+                        <circle cx={x} cy={yHigh - 14} r="4" className="marker-dot" />
+                        <text x={x} y={yHigh - 22} textAnchor="middle" className="marker-label">
+                          {bar.marker}
+                        </text>
+                      </g>
+                    ) : null}
+                  </g>
+                );
+              })}
+              <path
+                d={`M 44 ${245 - ((bars[0].close - lowMin) / priceRange) * 180} ${bars
+                  .map((bar, index) => {
+                    const step = 700 / bars.length;
+                    const x = 44 + index * step;
+                    const y = 245 - ((bar.close - lowMin) / priceRange) * 180;
+                    return `L ${x} ${y}`;
+                  })
+                  .join(" ")}`}
+                className="close-line"
+              />
+            </svg>
+          </div>
+
+          <div className="volume-pane">
+            <div className="pane-header">
+              <strong>Activity lane</strong>
+              <span>{formatBps(detail.microstructure.spread_bps)} spread</span>
+            </div>
+            <div className="volume-bars" aria-label="Selected product activity chart">
+              {bars.map((bar, index) => (
+                <div key={`${bar.label}-volume-${index}`} className="volume-bar-wrap">
+                  <div
+                    className="volume-bar"
+                    style={{ height: `${Math.max((bar.volume / volumeMax) * 100, 8)}%` }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="volume-caption">
+              <span>Volume is derived from current product detail for layout and benchmarking.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside className="strategy-rail">
+        <div className="strategy-rail__header">
+          <p className="eyebrow">Strategy review rail</p>
+          <h3>Paper-state lineage and guardrails</h3>
+        </div>
+
+        <div className="rail-stack">
+          <div className="rail-card">
+            <span>Active strategy</span>
+            <strong>{detail.strategy.strategy_name}</strong>
+            <p>
+              Composite score {detail.strategy.composite_score.toFixed(3)} with
+              {detail.strategy.priority_fill ? " priority fill enabled." : " standard execution posture."}
+            </p>
+          </div>
+
+          <div className="rail-card">
+            <span>Imported lineage</span>
+            <strong>{detail.imports[0]?.best_variants[0] ?? "No imported variant active"}</strong>
+            <p>{detail.imports[0]?.path ?? "This product is currently running without imported strategy-lab lineage."}</p>
+          </div>
+
+          <div className="rail-metrics">
+            <div className="rail-metric">
+              <span>Micro</span>
+              <strong>{detail.strategy.microstructure_score.toFixed(3)}</strong>
+            </div>
+            <div className="rail-metric">
+              <span>Momentum</span>
+              <strong>{detail.strategy.momentum_score.toFixed(3)}</strong>
+            </div>
+            <div className="rail-metric">
+              <span>Volatility</span>
+              <strong>{detail.strategy.volatility_score.toFixed(3)}</strong>
+            </div>
+            <div className="rail-metric">
+              <span>Plugin</span>
+              <strong>{detail.strategy.plugin_score.toFixed(3)}</strong>
+            </div>
+          </div>
+
+          <div className="rail-card rail-card--guardrail">
+            <span>Routing guardrails</span>
+            <strong>
+              {detail.eligibility.eligible ? "Eligible for paper routing" : detail.eligibility.scan_only ? "Scan only" : "Policy hold active"}
+            </strong>
+            <ul>
+              {detail.eligibility.reasons.length === 0 ? <li>No active policy holds.</li> : detail.eligibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+            </ul>
+          </div>
+
+          <div className="rail-card rail-card--contract">
+            <span>Contract stance</span>
+            <strong>Current API for strategy state, fixture-backed for history bars</strong>
+            <p>
+              This first visual slice is safe for operator review and benchmarking, but it is not replay evidence.
+            </p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
 }
 
 export default function App() {
@@ -718,24 +973,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="vector-grid">
-                  <div className="vector-card">
-                    <span>Microstructure</span>
-                    <strong>{detail.strategy.microstructure_score.toFixed(3)}</strong>
-                  </div>
-                  <div className="vector-card">
-                    <span>Momentum</span>
-                    <strong>{detail.strategy.momentum_score.toFixed(3)}</strong>
-                  </div>
-                  <div className="vector-card">
-                    <span>Volatility</span>
-                    <strong>{detail.strategy.volatility_score.toFixed(3)}</strong>
-                  </div>
-                  <div className="vector-card">
-                    <span>Plugin</span>
-                    <strong>{detail.strategy.plugin_score.toFixed(3)}</strong>
-                  </div>
-                </div>
+                <VisualWorkstation detail={detail} selection={selection} />
 
                 <form className="trade-ticket" onSubmit={submitManualOrder}>
                   <div className="ticket-row">
@@ -758,17 +996,6 @@ export default function App() {
                     </button>
                   </div>
                 </form>
-
-                <div className="eligibility">
-                  <h3>Eligibility</h3>
-                  <ul>
-                    {detail.eligibility.reasons.length === 0 ? (
-                      <li>Eligible for automated routing.</li>
-                    ) : (
-                      detail.eligibility.reasons.map((reason) => <li key={reason}>{reason}</li>)
-                    )}
-                  </ul>
-                </div>
               </div>
             ) : (
               <p className="muted">Select a market from the scanner.</p>
@@ -819,8 +1046,7 @@ export default function App() {
                   <strong>{strategy.product_id}</strong>
                   <span>{strategy.strategy_name}</span>
                   <small>
-                    threshold {strategy.score_threshold.toFixed(2)} / $
-                    {strategy.quote_size_usd.toFixed(0)}
+                    threshold {strategy.score_threshold.toFixed(2)} / ${strategy.quote_size_usd.toFixed(0)}
                   </small>
                 </div>
               ))}
@@ -858,8 +1084,7 @@ export default function App() {
       <section className="mission-band">
         <p className="lede">
           The workstation now separates operating views for execution, listing research, risk,
-          strategy validation, and agent governance while continuing to run on the current API
-          surface.
+          strategy validation, and agent governance while continuing to run on the current API surface.
         </p>
         <div className="mission-stats">
           <div>
@@ -907,9 +1132,7 @@ export default function App() {
               <option value="paper">Paper</option>
               <option value="live">Live</option>
             </select>
-            <button onClick={() => void postJson("/api/v1/mode", { mode: modeDraft })}>
-              Apply Mode
-            </button>
+            <button onClick={() => void postJson("/api/v1/mode", { mode: modeDraft })}>Apply Mode</button>
           </div>
           <div className="button-row">
             <button
@@ -941,9 +1164,7 @@ export default function App() {
               onChange={(event) => setImportPath(event.target.value)}
               placeholder="data/strategy_lab/dashboard-....json"
             />
-            <button onClick={() => void postJson("/api/v1/strategy-lab/import", { path: importPath })}>
-              Import
-            </button>
+            <button onClick={() => void postJson("/api/v1/strategy-lab/import", { path: importPath })}>Import</button>
           </div>
           <div className="import-list">
             {(strategies?.imports ?? []).slice(0, 3).map((item) => (
