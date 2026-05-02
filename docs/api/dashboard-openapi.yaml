@@ -206,7 +206,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProductDetailView'
+                $ref: '#/components/schemas/ProductDetailResponse'
   /api/v1/orders:
     get:
       summary: Manual and automatic workstation orders
@@ -230,7 +230,7 @@ paths:
                 $ref: '#/components/schemas/WorkstationOrder'
   /api/v1/strategies:
     get:
-      summary: Strategy config, imports, and live-arm state
+      summary: Strategy config, imports, live-arm state, and active import mapping
       responses:
         '200':
           description: OK
@@ -576,9 +576,31 @@ components:
         best_variants:
           type: array
           items: { type: string }
-    ProductDetailView:
+    ActiveImportView:
       type: object
-      required: [product, microstructure, strategy, eligibility, orders, imports]
+      required: [import_id, path, product_id, market, variant]
+      properties:
+        import_id: { type: string }
+        path: { type: string }
+        product_id: { type: string }
+        market: { type: string }
+        variant: { type: string }
+        imported_at:
+          type: string
+          format: date-time
+          nullable: true
+    ProductImportActivationView:
+      type: object
+      required: [product_id, imports]
+      properties:
+        product_id: { type: string }
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActiveImportView'
+    ProductDetailResponse:
+      type: object
+      required: [product, microstructure, strategy, eligibility, orders, imports, active_imports]
       properties:
         product:
           $ref: '#/components/schemas/WorkstationProduct'
@@ -596,6 +618,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StrategyLabImportSummary'
+        active_imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActiveImportView'
     ModeResponse:
       type: object
       required: [mode, live_arm]
@@ -605,7 +631,7 @@ components:
           $ref: '#/components/schemas/LiveArmState'
     StrategiesResponse:
       type: object
-      required: [mode, live_arm, strategies, imports]
+      required: [mode, live_arm, strategies, imports, active_imports]
       properties:
         mode: { type: string }
         live_arm:
@@ -618,6 +644,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StrategyLabImportSummary'
+        active_imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImportActivationView'
     ActionResponse:
       type: object
       required: [ok, message]
