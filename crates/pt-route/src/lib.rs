@@ -18,6 +18,7 @@ struct DirectedEdge {
     px: f64,
 }
 
+#[allow(clippy::too_many_arguments)] // Route scan takes independent fee and penalty knobs from callers.
 pub fn find_route_opportunities(
     books: &HashMap<String, RouteBook>,
     capital_usd: f64,

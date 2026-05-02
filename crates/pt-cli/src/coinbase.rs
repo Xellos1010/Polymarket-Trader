@@ -57,17 +57,12 @@ pub async fn coinbase_preflight(
         cfg.venues.coinbase.passphrase.clone(),
     );
 
-    let mut checks = Vec::new();
-    checks.push(check_bind("ops.dashboard_bind", &cfg.ops.dashboard_bind));
-    checks.push(check_nonempty(
-        "venues.coinbase.api_base",
-        &cfg.venues.coinbase.api_base,
-    ));
-    checks.push(check_nonempty(
-        "venues.coinbase.ws.url",
-        &cfg.venues.coinbase.ws.url,
-    ));
-    checks.push(check_pass("mode", &mode));
+    let mut checks = vec![
+        check_bind("ops.dashboard_bind", &cfg.ops.dashboard_bind),
+        check_nonempty("venues.coinbase.api_base", &cfg.venues.coinbase.api_base),
+        check_nonempty("venues.coinbase.ws.url", &cfg.venues.coinbase.ws.url),
+        check_pass("mode", &mode),
+    ];
 
     match client.list_public_products(8).await {
         Ok(products) if !products.is_empty() => checks.push(check_pass(
@@ -230,12 +225,13 @@ impl CoinbaseWorkstationRuntime {
 
     async fn run(self) -> Result<(), String> {
         let runtime = Arc::new(self);
-        let mut tasks = Vec::new();
-        tasks.push(runtime.clone().spawn_dashboard_server());
-        tasks.push(runtime.clone().spawn_product_refresh_loop());
-        tasks.push(runtime.clone().spawn_scanner_loop());
-        tasks.push(runtime.clone().spawn_order_loop());
-        tasks.push(runtime.clone().spawn_live_order_sync_loop());
+        let tasks = vec![
+            runtime.clone().spawn_dashboard_server(),
+            runtime.clone().spawn_product_refresh_loop(),
+            runtime.clone().spawn_scanner_loop(),
+            runtime.clone().spawn_order_loop(),
+            runtime.clone().spawn_live_order_sync_loop(),
+        ];
 
         info!(
             bind = %runtime.cfg.ops.dashboard_bind,
@@ -729,7 +725,10 @@ impl CoinbaseWorkstationRuntime {
         for order in pending {
             let mode = self.state.coinbase.mode.read().clone();
             if mode == "live" && self.client.credentials_available() {
-                let result = self.client.cancel_orders(&[order.order_id.clone()]).await;
+                let result = self
+                    .client
+                    .cancel_orders(std::slice::from_ref(&order.order_id))
+                    .await;
                 match result {
                     Ok(_) => self.update_order_status(
                         &order.order_id,

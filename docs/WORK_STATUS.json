@@ -1,308 +1,173 @@
 {
-  "schema_version": 7,
-  "updated_on": "2026-04-29",
+  "schema_version": 8,
+  "updated_on": "2026-05-02",
   "phase": {
-    "id": "phase0",
-    "name": "Phase 0: repo readiness"
+    "id": "phase1",
+    "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "The repository remains blocked in Phase 0 by compile-integrity failures, PR #51 should remain the only active integration PR, the active PR still carries tracker and control files only, issue #48 remains the one active_now code-bearing slice, and the visible Phase 0 recovery reference branches do not contain a cleaner Slice 1 replay payload.",
+  "current_audit_finding": "Issue #48 is closed, PR #57 merged the Coinbase visual workstation foundation, Track B issues #54/#55/#56 are closed, PR #62 carries roadmap closeout plus workspace Clippy hygiene, and issue #53 is the next active strategy-artifact handoff lane.",
   "audit": {
-    "last_audited_on": "2026-04-29",
+    "last_audited_on": "2026-05-02",
     "audit_source": [
-      "GitHub repository state",
-      "open issue queue",
-      "open PR queue",
-      "active integration branch documents",
-      "visible codex branch inventory",
-      "visible Phase 0 recovery reference branches",
-      "current branch versions of crates/pt-cli/src/main.rs and crates/pt-coinbase/src/lib.rs"
+      "GitHub issue state",
+      "merged PR #57",
+      "operator-reported validation evidence",
+      "agent-reran PR #62 branch validation including clippy",
+      "Coinbase strategy AI roadmap packet"
     ],
-    "validation_evidence_state": "not_rerun_from_full_private_repo_checkout",
-    "truth_standard": "Tracker files may describe queue order, blockers, and execution policy, but they must not imply that the Phase 0 validation ladder is green without fresh local evidence.",
-    "visible_recovery_branch_replay_result": "no_clean_slice1_payload_found"
+    "validation_evidence_state": "operator_reported_workstation_validation_plus_agent_reran_pr62_branch_may_2_2026",
+    "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
-    "single_active_integration_branch": true,
-    "single_active_integration_pr": true,
-    "single_ordered_queue": true,
-    "status_markdown_json_mirror_required": true,
-    "full_codex_branch_classification_required": true,
-    "tracker_truth_must_not_imply_validation": true,
-    "exactly_one_active_now_queue_item": true,
-    "refinement_only_after_no_eligible_implementation_items": true,
-    "tracker_only_refinement_requires_state_change": true
-  },
-  "queue_state_machine": {
-    "allowed_states": [
-      "active_now",
-      "queued",
-      "blocked_by_phase0",
-      "blocked_on_human_decision",
-      "deferred_until_phase0_green",
-      "deferred_until_current_api_reaudit",
-      "completed",
-      "explicitly_deferred"
-    ],
-    "execution_rule": "Continue the active_now item on PR #51 unless it becomes blocked_on_human_decision; environment-only audit blockers do not justify queue reordering.",
-    "tracker_only_refinement_rule": "Do not spend another tracker-only pass on PR #51 unless stage truth, blocker state, queue eligibility, or validation evidence actually changes.",
-    "refinement_trigger": "Only start the final best-practices refinement pass after no defined eligible implementation items remain."
+    "single_active_implementation_lane": true,
+    "single_active_pr_per_lane": true,
+    "sandbox_and_paper_only": true,
+    "frontend_chart_not_source_of_truth": true,
+    "strategy_artifacts_before_optimizer_widening": true,
+    "ai_behind_artifact_promotion_and_risk_controls": true,
+    "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "phase0_slice1_waiting_on_compile_recovery",
-    "label": "Phase 0 slice 1 waiting on compile recovery",
+    "id": "phase1_strategy_artifact_handoff",
+    "label": "Strategy-lab handoff into Coinbase paper runtime",
     "requires_human_decision": false,
-    "blocker_type": "compile_integrity_recovery",
-    "execution_status": "exact_repairs_identified_visible_recovery_branches_do_not_help_and_current_audit_run_lacks_authenticated_checkout",
-    "code_bearing_progress": "not_started_on_active_pr",
-    "next_required_environment": "authenticated_checkout_of_codex/single-integration-board-2026-04-28",
-    "environment_note": "This audit environment does not currently provide a usable authenticated checkout of the private repository, so the Slice 1 Rust repair must still be completed from a proper checkout before readiness status changes.",
-    "environment_blocker": {
-      "type": "missing_authenticated_checkout",
-      "present_in_current_run": true,
-      "queue_reorder_allowed": false
-    },
-    "active_now_queue_order": 1,
-    "next_automatically_eligible_queue_order": 2,
-    "fallback_if_human_decision_blocks": {
-      "label": "Compile recovery slice 2",
-      "source": "Phase 0 recovery queue",
-      "path": "crates/pt-core/src/config.rs"
-    }
+    "blocker_type": null,
+    "execution_status": "ready_for_next_pr",
+    "active_now_queue_order": 5,
+    "active_issue": 53,
+    "environment_note": "After PR #62 merges to main, start issue #53 from updated main. This status update records issue and queue state plus agent validation on the PR #62 branch."
   },
-  "exact_blocker_signature": {
-    "crates/pt-cli/src/main.rs": {
-      "problems": [
-        "duplicate pt_core import blocks are present",
-        "duplicate pt_engine::TradingEngine imports are present",
-        "the Commands enum is broken at the StrategyProfileLoad to Coinbase boundary"
-      ],
-      "safe_repair_plan": [
-        "merge the pt_core imports so the file keeps one source of AppConfig, EngineMode, ReplayAcceptanceReport, RuntimeRole, and MarketSnapshot",
-        "keep only one pt_engine::TradingEngine import",
-        "close StrategyProfileLoad cleanly and keep Coinbase as its own subcommand variant",
-        "preserve the newer command surface already present in the file"
-      ]
+  "completed_evidence": {
+    "phase0_compile_recovery": {
+      "issue": 48,
+      "status": "closed_completed",
+      "operator_reported_commit": "7dfb650"
     },
-    "crates/pt-coinbase/src/lib.rs": {
-      "problems": [
-        "the top-level import and header block is merge-corrupted",
-        "duplicated pt_core fragments are present",
-        "duplicated reqwest::header fragments are present"
-      ],
-      "safe_repair_plan": [
-        "keep the newer auth-manager, websocket, and runtime imports intact",
-        "merge the older advanced-trade imports into that same top block without duplicates",
-        "remove the duplicated header fragments without changing runtime behavior below the import section"
+    "coinbase_visual_workstation_foundation": {
+      "pr": 57,
+      "status": "merged",
+      "head_sha": "95d913d6fc10a8e9e9dcb541b218499b95dc5a68",
+      "merge_commit_sha": "0a4af223cf7a342f17d7dbdd9982d406d629657a",
+      "closed_issues": [54, 55, 56],
+      "operator_reported_validation": [
+        "cargo check --workspace passed",
+        "cargo test --workspace passed",
+        "cd crates/pt-dashboard/frontend && npm run build passed",
+        "cd crates/pt-dashboard/frontend && npm test passed after commit 95d913d"
       ]
     }
-  },
-  "active_integration": {
-    "branch": "codex/single-integration-board-2026-04-28",
-    "pr_number": 51,
-    "pr_title": "[codex] Re-establish one active integration branch and canonical work board",
-    "status": "active"
   },
   "active_next_step": {
-    "label": "Issue #48 compile recovery slice 1",
-    "source": "issue #48",
+    "label": "Strengthen strategy-lab handoff into Coinbase paper runtime",
+    "source": "issue #53",
     "queue_state": "active_now",
-    "files": [
-      "crates/pt-cli/src/main.rs",
-      "crates/pt-coinbase/src/lib.rs"
-    ],
     "constraints": [
-      "repair syntax and structure only",
-      "preserve coherent newer behavior where intact",
-      "do not add queue-runtime behavior in this slice",
-      "land the slice on the existing PR rather than opening a new PR",
-      "do not keep searching visible recovery branches for a hidden clean replay candidate unless new evidence appears"
+      "sandbox and paper only",
+      "do not enable live mode",
+      "do not add or modify credentials",
+      "do not raise risk caps",
+      "do not let AI bypass risk controls",
+      "do not treat chart-derived fixture bars as replay or paper evidence"
     ],
-    "immediate_follow_up_if_slice_lands": [
-      "cargo fmt --all -- --check",
-      "cargo check --workspace",
-      "if parser failures move to crates/pt-core/src/config.rs continue slice 2 on the same PR"
+    "required_outputs": [
+      "strategy artifact schema or hardened model",
+      "active artifact traceability in Coinbase paper runtime",
+      "dashboard/API active artifact exposure",
+      "replay and paper evidence linked to exact artifact ids"
     ]
   },
   "queue_summary": {
+    "completed": 4,
     "active_now": 1,
-    "queued_after_current_stage": 3,
-    "deferred_until_phase0_green": 3,
-    "blocked_by_phase0": 1,
-    "deferred_until_current_api_reaudit": 1,
+    "queued_after_current_stage": 4,
     "blocked_on_human_decision": 0
-  },
-  "branch_inventory": {
-    "query": "codex/",
-    "discovered_count": 44,
-    "classified_count": 44,
-    "active_branch": "codex/single-integration-board-2026-04-28",
-    "compile_recovery_reference_branches": [
-      "codex/fix-pt-cli-duplicate-chrono",
-      "codex/phase0-compile-hotfix-execution-2026-04-27",
-      "codex/phase0-compile-recovery-2026-04-27",
-      "codex/phase0-execution-board-2026-04-27",
-      "codex/phase0-manifest-and-risk-scar-2026-04-27",
-      "codex/phase0-recovery-queue-2026-04-27",
-      "codex/phase0-slice1-compile-recovery",
-      "codex/phase0-slice1-start-2026-04-27"
-    ],
-    "compile_recovery_reference_result": "no_clean_slice1_payload_found",
-    "frontend_or_dashboard_reference_branches": [
-      "codex/approval-queue-frontend-panel",
-      "codex/dashboard-shell-current-api",
-      "codex/frontend-fixture-tests-current-api",
-      "codex/full-scale-product-expansion",
-      "codex/set-up-portfolio-and-orders-management"
-    ],
-    "approval_queue_reference_branches": [
-      "codex/approval-queue-runtime-hydration-helpers",
-      "codex/approval-queue-runtime-store-bridge",
-      "codex/approval-queue-snapshot-reconcile",
-      "codex/approval-queue-storage-foundation",
-      "codex/issue-9-persistence-stack-brief",
-      "codex/issue-9-runtime-wiring-brief",
-      "codex/phase1-approval-queue-persistence-plan",
-      "codex/queue-helper-stack-on-main",
-      "codex/read-only-approval-queue-api"
-    ],
-    "planning_or_audit_reference_branches": [
-      "codex/codespaces-cloud-agent-tdd",
-      "codex/consolidated-open-work-2026-04-27",
-      "codex/issue-5-phase1-product-bootstrap",
-      "codex/issue-21-local-validation-ladder",
-      "codex/issue-23-risk-quote-tests",
-      "codex/local-validation-bounded-smoke",
-      "codex/phase1-canonical-next-round-2026-04-26",
-      "codex/phase1-control-tower-2026-04-26",
-      "codex/phase1-control-tower-2026-04-27",
-      "codex/phase1-evidence-bundle-starter",
-      "codex/phase1-next-round-after-pr31",
-      "codex/phase1-next-round-after-pr37-audit",
-      "codex/phase1-next-round-canonical-issue9",
-      "codex/phase1-next-round-coordination-2026-04-26",
-      "codex/phase1-next-round-start-2026-04-26",
-      "codex/phase1-queue-audit-2026-04-26",
-      "codex/phase1-queue-control-after-pr37",
-      "codex/phase1-runtime-roundup-2026-04-27",
-      "codex/phase1-runtime-wiring-execution-plan-2026-04-27",
-      "codex/project-completion-pass",
-      "codex/single-status-board-2026-04-28"
-    ]
   },
   "queue": [
     {
       "order": 1,
       "label": "Compile recovery slice 1",
       "source": "issue #48",
-      "status": "active_now",
-      "requires_human_decision": false,
-      "eligible_after_current_item": "current_item"
+      "status": "completed",
+      "requires_human_decision": false
     },
     {
       "order": 2,
-      "label": "Compile recovery slice 2",
-      "source": "Phase 0 recovery queue",
-      "status": "queued",
-      "requires_human_decision": false,
-      "eligible_after_current_item": true
+      "label": "Coinbase visual workstation contract",
+      "source": "issue #54 / PR #57",
+      "status": "completed",
+      "requires_human_decision": false
     },
     {
       "order": 3,
-      "label": "Compile recovery slice 3",
-      "source": "Phase 0 recovery queue",
-      "status": "queued",
-      "requires_human_decision": false,
-      "eligible_after_current_item": true
+      "label": "Chart-first Coinbase product detail surface",
+      "source": "issue #55 / PR #57",
+      "status": "completed",
+      "requires_human_decision": false
     },
     {
       "order": 4,
-      "label": "Phase 0 validation ladder",
-      "source": "repo readiness gate",
-      "status": "queued",
-      "requires_human_decision": false,
-      "eligible_after_current_item": true
+      "label": "Strategy review rail with import lineage",
+      "source": "issue #56 / PR #57",
+      "status": "completed",
+      "requires_human_decision": false
     },
     {
       "order": 5,
-      "label": "Deterministic risk and quote failure-path tests",
-      "source": "issue #23",
-      "status": "deferred_until_phase0_green",
-      "requires_human_decision": false,
-      "eligible_after_current_item": false
+      "label": "Strategy-lab handoff into Coinbase paper runtime",
+      "source": "issue #53",
+      "status": "active_now",
+      "requires_human_decision": false
     },
     {
       "order": 6,
-      "label": "Dashboard safety-net and read-only queue test consolidation",
-      "source": "issue #22",
-      "status": "deferred_until_phase0_green",
-      "requires_human_decision": false,
-      "eligible_after_current_item": false
+      "label": "Rust-native strategy IR and adapter layer",
+      "source": "issue #58",
+      "status": "queued",
+      "requires_human_decision": false
     },
     {
       "order": 7,
-      "label": "Repeatable replay and paper evidence bundle refresh",
-      "source": "issue #10",
-      "status": "deferred_until_phase0_green",
-      "requires_human_decision": false,
-      "eligible_after_current_item": false
+      "label": "Bounded AI optimizer objective and candidate sweep lane",
+      "source": "issue #59",
+      "status": "queued",
+      "requires_human_decision": false
     },
     {
       "order": 8,
-      "label": "Durable approval-queue persistence",
-      "source": "issue #9",
-      "status": "blocked_by_phase0",
-      "requires_human_decision": false,
-      "eligible_after_current_item": false
+      "label": "Strategy AI review surfaces",
+      "source": "issue #60",
+      "status": "queued",
+      "requires_human_decision": false
     },
     {
       "order": 9,
-      "label": "Dashboard shell or UI salvage",
-      "source": "codex/dashboard-shell-current-api",
-      "status": "deferred_until_current_api_reaudit",
-      "requires_human_decision": true,
-      "eligible_after_current_item": false
+      "label": "Visual and strategy benchmark harnesses",
+      "source": "issue #61",
+      "status": "queued",
+      "requires_human_decision": false
     }
   ],
-  "queue_progression_rule": {
-    "default": "Advance the first queue item that is well-defined, unblocked, and independent of any active human-decision blocker.",
-    "if_human_decision_blocks": "Record the blocker in the status files and promote the next eligible item on the same integration PR.",
-    "if_environment_only_blocker": "Keep the same active_now item and resume it from a proper checkout instead of silently promoting the next slice.",
-    "if_no_eligible_items_remain": "Stop adding scope and run the final consistency and best-practices refinement pass.",
-    "tracker_only_refinement_guard": "Do not spend another tracker-only pass unless stage truth, blocker state, queue eligibility, or validation evidence changes."
-  },
-  "refinement_trigger": {
-    "run_when_remaining_items_are_only": [
-      "completed",
-      "explicitly_deferred",
-      "blocked_on_human_decision",
-      "blocked_on_missing_validation_evidence"
-    ],
-    "scope": [
-      "status files",
-      "planning files",
-      "operator-facing instructions"
-    ],
-    "must_not_expand": [
-      "runtime scope",
-      "live trading scope",
-      "risk caps"
-    ]
-  },
   "validation_commands": [
     "cargo fmt --all -- --check",
     "cargo check --workspace",
     "cargo clippy --workspace --all-targets --all-features -- -D warnings",
     "cargo test --workspace",
     "cargo build --workspace",
-    "cargo audit",
-    "./scripts/generate_sbom.sh artifacts"
+    "cd crates/pt-dashboard/frontend && npm test",
+    "cd crates/pt-dashboard/frontend && npm run build",
+    "python3 tools/coinbase_strategy_lab.py backtest --config config/coinbase_strategy_lab.json",
+    "python3 tools/coinbase_strategy_lab.py overlap --config config/coinbase_strategy_lab.json --auto-discovery",
+    "python3 tools/coinbase_strategy_lab.py optimize --config config/coinbase_strategy_lab.json",
+    "cargo run -p pt-cli -- run --config config/config.toml",
+    "./scripts/paper_soak.sh 86400 30 config/config.toml"
   ],
   "guardrails": [
     "Do not enable live mode.",
     "Do not add or modify credentials.",
     "Do not raise risk caps.",
-    "Do not merge stale diverged branches directly.",
-    "Do not resume Phase 1 work before compile integrity is restored.",
-    "Do not substitute tracker churn for the missing Slice 1 code-bearing repair."
+    "Do not let strategy artifacts bypass replay or paper validation.",
+    "Do not let AI directly mutate live or paper positions outside bounded policy controls.",
+    "Do not treat chart-derived fixture bars as replay, backtest, or paper evidence.",
+    "Do not build a Pine clone before the typed strategy artifact and IR lanes are stable."
   ]
 }
