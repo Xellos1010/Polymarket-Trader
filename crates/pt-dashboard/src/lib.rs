@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use pt_core::{
     Asset, ExecutionReport, KillSwitchState, LiveArmState, MarketHistoryPoint, MarketSnapshot,
@@ -164,11 +164,35 @@ struct ModeResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct ActiveImportView {
+    import_id: String,
+    path: String,
+    product_id: String,
+    market: String,
+    variant: String,
+    imported_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ProductImportActivationView {
+    product_id: String,
+    imports: Vec<ActiveImportView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ProductDetailResponse {
+    #[serde(flatten)]
+    detail: ProductDetailView,
+    active_imports: Vec<ActiveImportView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct StrategiesResponse {
     mode: String,
     live_arm: LiveArmState,
     strategies: Vec<ProductStrategyConfigView>,
     imports: Vec<StrategyLabImportSummary>,
+    active_imports: Vec<ProductImportActivationView>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -407,7 +431,7 @@ async fn get_scanner(State(state): State<DashboardState>) -> Json<Vec<ScannerRow
 async fn get_product_detail(
     State(state): State<DashboardState>,
     Path(product_id): Path<String>,
-) -> Result<Json<ProductDetailView>, StatusCode> {
+) -> Result<Json<ProductDetailResponse>, StatusCode> {
     let existing_detail = state.coinbase.product_details.read().get(&product_id).cloned();
     let current_orders = state
         .coinbase
@@ -418,10 +442,14 @@ async fn get_product_detail(
         .cloned()
         .collect::<Vec<_>>();
     let current_imports = state.coinbase.imports.read().clone();
+    let active_imports = active_imports_for_product(&current_imports, &product_id);
     if let Some(mut detail) = existing_detail {
         detail.orders = current_orders;
         detail.imports = current_imports;
-        return Ok(Json(detail));
+        return Ok(Json(ProductDetailResponse {
+            detail,
+            active_imports,
+        }));
     }
 
     let products = state.coinbase.products.read();
@@ -472,7 +500,10 @@ async fn get_product_detail(
         imports: current_imports,
     };
 
-    Ok(Json(detail))
+    Ok(Json(ProductDetailResponse {
+        detail,
+        active_imports,
+    }))
 }
 
 async fn get_orders(State(state): State<DashboardState>) -> Json<Vec<WorkstationOrder>> {
@@ -482,11 +513,15 @@ async fn get_orders(State(state): State<DashboardState>) -> Json<Vec<Workstation
 }
 
 async fn get_strategies(State(state): State<DashboardState>) -> Json<StrategiesResponse> {
+    let strategies = state.coinbase.strategies.read().clone();
+    let imports = state.coinbase.imports.read().clone();
+    let active_imports = collect_active_imports(&strategies, &imports);
     Json(StrategiesResponse {
         mode: state.coinbase.mode.read().clone(),
         live_arm: state.coinbase.live_arm.read().clone(),
-        strategies: state.coinbase.strategies.read().clone(),
-        imports: state.coinbase.imports.read().clone(),
+        strategies,
+        imports,
+        active_imports,
     })
 }
 
@@ -570,6 +605,13 @@ async fn post_order(
         )
     })?;
     let route = parse_route(payload.route.as_deref()).unwrap_or(OrderRoute::Maker);
+    let priority_fill = payload.priority_fill.unwrap_or(false);
+    let active_import = {
+        let imports = state.coinbase.imports.read();
+        active_imports_for_product(&imports, &payload.product_id)
+            .into_iter()
+            .next()
+    };
     let now = Utc::now();
     let status = if matches!(route, OrderRoute::ScanOnly) {
         WorkstationOrderStatus::ScanOnly
@@ -579,7 +621,7 @@ async fn post_order(
     let order = WorkstationOrder {
         order_id: format!("manual-{}", now.timestamp_millis()),
         client_order_id: Some(format!("manual-{}", now.timestamp_nanos_opt().unwrap_or_default())),
-        product_id: ProductId::from(payload.product_id),
+        product_id: ProductId::from(payload.product_id.clone()),
         instrument: None,
         side: Some(side),
         route: Some(route),
@@ -590,17 +632,11 @@ async fn post_order(
         base_size: payload.base_size.unwrap_or(0.0),
         quote_notional: payload.quote_notional.unwrap_or(0.0),
         expected_net_bps: payload.expected_net_bps.unwrap_or(0.0),
-        reason: payload
-            .strategy_name
-            .clone()
-            .map(|strategy| {
-                let priority_fill = if payload.priority_fill.unwrap_or(false) {
-                    " priority_fill"
-                } else {
-                    ""
-                };
-                format!("queued from dashboard ({strategy}{priority_fill})")
-            }),
+        reason: Some(order_reason(
+            payload.strategy_name.as_deref(),
+            priority_fill,
+            active_import.as_ref(),
+        )),
         created_at: Some(now),
         updated_at: Some(now),
     };
@@ -685,6 +721,84 @@ fn summarize_strategy_lab_import(path: &str) -> Result<StrategyLabImportSummary,
         markets,
         best_variants,
     })
+}
+
+fn active_imports_for_product(
+    imports: &[StrategyLabImportSummary],
+    product_id: &str,
+) -> Vec<ActiveImportView> {
+    let mut rows = Vec::new();
+    for summary in imports {
+        for best_variant in &summary.best_variants {
+            let Some((market, variant)) = best_variant.split_once(':') else {
+                continue;
+            };
+            if market.eq_ignore_ascii_case(product_id) {
+                rows.push(ActiveImportView {
+                    import_id: summary.import_id.clone(),
+                    path: summary.path.clone(),
+                    product_id: product_id.to_string(),
+                    market: market.to_string(),
+                    variant: variant.to_string(),
+                    imported_at: summary.imported_at,
+                });
+            }
+        }
+    }
+    rows.sort_by(|a, b| {
+        b.imported_at
+            .cmp(&a.imported_at)
+            .then_with(|| a.import_id.cmp(&b.import_id))
+    });
+    rows
+}
+
+fn collect_active_imports(
+    strategies: &[ProductStrategyConfigView],
+    imports: &[StrategyLabImportSummary],
+) -> Vec<ProductImportActivationView> {
+    strategies
+        .iter()
+        .filter_map(|strategy| {
+            let product_imports = active_imports_for_product(imports, strategy.product_id.as_str());
+            if product_imports.is_empty() {
+                None
+            } else {
+                Some(ProductImportActivationView {
+                    product_id: strategy.product_id.as_str().to_string(),
+                    imports: product_imports,
+                })
+            }
+        })
+        .collect()
+}
+
+fn order_reason(
+    strategy_name: Option<&str>,
+    priority_fill: bool,
+    active_import: Option<&ActiveImportView>,
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(strategy_name) = strategy_name {
+        if !strategy_name.trim().is_empty() {
+            parts.push(format!("strategy={strategy_name}"));
+        }
+    }
+    if priority_fill {
+        parts.push("priority_fill".to_string());
+    }
+    if let Some(active_import) = active_import {
+        parts.push(format!(
+            "import={} {}:{}",
+            active_import.import_id, active_import.market, active_import.variant
+        ));
+    }
+
+    if parts.is_empty() {
+        "queued from dashboard".to_string()
+    } else {
+        format!("queued from dashboard ({})", parts.join(" "))
+    }
 }
 
 fn scanner_row_to_microstructure(row: &ScannerRow) -> pt_core::MarketMicrostructureSnapshot {

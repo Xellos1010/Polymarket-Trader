@@ -90,13 +90,6 @@ max_order_age_secs = 20
 stale_book_threshold_ms = 400
 min_expected_net = 0.002
 
-[risk.pilot]
-enforce_ultra_tight_live = true
-ultra_tight_daily_loss_limit_pct = 0.01
-ultra_tight_max_notional_per_market = 2.5
-ultra_tight_max_total_open_notional = 10.0
-ultra_tight_max_markets_quoted = 1
-
 [execution]
 mode = "maker_first"
 allow_taker_on_unwind_only = true

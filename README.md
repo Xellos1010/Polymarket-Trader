@@ -41,18 +41,6 @@ Use the canonical local-first ladder before merge or deployment decisions:
 Guide:
 - `docs/LOCAL_VALIDATION.md`
 
-## Current recovery status
-
-The current repo cycle is in Phase 0: repo readiness.
-
-Before starting feature work or salvaging payload from older branches:
-- check `docs/WORK_STATUS.md` for the operator-readable current stage
-- check `docs/WORK_STATUS.json` for the machine-readable current stage
-- check `docs/INTEGRATION_BOARD.md` for the ordered consolidation queue
-- keep PR `#51` as the only active integration PR for the current cycle
-- treat issue `#48` compile recovery as the next code-bearing slice
-- keep issue `#9` and deferred branch salvage paused until the Phase 0 validation ladder is green again
-
 ## Developer setup
 
 Install local git hooks:
@@ -77,6 +65,8 @@ Use `.env.example` as the baseline for local or dev shells.
 
 ## Operator endpoints
 
+Slim dashboard and workstation endpoints currently shipped by `pt-dashboard`:
+
 - `GET /` dashboard UI
 - `GET /health`
 - `GET /healthz`
@@ -85,23 +75,24 @@ Use `.env.example` as the baseline for local or dev shells.
 - `GET /state/risk`
 - `GET /state/books`
 - `GET /state/markets`
-- `GET /state/history?market_id=<id>&limit=360`
+- `GET /state/history?market_id=<id>&limit=<n>`
 - `GET /state/executions`
-- `GET /state/execution/orders`
-- `GET /state/execution/costs`
-- `GET /state/execution/vectors`
 - `GET /state/bias`
 - `GET /state/inventory`
-- `GET /state/coinbase/wallet`
-- `GET /state/coinbase/allocations`
-- `GET /state/coinbase/rebalance-plan`
-- `GET /state/coinbase/orders`
 - `POST /ops/halt`
 - `POST /ops/resume`
 - `POST /ops/flatten`
-- `POST /ops/coinbase/rebalance/approve`
-- `POST /ops/coinbase/rebalance/reject`
-- `POST /ops/execution/unwind`
+- `GET /api/v1/products`
+- `GET /api/v1/scanner`
+- `GET /api/v1/products/<product_id>`
+- `GET /api/v1/orders`
+- `POST /api/v1/orders`
+- `GET /api/v1/strategies`
+- `POST /api/v1/mode`
+- `POST /api/v1/live/arm`
+- `POST /api/v1/live/disarm`
+- `POST /api/v1/orders/<order_id>/cancel`
+- `POST /api/v1/strategy-lab/import`
 
 ## CLI utilities
 
