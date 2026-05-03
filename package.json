@@ -1,0 +1,19 @@
+{
+  "name": "polymarket-trader",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Polymarket-Trader — Rust workspace with Nx task orchestration",
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "nx": "nx",
+    "verify": "nx run-many -t fmt check clippy test build --projects=polymarket-trader",
+    "verify:full": "nx run polymarket-trader:local-validation"
+  },
+  "devDependencies": {
+    "nx": "^20.0.0"
+  }
+}

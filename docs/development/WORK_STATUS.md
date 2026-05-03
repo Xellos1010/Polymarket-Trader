@@ -1,5 +1,7 @@
 # Work Status
 
+**Strategic direction** is defined in the repository root [`ROADMAP.md`](../../ROADMAP.md). This file tracks **current execution stage**, queue, and validation evidence—keep it aligned when phases in the roadmap advance.
+
 ## Phase
 Phase 1: sandbox trading / paper ROI preparation
 

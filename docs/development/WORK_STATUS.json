@@ -1,6 +1,10 @@
 {
-  "schema_version": 8,
-  "updated_on": "2026-05-02",
+  "schema_version": 9,
+  "updated_on": "2026-05-03",
+  "direction": {
+    "roadmap_repository_path": "ROADMAP.md",
+    "role": "ROADMAP.md is the source of truth for product and technical direction; WORK_STATUS tracks execution state."
+  },
   "phase": {
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"

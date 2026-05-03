@@ -2,6 +2,8 @@
 
 Rust-first trading workspace with a Coinbase-native workstation, replay/paper/live modes, legacy Polymarket support, hard risk controls, and operator tooling.
 
+**Direction and phased outcomes:** [`ROADMAP.md`](ROADMAP.md) is the source of truth for where the project is going. **Current execution stage** (active issue, queue, validation): [`docs/development/WORK_STATUS.md`](docs/development/WORK_STATUS.md).
+
 ## Workspace crates
 
 - `pt-core`: shared config, domain types, metrics, math, errors.
@@ -41,6 +43,75 @@ Open dashboard (default bind from `config.example.toml` → `[ops].dashboard_bin
 http://127.0.0.1:8080/
 ```
 
+## Monorepo setup with Nx and pnpm
+
+The repository root is a **pnpm workspace** with **Nx** used for task orchestration (Rust `cargo` targets on the workspace root project, and optional Vite/Vitest targets for the dashboard frontend). Rust remains the primary toolchain; Node is required to run Nx and frontend checks.
+
+### Prerequisites
+
+- **Rust** — stable toolchain with `cargo` (see [rustup](https://rustup.rs/)).
+- **Node.js** — v20 or newer (`package.json` `engines.node`).
+- **pnpm** — v9 or newer; the repo pins a version via `packageManager` in `package.json`. Enable Corepack so that version is used automatically:
+
+  ```bash
+  corepack enable
+  ```
+
+### Install
+
+From the repository root:
+
+```bash
+pnpm install
+```
+
+That installs Nx and wires the workspace packages defined in `pnpm-workspace.yaml` (the root package and `crates/pt-dashboard/frontend`).
+
+Confirm Nx sees both projects:
+
+```bash
+pnpm exec nx show projects
+```
+
+You should see `polymarket-trader` and `pt-dashboard-frontend`.
+
+### Common Nx commands
+
+Rust pipeline (fmt, check, clippy, test, build) on the main workspace:
+
+```bash
+pnpm verify
+# equivalent:
+pnpm exec nx run-many -t fmt check clippy test build --projects=polymarket-trader
+```
+
+Full local validation ladder (matches `./scripts/local_validation_ladder.sh`):
+
+```bash
+pnpm verify:full
+# equivalent:
+pnpm exec nx run polymarket-trader:local-validation
+```
+
+With dashboard frontend checks (requires `npm install` inside `crates/pt-dashboard/frontend` first, or set `RUN_FRONTEND=1` when using the shell script — see `docs/LOCAL_VALIDATION.md`):
+
+```bash
+pnpm exec nx run polymarket-trader:local-validation-frontend
+```
+
+Individual dashboard targets after installing frontend dependencies:
+
+```bash
+cd crates/pt-dashboard/frontend && npm install && cd ../../..
+pnpm exec nx run pt-dashboard-frontend:typecheck
+pnpm exec nx run pt-dashboard-frontend:test
+pnpm exec nx run pt-dashboard-frontend:build
+```
+
+Project layout: root `project.json` defines `polymarket-trader` targets; `crates/pt-dashboard/frontend/project.json` defines `pt-dashboard-frontend`. See `AGENTS.md` for the full verification matrix.
+
+If pnpm reports ignored postinstall scripts for `nx` or `esbuild`, run `pnpm approve-builds` once and select the packages you trust so optional native installs can complete.
+
 ## Local validation
 
 Use the canonical local-first ladder before merge or deployment decisions:
@@ -61,7 +132,9 @@ Install local git hooks:
 ./scripts/install_git_hooks.sh
 ```
 
-Strategy lab UI and parity with CI use the Python driver (install `python3`; optional frontend work needs `node`/`npm` — see `docs/LOCAL_VALIDATION.md`).
+For Nx and the pnpm workspace, follow **[Monorepo setup with Nx and pnpm](#monorepo-setup-with-nx-and-pnpm)** above.
+
+Strategy lab UI and parity with CI use the Python driver (install `python3`; optional frontend work needs Node — see `docs/LOCAL_VALIDATION.md`).
 
 ## Environment variables
 

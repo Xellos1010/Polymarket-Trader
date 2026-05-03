@@ -43,10 +43,13 @@ crates/pt-dashboard/data/
 **/node_modules/
 **/.vite/
 
+# --- Nx (regenerated locally; ignore cache + workspace data) ---
+.nx/cache
+.nx/workspace-data
+
 # --- Build & analysis artifacts ---
 artifacts/
 .local/
-.nx/
 
 # --- Logs, coverage, temp ---
 *.log

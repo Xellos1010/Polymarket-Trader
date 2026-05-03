@@ -1,0 +1,77 @@
+{
+  "$schema": "./node_modules/nx/schemas/project-schema.json",
+  "name": "polymarket-trader",
+  "projectType": "application",
+  "root": ".",
+  "sourceRoot": "crates",
+  "tags": ["scope:polymarket", "type:rust-workspace"],
+  "targets": {
+    "fmt": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "Rustfmt entire workspace" },
+      "options": { "cwd": "{workspaceRoot}", "command": "cargo fmt --all" }
+    },
+    "check": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "cargo check --workspace" },
+      "options": { "cwd": "{workspaceRoot}", "command": "cargo check --workspace" }
+    },
+    "clippy": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "Clippy with warnings denied" },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "cargo test --workspace" },
+      "options": { "cwd": "{workspaceRoot}", "command": "cargo test --workspace" }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "cargo build --workspace" },
+      "options": { "cwd": "{workspaceRoot}", "command": "cargo build --workspace" }
+    },
+    "audit": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "cargo audit" },
+      "options": { "cwd": "{workspaceRoot}", "command": "cargo audit" }
+    },
+    "sbom": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "Generate SBOM under artifacts/" },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/generate_sbom.sh artifacts"
+      }
+    },
+    "local-validation": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Full local validation ladder (no frontend unless RUN_FRONTEND=1)"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/local_validation_ladder.sh"
+      }
+    },
+    "local-validation-frontend": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "Validation ladder with dashboard frontend checks" },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "RUN_FRONTEND=1 ./scripts/local_validation_ladder.sh"
+      }
+    },
+    "cli-run": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "Smoke: pt-cli run with config/config.toml" },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "cargo run -p pt-cli -- run --config config/config.toml"
+      }
+    }
+  }
+}

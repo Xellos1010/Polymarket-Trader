@@ -1,0 +1,30 @@
+{
+  "project": {
+    "id": "polymarket-trader",
+    "path": ".",
+    "name": "Polymarket-Trader"
+  },
+  "lifecycleStage": "implement",
+  "sdlcPhase": "verify",
+  "currentPhase": {
+    "id": "nx-skills-scaffold",
+    "status": "in_progress",
+    "updatedAt": "2026-05-02T00:00:00Z",
+    "notes": "Nx workspace and .cursor/.claude skills scaffolded at repo root."
+  },
+  "activeBranch": "main",
+  "nextCommandSet": [
+    "pnpm install",
+    "pnpm exec nx run polymarket-trader:fmt",
+    "pnpm exec nx run polymarket-trader:check",
+    "pnpm exec nx run polymarket-trader:clippy",
+    "pnpm exec nx run polymarket-trader:test"
+  ],
+  "doneCriteria": [
+    "Nx discovers polymarket-trader and pt-dashboard-frontend projects",
+    "Rust targets run successfully via nx:run-commands",
+    "Skills present under .cursor/skills and .claude/skills"
+  ],
+  "blockedBy": [],
+  "artifacts": []
+}

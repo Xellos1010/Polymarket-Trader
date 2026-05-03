@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "cli": {
+    "packageManager": "pnpm"
+  },
+  "defaultBase": "main",
+  "defaultProject": "polymarket-trader",
+  "useDaemonProcess": false,
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "!{projectRoot}/target/**"],
+    "rustSources": [
+      "{workspaceRoot}/crates/**/*.rs",
+      "{workspaceRoot}/Cargo.toml",
+      "{workspaceRoot}/Cargo.lock",
+      "{workspaceRoot}/crates/**/Cargo.toml"
+    ],
+    "frontendSources": [
+      "{workspaceRoot}/crates/pt-dashboard/frontend/**/*",
+      "!{workspaceRoot}/crates/pt-dashboard/frontend/node_modules/**"
+    ]
+  },
+  "targetDefaults": {
+    "fmt": { "cache": true, "inputs": ["rustSources"] },
+    "check": { "cache": true, "inputs": ["rustSources"] },
+    "clippy": { "cache": true, "inputs": ["rustSources"] },
+    "test": { "cache": true, "inputs": ["rustSources"] },
+    "build": { "cache": true, "inputs": ["rustSources", "frontendSources"] },
+    "audit": { "cache": true, "inputs": ["{workspaceRoot}/Cargo.lock"] }
+  },
+  "plugins": [{ "plugin": "nx/plugins/package-json" }]
+}
