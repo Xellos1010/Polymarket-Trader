@@ -515,8 +515,38 @@ impl AppConfig {
         if let Some(v) = env_nonempty("COINBASE_PASSPHRASE") {
             self.venues.coinbase.passphrase = Some(v);
         }
+        if let Some(v) = env_nonempty("COINBASE_AUTH_PROFILE") {
+            self.venues.coinbase.auth.active_profile = v;
+        }
         if let Some(v) = env_nonempty("TRADINGVIEW_ENDPOINT_SECRET") {
             self.signals.tradingview.endpoint_secret = Some(v);
+        }
+        if let Some(v) = env_nonempty("OPS_DASHBOARD_BIND") {
+            self.ops.dashboard_bind = v;
+        }
+        if let Some(v) = env_nonempty("TRADINGVIEW_BIND_ADDR") {
+            self.signals.tradingview.bind_addr = v;
+        }
+
+        let active_profile = self.venues.coinbase.auth.active_profile.trim().to_string();
+        if !active_profile.is_empty() {
+            let profile = self
+                .venues
+                .coinbase
+                .auth
+                .profiles
+                .entry(active_profile)
+                .or_default();
+
+            if let Some(v) = env_nonempty("COINBASE_CDP_KEY_FILE") {
+                profile.cdp_key_file = Some(v);
+            }
+            if let Some(v) = env_nonempty("COINBASE_CDP_SECRET_ID") {
+                profile.cdp_secret_id = Some(v);
+            }
+            if let Some(v) = env_nonempty("COINBASE_EXPECTED_KEY_ID") {
+                profile.expected_key_id = Some(v);
+            }
         }
     }
 
@@ -1032,5 +1062,44 @@ mod tests {
         std::env::remove_var("COINBASE_API_SECRET");
         std::env::remove_var("COINBASE_PASSPHRASE");
         std::env::remove_var("TRADINGVIEW_ENDPOINT_SECRET");
+    }
+
+    #[test]
+    fn env_overrides_apply_for_runtime_and_auth_profile() {
+        let raw = include_str!("../../../config/config.example.toml");
+        let mut cfg = toml::from_str::<AppConfig>(raw).expect("parse config example");
+
+        std::env::set_var("COINBASE_AUTH_PROFILE", "pi");
+        std::env::set_var("COINBASE_CDP_KEY_FILE", "/secure/cdp.json");
+        std::env::set_var("COINBASE_CDP_SECRET_ID", "pi-secret");
+        std::env::set_var("COINBASE_EXPECTED_KEY_ID", "organizations/test/apiKeys/key");
+        std::env::set_var("OPS_DASHBOARD_BIND", "0.0.0.0:18080");
+        std::env::set_var("TRADINGVIEW_BIND_ADDR", "127.0.0.1:18090");
+
+        cfg.apply_env_overrides();
+
+        assert_eq!(cfg.venues.coinbase.auth.active_profile, "pi");
+        let profile = cfg
+            .venues
+            .coinbase
+            .auth
+            .profiles
+            .get("pi")
+            .expect("pi auth profile");
+        assert_eq!(profile.cdp_key_file.as_deref(), Some("/secure/cdp.json"));
+        assert_eq!(profile.cdp_secret_id.as_deref(), Some("pi-secret"));
+        assert_eq!(
+            profile.expected_key_id.as_deref(),
+            Some("organizations/test/apiKeys/key")
+        );
+        assert_eq!(cfg.ops.dashboard_bind, "0.0.0.0:18080");
+        assert_eq!(cfg.signals.tradingview.bind_addr, "127.0.0.1:18090");
+
+        std::env::remove_var("COINBASE_AUTH_PROFILE");
+        std::env::remove_var("COINBASE_CDP_KEY_FILE");
+        std::env::remove_var("COINBASE_CDP_SECRET_ID");
+        std::env::remove_var("COINBASE_EXPECTED_KEY_ID");
+        std::env::remove_var("OPS_DASHBOARD_BIND");
+        std::env::remove_var("TRADINGVIEW_BIND_ADDR");
     }
 }

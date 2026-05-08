@@ -72,6 +72,176 @@
         "cwd": "{workspaceRoot}",
         "command": "cargo run -p pt-cli -- run --config config/config.toml"
       }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Run pt-cli backend and Vite frontend together for dashboard development"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/dev_stack.sh"
+      }
+    },
+    "pi-dev-deploy": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Build frontend locally, sync repo to Raspberry Pi, rebuild, and restart dev service"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh deploy"
+      }
+    },
+    "pi-dev-init-env": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Write a non-repo environment file on the Raspberry Pi from current shell env"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh init-env"
+      }
+    },
+    "pi-dev-urls": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Print direct and tunneled Raspberry Pi dashboard URLs"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_access.sh urls"
+      }
+    },
+    "pi-dev-tunnel": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Open an SSH tunnel to the Raspberry Pi dashboard"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_access.sh tunnel"
+      }
+    },
+    "pi-dev-watch-start": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Start background Raspberry Pi sync/watch loop"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh watch start"
+      }
+    },
+    "pi-dev-watch-status": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Show Raspberry Pi sync/watch and remote service status"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh watch status"
+      }
+    },
+    "pi-dev-watch-logs": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Tail local Raspberry Pi sync/watch logs"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh watch logs"
+      }
+    },
+    "pi-dev-watch-stop": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Stop background Raspberry Pi sync/watch loop but leave remote service running"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh watch stop"
+      }
+    },
+    "pi-dev-scan": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Discover the Raspberry Pi on the local network (ARP, mDNS, hostname, /24 sweep) and print its IPv4"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_access.sh scan"
+      }
+    },
+    "pi-dev-ssh": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Open an interactive SSH session to the Raspberry Pi"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_access.sh ssh"
+      }
+    },
+    "pi-dev-install-support": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Install Rust toolchain, Node 22, and pnpm on a fresh Raspberry Pi"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh install-support"
+      }
+    },
+    "pi-dev-health": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Curl the dashboard /healthz endpoint on the Pi over SSH and report status"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh health"
+      }
+    },
+    "pi-dev-down": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Stop and disable the Pi dev service (leaves files in place)"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh down"
+      }
+    },
+    "pi-dev-remove": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Stop the service, remove the systemd unit, and delete the Pi deploy directory"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_sync.sh remove"
+      }
+    },
+    "pi-dev-deploy-tailscale": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Resolve the Pi via Tailscale and run the standard pi-dev-deploy flow against it"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_tailscale.sh deploy"
+      }
+    },
+    "pi-dev-status-tailscale": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Show systemd status of the Pi dev service over Tailscale"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_tailscale.sh status"
+      }
     }
   }
 }

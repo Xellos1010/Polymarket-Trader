@@ -37,6 +37,18 @@ Full engine + dashboard (matches `./scripts/local_validation_ladder.sh` runtime 
 cargo run -p pt-cli -- run --config config/config.toml
 ```
 
+One-command backend + frontend dev loop:
+
+```bash
+pnpm exec nx run polymarket-trader:dev
+```
+
+That starts:
+- Rust backend on `http://127.0.0.1:8080`
+- Vite frontend on `http://127.0.0.1:5173`
+
+The Vite server proxies `/api`, `/ops`, `/state`, `/health*`, `/ready`, and `/metrics` to the Rust backend.
+
 Open dashboard (default bind from `config.example.toml` → `[ops].dashboard_bind`):
 
 ```text
@@ -93,7 +105,7 @@ pnpm verify:full
 pnpm exec nx run polymarket-trader:local-validation
 ```
 
-With dashboard frontend checks (requires `npm install` inside `crates/pt-dashboard/frontend` first, or set `RUN_FRONTEND=1` when using the shell script — see `docs/LOCAL_VALIDATION.md`):
+With dashboard frontend checks (after `pnpm install` at the repo root, or set `RUN_FRONTEND=1` when using the shell script — see `docs/LOCAL_VALIDATION.md`):
 
 ```bash
 pnpm exec nx run polymarket-trader:local-validation-frontend
@@ -102,10 +114,10 @@ pnpm exec nx run polymarket-trader:local-validation-frontend
 Individual dashboard targets after installing frontend dependencies:
 
 ```bash
-cd crates/pt-dashboard/frontend && npm install && cd ../../..
 pnpm exec nx run pt-dashboard-frontend:typecheck
 pnpm exec nx run pt-dashboard-frontend:test
 pnpm exec nx run pt-dashboard-frontend:build
+pnpm exec nx run pt-dashboard-frontend:dev
 ```
 
 Project layout: root `project.json` defines `polymarket-trader` targets; `crates/pt-dashboard/frontend/project.json` defines `pt-dashboard-frontend`. See `AGENTS.md` for the full verification matrix.
@@ -135,6 +147,38 @@ Install local git hooks:
 For Nx and the pnpm workspace, follow **[Monorepo setup with Nx and pnpm](#monorepo-setup-with-nx-and-pnpm)** above.
 
 Strategy lab UI and parity with CI use the Python driver (install `python3`; optional frontend work needs Node — see `docs/LOCAL_VALIDATION.md`).
+
+## Raspberry Pi dev deploy
+
+For a persistent Pi-hosted dev deployment that rebuilds and restarts on each local change:
+
+```bash
+export PI_HOST=<pi-host-or-ip>
+export PI_USER=pi
+cp config/pi.env.example .env
+# edit .env or export values in your shell; keep secrets out of tracked files
+pnpm exec nx run polymarket-trader:pi-dev-init-env
+pnpm exec nx run polymarket-trader:pi-dev-deploy
+pnpm exec nx run polymarket-trader:pi-dev-watch-start
+```
+
+Useful follow-ups:
+
+```bash
+pnpm exec nx run polymarket-trader:pi-dev-urls
+pnpm exec nx run polymarket-trader:pi-dev-tunnel
+pnpm exec nx run polymarket-trader:pi-dev-watch-status
+pnpm exec nx run polymarket-trader:pi-dev-watch-logs
+pnpm exec nx run polymarket-trader:pi-dev-watch-stop
+./scripts/pi_dev_sync.sh remote-logs
+```
+
+Notes:
+- The watch loop runs locally in the background and persists after you detach from the terminal.
+- The Pi service keeps running when you stop or detach from the watcher.
+- Frontend changes are built locally and synced as `crates/pt-dashboard/frontend/dist`; the Pi serves that bundle from the Rust dashboard.
+- `config/config.toml`, `.env`, and credential JSON files are excluded from Pi sync; the Pi runtime reads its own `$PI_DEST/.env.pi`.
+- Keep the Pi config sandbox-only. Do not copy live credentials or enable live mode for this workflow.
 
 ## Environment variables
 

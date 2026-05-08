@@ -1,0 +1,31 @@
+# Polymarket Trader — Pi dev service template.
+# Rendered by scripts/pi_dev_sync.sh during `deploy`. Variables are substituted
+# by `envsubst`-style replacement at deploy time:
+#
+#   ${PI_SERVICE}   systemd unit name (e.g. pt-engine-dev)
+#   ${PI_USER}      Linux user account on the Pi (e.g. pi)
+#   ${PI_DEST}      Absolute deploy path on the Pi (e.g. /home/pi/Polymarket-Trader-dev)
+#
+# The unit is intentionally minimal: pre-built debug binary, env-file driven
+# secrets, restart-on-failure. Hardening (NoNewPrivileges, ProtectSystem, etc.)
+# is left off here so a developer can attach strace and tail logs against it
+# without needing a system administrator.
+#
+# DO NOT remove or rename `EnvironmentFile=-${PI_DEST}/.env.pi` — that file is
+# the only place runtime secrets exist on the Pi (see config/pi.env.example).
+
+[Unit]
+Description=Polymarket Trader Dev Service (${PI_SERVICE})
+After=network.target
+
+[Service]
+Type=simple
+User=${PI_USER}
+WorkingDirectory=${PI_DEST}
+EnvironmentFile=-${PI_DEST}/.env.pi
+ExecStart=${PI_DEST}/target/debug/pt-cli run --config ${PI_DEST}/config/config.toml
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

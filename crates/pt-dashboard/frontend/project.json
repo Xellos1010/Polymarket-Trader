@@ -6,12 +6,20 @@
   "sourceRoot": "crates/pt-dashboard/frontend/src",
   "tags": ["scope:dashboard", "type:ui"],
   "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "metadata": { "description": "Vite dev server with backend API proxy" },
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "pnpm run dev -- --host 0.0.0.0 --port 5173"
+      }
+    },
     "build": {
       "executor": "nx:run-commands",
       "metadata": { "description": "Vite production build" },
       "options": {
         "cwd": "{projectRoot}",
-        "command": "npm run build"
+        "command": "pnpm run build"
       }
     },
     "test": {
@@ -19,7 +27,7 @@
       "metadata": { "description": "Vitest" },
       "options": {
         "cwd": "{projectRoot}",
-        "command": "npm test"
+        "command": "pnpm test"
       }
     },
     "typecheck": {
@@ -27,7 +35,7 @@
       "metadata": { "description": "tsc --noEmit" },
       "options": {
         "cwd": "{projectRoot}",
-        "command": "npx tsc --noEmit -p tsconfig.json"
+        "command": "pnpm exec tsc --noEmit -p tsconfig.json"
       }
     }
   }

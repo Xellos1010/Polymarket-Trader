@@ -2,6 +2,7 @@ mod coinbase;
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
+use dotenvy::dotenv;
 use pt_core::{AppConfig, EngineMode, MarketSnapshot};
 use pt_engine::TradingEngine;
 use pt_market_discovery::MarketDiscoveryClient;
@@ -147,6 +148,7 @@ struct PineTuneReport {
 
 #[tokio::main]
 async fn main() {
+    let _ = dotenv();
     init_tracing();
 
     let cli = Cli::parse();

@@ -22,7 +22,7 @@ Install or confirm these tools before running the ladder:
 - `git`
 - `cargo-audit`
 - optional but recommended: `cargo-cyclonedx`
-- optional for frontend changes: `node`, `npm`
+- optional for frontend changes: `node`, `pnpm`
 
 Example setup:
 
@@ -44,6 +44,7 @@ cp config/prompt_bundle.example.json config/prompt_bundle.json
 ```
 
 Do not put live credentials in these files for local validation.
+Use environment variables or a local `.env` file for secrets instead.
 
 ## Canonical ladder
 
@@ -69,13 +70,9 @@ cargo run -p pt-cli -- run --config config/config.toml
 When a change touches `crates/pt-dashboard/frontend`, also run:
 
 ```bash
-cd crates/pt-dashboard/frontend
-npm install
-npm test
-npm run build
+pnpm exec nx run pt-dashboard-frontend:test
+pnpm exec nx run pt-dashboard-frontend:build
 ```
-
-Return to the repo root after frontend checks.
 
 ## What CI covers
 

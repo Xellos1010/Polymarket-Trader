@@ -9,6 +9,7 @@ authors.workspace = true
 chrono.workspace = true
 axum.workspace = true
 clap.workspace = true
+dotenvy.workspace = true
 parking_lot.workspace = true
 rand = "0.9"
 reqwest.workspace = true
