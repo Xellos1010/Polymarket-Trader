@@ -367,4 +367,83 @@ describe("App", () => {
       expect(screen.getByText("/api/v1/strategies failed with 500")).toBeInTheDocument();
     });
   });
+
+  it("renders approval queue items in the Agent Console tab", async () => {
+    installFetchMock();
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Selected Market" });
+    fireEvent.click(screen.getByRole("button", { name: /Agent Console/i }));
+
+    expect(await screen.findByRole("heading", { name: "Approval Queue" })).toBeInTheDocument();
+    expect(await screen.findByText("Hold for policy review")).toBeInTheDocument();
+    expect(screen.getByText("BTC-USD remains paper only while the daily loss threshold is close.")).toBeInTheDocument();
+  });
+
+  it("shows zero approval queue count when approvals are empty", async () => {
+    installFetchMock({
+      "/api/v1/agent/console": new Response(
+        JSON.stringify({ ...agentConsole, approvals: [] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    });
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Selected Market" });
+    fireEvent.click(screen.getByRole("button", { name: /Agent Console/i }));
+
+    await screen.findByRole("heading", { name: "Approval Queue" });
+    const queuePanel = screen.getByRole("heading", { name: "Approval Queue" }).closest(".panel")!;
+    expect(queuePanel.querySelector(".panel-title span")?.textContent).toBe("0");
+  });
+
+  it("still renders core surfaces when agent console endpoint fails", async () => {
+    installFetchMock({
+      "/api/v1/agent/console": new Response("error", { status: 500 }),
+    });
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Selected Market" });
+    fireEvent.click(screen.getByRole("button", { name: /Agent Console/i }));
+
+    await screen.findByRole("heading", { name: "Approval Queue" });
+    // Shows 0 items gracefully when endpoint fails
+    const queuePanel = screen.getByRole("heading", { name: "Approval Queue" }).closest(".panel")!;
+    expect(queuePanel.querySelector(".panel-title span")?.textContent).toBe("0");
+  });
+
+  it("approval queue cards have no action buttons", async () => {
+    installFetchMock();
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Selected Market" });
+    fireEvent.click(screen.getByRole("button", { name: /Agent Console/i }));
+
+    await screen.findByText("Hold for policy review");
+    const cards = document.querySelectorAll(".reason-card");
+    cards.forEach((card) => {
+      expect(card.querySelectorAll("button")).toHaveLength(0);
+    });
+  });
+
+  it("renders main surfaces when multiple endpoints fail simultaneously", async () => {
+    installFetchMock({
+      "/api/v1/risk/overview": new Response("error", { status: 500 }),
+      "/api/v1/agent/console": new Response("error", { status: 500 }),
+      "/api/v1/listings": new Response("error", { status: 500 }),
+    });
+
+    render(<App />);
+
+    // Core command center should still render despite multiple failures
+    expect(await screen.findByRole("heading", { name: "Selected Market" })).toBeInTheDocument();
+    // Error banners are shown
+    await waitFor(() => {
+      expect(screen.getAllByText(/failed with 500/).length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });

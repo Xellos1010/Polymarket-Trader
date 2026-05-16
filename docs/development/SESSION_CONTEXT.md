@@ -1,116 +1,44 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1777454150`
+Generated at UNIX epoch seconds: `1747418100`
 
 ## Note
-Control-tower checkpoint after a connector-backed audit of the active integration PR, current branch status files, open issue queue, and the current Slice 1 Rust files on April 29, 2026.
+Control-tower checkpoint after local validation on main following merged PR #63 (strategy-lab artifact handoff for issue #53). May 16, 2026.
 
 ## Current phase
-Phase 0: repo readiness
+Phase 1: sandbox trading / paper ROI preparation
 
 ## Grounded repo state
-- PR `#47`, PR `#49`, and PR `#50` are already merged into `main`.
-- PR `#51` is still the only active integration PR, so the single-PR consolidation rule is currently satisfied.
-- Issue `#48` is still the correct next code-bearing slice.
-- Issue `#9` remains paused until compile integrity is recovered.
-- The visible `codex/` branch inventory currently contains 44 branches and the control files now classify the full set.
-- Diverged remote branches must be treated as salvage or archive context rather than active review targets.
+- PR `#63` is the latest merged implementation slice (strategy-lab artifact handoff for issue `#53`).
+- PR `#62` closed workstation workorders and queued strategy AI lanes.
+- PR `#57` merged Track B Coinbase visual workstation foundation.
+- Issue `#53` is still open pending post-merge validation evidence and end-to-end artifact-lineage smoke.
+- Issues `#58`, `#59`, `#60`, `#61` are queued after `#53` closes.
+- Both repos have 0 open PRs.
 
-## Validation evidence state
-- The Phase 0 validation ladder has not been rerun from a full private-repo checkout in this environment.
-- The current tracker set is a truthful queue and blocker description, not evidence that compile recovery is already complete.
-- Any readiness upgrade still requires fresh local validation on the active integration branch.
+## Validation evidence state (May 16, 2026 — fresh post-PR-#63 run on current main)
+- `cargo fmt --all`: PASS
+- `cargo check --workspace`: PASS
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: PASS
+- `cargo test --workspace`: PASS (pt-risk: 10 tests, pt-quote: 7 tests, pt-cli: 11 queue tests + 2 config tests, pt-core: 6 tests, all others pass)
+- `pnpm exec nx run pt-dashboard-frontend:test`: PASS (11 tests: 9 in App.test.tsx, 2 in format.test.ts)
+- `npm run build` (frontend): PASS
 
 ## Canonical status files
-- `docs/WORK_STATUS.md`
+- `docs/development/WORK_STATUS.md`
 - `docs/WORK_STATUS.json`
-- `docs/archive/program-history-2026/INTEGRATION_BOARD.md` (historical snapshot)
 
 ## Canonical integration branch
-- `codex/single-integration-board-2026-04-28`
+- `main` (no open PRs)
 
-## Execution policy for this cycle
-- keep one active integration PR
-- take the next code-bearing slice from the ordered queue and land it on PR `#51`
-- if a later stage requires human approval, keep the same PR and move to the next eligible queued feature
-- if a run is blocked only by missing authenticated checkout or another audit-environment limitation, keep the same active slice and resume it from a proper checkout
-- when no more eligible queued features remain, finish with one refinement pass for consistency and best practices
+## Current active next step
+Close issue `#53` after strategy-artifact smoke confirmation, then advance queued issues in order: `#58`, `#59`, `#60`, `#61`.
 
-## Branch-classification policy
-Treat every visible `codex/` branch as exactly one of:
-- active integration branch
-- compile-recovery reference
-- frontend or dashboard salvage reference
-- approval-queue persistence reference
-- planning or audit archive context
-
-Current rule:
-- only `codex/single-integration-board-2026-04-28` is active
-- all other visible `codex/` branches are reference-only until the current phase gates allow targeted salvage
-- the canonical classification source (historical) is `docs/archive/program-history-2026/INTEGRATION_BOARD.md`
-
-## Recommended next implementation slice
-Recover compile integrity for issue `#48` on PR `#51`, limited to:
-- `crates/pt-cli/src/main.rs`
-- `crates/pt-coinbase/src/lib.rs`
-
-Required scope:
-- repair import, header, and command-boundary corruption only
-- preserve coherent newer behavior where it is already intact
-- do not add queue-runtime behavior in this slice
-- do not change live-mode behavior, credentials, deployment posture, or risk caps
-
-## Exact Slice 1 blocker signatures
-### `crates/pt-cli/src/main.rs`
-- duplicate `pt_core` imports
-- duplicate `pt_engine::TradingEngine` imports
-- a broken `Commands` enum boundary where `StrategyProfileLoad` runs into `Coinbase`
-
-Immediate safe repair:
-1. merge the `pt_core` imports so one block carries `AppConfig`, `EngineMode`, `ReplayAcceptanceReport`, `RuntimeRole`, and `MarketSnapshot`
-2. keep only one `pt_engine::TradingEngine` import
-3. close `StrategyProfileLoad` cleanly and keep `Coinbase` as its own subcommand variant
-4. preserve the newer command surface already present
-
-### `crates/pt-coinbase/src/lib.rs`
-- merge-corrupted top-level import and header block
-- duplicated `pt_core` fragments
-- duplicated `reqwest::header` fragments
-
-Immediate safe repair:
-1. keep the newer auth-manager, websocket, and runtime imports intact
-2. merge the older advanced-trade imports into that same top block without duplicates
-3. remove the duplicated header fragments without changing behavior below the import section
-
-## Environment blocker for the code-bearing slice
-- This audit run has GitHub connector access for repository and PR analysis.
-- This audit run still does not provide a usable authenticated local checkout of the private repository.
-- Direct git clone from GitHub was not available in this environment.
-- This is an execution-environment blocker, not a human-decision gate, so issue `#48` must remain the `active_now` slice.
-- The next code-bearing pass should therefore happen from a proper checkout of branch `codex/single-integration-board-2026-04-28`, and it should stay limited to issue `#48`.
-
-## Acceptance criteria
-- `cargo fmt --all -- --check` no longer reports parser errors for the two Slice 1 files
-- the recovery work stays limited to those two files
-- queue-runtime work for issue `#9` stays paused until later slices clear the remaining parser blockers
-
-## Validation ladder
-1. `cargo fmt --all -- --check`
-2. `cargo check --workspace`
-3. `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-4. `cargo test --workspace`
-5. `cargo build --workspace`
-6. `cargo audit`
-7. `./scripts/generate_sbom.sh artifacts`
-
-## Guardrails
-- Do not enable live mode.
-- Do not add or modify credentials.
-- Do not raise risk caps.
-- Do not mix issue `#9` queue-runtime wiring into the Slice 1 compile-recovery work.
-- Do not treat diverged remote branches as current readiness evidence.
-- Do not open more than one active integration PR for this queue.
-
-## Operator decision needed
-No approval is needed to continue PR `#51` or to start issue `#48`.
-Explicit approval is still required for merge, deployment, live mode, live credentials, or a tiny live pilot.
+## Queue summary
+- completed Phase 0: issue `#48`
+- completed Track B: issues `#54`, `#55`, `#56`, PR `#57`
+- completed strategy-lab handoff slice: PR `#63`
+- newly completed (this session): issue `#22` (dashboard safety-net tests), issue `#23` (risk/quote failure-path tests)
+- active now: issue `#53` — awaiting end-to-end artifact-lineage smoke proof
+- queued: issues `#58`, `#59`, `#60`, `#61`
+- blocked on human decision: 0 items
