@@ -1,6 +1,6 @@
 {
   "schema_version": 9,
-  "updated_on": "2026-05-03",
+  "updated_on": "2026-05-16",
   "direction": {
     "roadmap_repository_path": "ROADMAP.md",
     "role": "ROADMAP.md is the source of truth for product and technical direction; WORK_STATUS tracks execution state."
@@ -9,17 +9,16 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Issue #48 is closed, PR #57 merged the Coinbase visual workstation foundation, Track B issues #54/#55/#56 are closed, PR #62 carries roadmap closeout plus workspace Clippy hygiene, and issue #53 is the next active strategy-artifact handoff lane.",
+  "current_audit_finding": "Issues #22 and #23 closed with full test evidence (May 16 2026). Issues #6 and #9 closed as superseded/implemented. Fresh post-PR-#63 validation evidence posted to issue #53. Rust/frontend validation gate is cleared; remaining #53 gate item is artifact-lineage smoke requiring Coinbase sandbox credentials.",
   "audit": {
-    "last_audited_on": "2026-05-02",
+    "last_audited_on": "2026-05-16",
     "audit_source": [
       "GitHub issue state",
-      "merged PR #57",
-      "operator-reported validation evidence",
-      "agent-reran PR #62 branch validation including clippy",
-      "Coinbase strategy AI roadmap packet"
+      "local validation run on main commit ce8c39d",
+      "direct cargo test / npm test execution",
+      "adversarial review document audit"
     ],
-    "validation_evidence_state": "operator_reported_workstation_validation_plus_agent_reran_pr62_branch_may_2_2026",
+    "validation_evidence_state": "fresh_local_run_main_ce8c39d_may_16_2026_rust_and_frontend_pass",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -41,6 +40,32 @@
     "active_issue": 53,
     "environment_note": "After PR #62 merges to main, start issue #53 from updated main. This status update records issue and queue state plus agent validation on the PR #62 branch."
   },
+  "recently_closed_issues": [
+    {
+      "issue": 23,
+      "label": "Add deterministic tests for risk-engine and quote-engine failure paths",
+      "closed_on": "2026-05-16",
+      "evidence": "pt-risk: 10 tests, pt-quote: 7 tests — all pass on main"
+    },
+    {
+      "issue": 22,
+      "label": "Consolidate dashboard safety-net tests with the read-only approval queue stack",
+      "closed_on": "2026-05-16",
+      "evidence": "App.test.tsx: 9 tests (added approval queue render, empty state, error fallback, no-action assertion, multi-failure stability)"
+    },
+    {
+      "issue": 9,
+      "label": "Persist dashboard approval queue state for operator review",
+      "closed_on": "2026-05-16",
+      "evidence": "ApprovalQueueStore (SQLite-backed) present on main since initial snapshot; 11 queue store/runtime tests pass"
+    },
+    {
+      "issue": 6,
+      "label": "Split PR #4: isolate dashboard shell into current-API frontend PR",
+      "closed_on": "2026-05-16",
+      "evidence": "Superseded by PR #57 (Track B) and PR #62; source branch no longer active"
+    }
+  ],
   "completed_evidence": {
     "phase0_compile_recovery": {
       "issue": 48,
