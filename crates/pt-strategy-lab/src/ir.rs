@@ -80,7 +80,7 @@ pub enum IrAction {
 }
 
 /// A single bar's evaluation output from `eval_ir`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IrDecision {
     pub ts_ms: i64,
     pub action: IrAction,
