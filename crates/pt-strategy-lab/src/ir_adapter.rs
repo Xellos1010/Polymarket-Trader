@@ -1,6 +1,4 @@
-use crate::ir::{
-    CompareNode, InputNode, MaKind, RuleNode, SizingHint, StrategyIrDef, IR_VERSION,
-};
+use crate::ir::{CompareNode, InputNode, MaKind, RuleNode, SizingHint, StrategyIrDef, IR_VERSION};
 use crate::types::{MaType, StrategyProfile};
 use std::collections::HashMap;
 
@@ -78,7 +76,9 @@ pub fn from_profile(profile: &StrategyProfile) -> StrategyIrDef {
         granularity_sec: profile.granularity_sec,
         entry_rule,
         exit_rule,
-        sizing: Some(SizingHint::FixedFraction { fraction: DEFAULT_FIXED_FRACTION }),
+        sizing: Some(SizingHint::FixedFraction {
+            fraction: DEFAULT_FIXED_FRACTION,
+        }),
         provenance,
     }
 }

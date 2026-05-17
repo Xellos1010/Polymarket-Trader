@@ -15,8 +15,13 @@ pub enum InputNode {
         ma_type: MaKind,
         period: usize,
     },
-    Rsi { source: Box<InputNode>, period: usize },
-    Atr { period: usize },
+    Rsi {
+        source: Box<InputNode>,
+        period: usize,
+    },
+    Atr {
+        period: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

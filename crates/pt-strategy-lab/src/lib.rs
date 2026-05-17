@@ -11,13 +11,13 @@ pub mod types;
 pub mod web;
 
 pub use backtest::run_backtest;
+pub use data::fetch_coinbase_candles;
+pub use ir::{
+    CompareNode, InputNode, IrAction, IrDecision, MaKind, RuleNode, SizingHint, StrategyIrDef,
+    IR_VERSION,
+};
 pub use ir_adapter::{from_profile, from_promotion_json};
 pub use ir_exec::eval_ir;
-pub use ir::{
-    CompareNode, InputNode, IrAction, IrDecision, MaKind, RuleNode,
-    SizingHint, StrategyIrDef, IR_VERSION,
-};
-pub use data::fetch_coinbase_candles;
 pub use persistence::{
     list_runs, load_profile, save_paper_endpoint_report, save_profile, save_run,
 };

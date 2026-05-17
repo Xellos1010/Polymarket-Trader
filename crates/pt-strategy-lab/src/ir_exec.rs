@@ -266,14 +266,29 @@ mod tests {
     fn eval_rising_series_produces_at_least_one_buy() {
         // Flat warm-up so both SMAs settle, then a sharp price jump makes fast SMA
         // cross above slow SMA — producing a genuine (non-warmup) Buy signal.
-        let flat: Vec<Candle> = (0..15).map(|i| Candle {
-            ts_ms: i as i64 * 300_000,
-            open: 100.0, high: 101.0, low: 99.0, close: 100.0, volume: 100.0,
-        }).collect();
-        let rise: Vec<Candle> = (0..35).map(|i| {
-            let p = 100.0 + (i + 1) as f64 * 10.0;
-            Candle { ts_ms: (i + 15) as i64 * 300_000, open: p, high: p + 1.0, low: p - 1.0, close: p, volume: 100.0 }
-        }).collect();
+        let flat: Vec<Candle> = (0..15)
+            .map(|i| Candle {
+                ts_ms: i as i64 * 300_000,
+                open: 100.0,
+                high: 101.0,
+                low: 99.0,
+                close: 100.0,
+                volume: 100.0,
+            })
+            .collect();
+        let rise: Vec<Candle> = (0..35)
+            .map(|i| {
+                let p = 100.0 + (i + 1) as f64 * 10.0;
+                Candle {
+                    ts_ms: (i + 15) as i64 * 300_000,
+                    open: p,
+                    high: p + 1.0,
+                    low: p - 1.0,
+                    close: p,
+                    volume: 100.0,
+                }
+            })
+            .collect();
         let candles: Vec<Candle> = flat.into_iter().chain(rise).collect();
         let ir = sma_cross_ir(3, 10);
         let decisions = eval_ir(&ir, &candles);
@@ -340,23 +355,53 @@ mod tests {
     #[test]
     fn eval_cross_under_produces_sell() {
         // Flat warm-up → sharp rise (crossover Buy) → sharp fall (crossunder Sell).
-        let flat: Vec<Candle> = (0..15).map(|i| Candle {
-            ts_ms: i as i64 * 300_000,
-            open: 100.0, high: 101.0, low: 99.0, close: 100.0, volume: 100.0,
-        }).collect();
-        let rise: Vec<Candle> = (0..20).map(|i| {
-            let p = 100.0 + (i + 1) as f64 * 10.0;
-            Candle { ts_ms: (i + 15) as i64 * 300_000, open: p, high: p + 1.0, low: p - 1.0, close: p, volume: 100.0 }
-        }).collect();
-        let fall: Vec<Candle> = (0..25).map(|i| {
-            let p = 300.0 - (i + 1) as f64 * 10.0;
-            Candle { ts_ms: (i + 35) as i64 * 300_000, open: p, high: p + 1.0, low: p - 1.0, close: p, volume: 100.0 }
-        }).collect();
+        let flat: Vec<Candle> = (0..15)
+            .map(|i| Candle {
+                ts_ms: i as i64 * 300_000,
+                open: 100.0,
+                high: 101.0,
+                low: 99.0,
+                close: 100.0,
+                volume: 100.0,
+            })
+            .collect();
+        let rise: Vec<Candle> = (0..20)
+            .map(|i| {
+                let p = 100.0 + (i + 1) as f64 * 10.0;
+                Candle {
+                    ts_ms: (i + 15) as i64 * 300_000,
+                    open: p,
+                    high: p + 1.0,
+                    low: p - 1.0,
+                    close: p,
+                    volume: 100.0,
+                }
+            })
+            .collect();
+        let fall: Vec<Candle> = (0..25)
+            .map(|i| {
+                let p = 300.0 - (i + 1) as f64 * 10.0;
+                Candle {
+                    ts_ms: (i + 35) as i64 * 300_000,
+                    open: p,
+                    high: p + 1.0,
+                    low: p - 1.0,
+                    close: p,
+                    volume: 100.0,
+                }
+            })
+            .collect();
         let candles: Vec<Candle> = flat.into_iter().chain(rise).chain(fall).collect();
         let ir = sma_cross_ir(3, 10);
         let decisions = eval_ir(&ir, &candles);
-        assert!(decisions.iter().any(|d| d.action == IrAction::Buy), "expected at least one Buy");
-        assert!(decisions.iter().any(|d| d.action == IrAction::Sell), "expected at least one Sell");
+        assert!(
+            decisions.iter().any(|d| d.action == IrAction::Buy),
+            "expected at least one Buy"
+        );
+        assert!(
+            decisions.iter().any(|d| d.action == IrAction::Sell),
+            "expected at least one Sell"
+        );
     }
 
     #[test]
