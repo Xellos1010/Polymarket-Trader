@@ -1,6 +1,7 @@
 pub mod backtest;
 pub mod data;
 pub mod indicators;
+pub mod ir;
 pub mod persistence;
 pub mod signals;
 pub mod tuning;
@@ -8,6 +9,10 @@ pub mod types;
 pub mod web;
 
 pub use backtest::run_backtest;
+pub use ir::{
+    CompareNode, InputNode, IrAction, IrDecision, MaKind, RuleNode,
+    SizingHint, StrategyIrDef, IR_VERSION,
+};
 pub use data::fetch_coinbase_candles;
 pub use persistence::{
     list_runs, load_profile, save_paper_endpoint_report, save_profile, save_run,
