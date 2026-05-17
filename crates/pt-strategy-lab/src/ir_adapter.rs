@@ -4,6 +4,8 @@ use crate::ir::{
 use crate::types::{MaType, StrategyProfile};
 use std::collections::HashMap;
 
+const DEFAULT_FIXED_FRACTION: f64 = 0.10;
+
 fn ma_kind_from(mt: &MaType) -> MaKind {
     match mt {
         MaType::Ema => MaKind::Ema,
@@ -24,12 +26,12 @@ pub fn from_profile(profile: &StrategyProfile) -> StrategyIrDef {
 
     let fast_ma = InputNode::Ma {
         source: Box::new(InputNode::Close),
-        ma_type: ma_kind.clone(),
+        ma_type: ma_kind,
         period: profile.indicators.ma_fast,
     };
     let slow_ma = InputNode::Ma {
         source: Box::new(InputNode::Close),
-        ma_type: ma_kind.clone(),
+        ma_type: ma_kind,
         period: profile.indicators.ma_slow,
     };
     let rsi_node = InputNode::Rsi {
@@ -43,6 +45,7 @@ pub fn from_profile(profile: &StrategyProfile) -> StrategyIrDef {
                 fast: fast_ma.clone(),
                 slow: slow_ma.clone(),
             },
+            // Guard: do not enter if RSI is already overbought at time of crossover.
             CompareNode::BelowThreshold {
                 source: rsi_node,
                 threshold: profile.indicators.rsi_overbought,
@@ -75,12 +78,17 @@ pub fn from_profile(profile: &StrategyProfile) -> StrategyIrDef {
         granularity_sec: profile.granularity_sec,
         entry_rule,
         exit_rule,
-        sizing: Some(SizingHint::FixedFraction { fraction: 0.10 }),
+        sizing: Some(SizingHint::FixedFraction { fraction: DEFAULT_FIXED_FRACTION }),
         provenance,
     }
 }
 
 /// Convert a strategy-lab promotion artifact JSON value into a `StrategyIrDef`.
+///
+/// Uses SMA 9/21 crossover as the canonical sma_baseline configuration
+/// (short_window=9, long_window=21 from coinbase_strategy_lab.example.json).
+/// Indicator fields in the artifact JSON are not parsed — this produces the
+/// standard baseline IR for replay and paper evaluation.
 pub fn from_promotion_json(json: &serde_json::Value) -> Option<StrategyIrDef> {
     let market = json.get("market")?.as_str()?.to_string();
     let variant = json
@@ -169,6 +177,7 @@ mod tests {
         let ir = from_profile(&profile);
         match &ir.exit_rule {
             RuleNode::All { conditions } => {
+                assert!(!conditions.is_empty(), "exit conditions must not be empty");
                 assert!(matches!(conditions[0], CompareNode::CrossUnder { .. }));
             }
             other => panic!("expected All with CrossUnder, got {:?}", other),
@@ -210,7 +219,6 @@ mod tests {
         let ir = from_profile(&profile);
         let json = serde_json::to_string(&ir).expect("serialize");
         let restored: StrategyIrDef = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(ir.ir_version, restored.ir_version);
-        assert_eq!(ir.name, restored.name);
+        assert_eq!(ir, restored);
     }
 }
