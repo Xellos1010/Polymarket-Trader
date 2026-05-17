@@ -61,10 +61,10 @@ fn eval_compare(node: &CompareNode, candles: &[Candle]) -> Vec<bool> {
             let mut out = vec![false; n];
             for i in 1..n {
                 if let (Some(f_cur), Some(s_cur)) = (f[i], s[i]) {
-                    // If previous bar lacked data, treat it as fast <= slow (below).
+                    // Treat unknown prior state as "no cross possible" (suppress warmup signal).
                     let prev_above = match (f[i - 1], s[i - 1]) {
                         (Some(fp), Some(sp)) => fp > sp,
-                        _ => false,
+                        _ => true,
                     };
                     out[i] = f_cur > s_cur && !prev_above;
                 }
@@ -77,10 +77,10 @@ fn eval_compare(node: &CompareNode, candles: &[Candle]) -> Vec<bool> {
             let mut out = vec![false; n];
             for i in 1..n {
                 if let (Some(f_cur), Some(s_cur)) = (f[i], s[i]) {
-                    // If previous bar lacked data, treat it as fast >= slow (above).
+                    // Treat unknown prior state as "no cross possible" (suppress warmup signal).
                     let prev_below = match (f[i - 1], s[i - 1]) {
                         (Some(fp), Some(sp)) => fp < sp,
-                        _ => false,
+                        _ => true,
                     };
                     out[i] = f_cur < s_cur && !prev_below;
                 }
@@ -264,7 +264,17 @@ mod tests {
 
     #[test]
     fn eval_rising_series_produces_at_least_one_buy() {
-        let candles = candles_rising(50, 100.0, 5.0);
+        // Flat warm-up so both SMAs settle, then a sharp price jump makes fast SMA
+        // cross above slow SMA — producing a genuine (non-warmup) Buy signal.
+        let flat: Vec<Candle> = (0..15).map(|i| Candle {
+            ts_ms: i as i64 * 300_000,
+            open: 100.0, high: 101.0, low: 99.0, close: 100.0, volume: 100.0,
+        }).collect();
+        let rise: Vec<Candle> = (0..35).map(|i| {
+            let p = 100.0 + (i + 1) as f64 * 10.0;
+            Candle { ts_ms: (i + 15) as i64 * 300_000, open: p, high: p + 1.0, low: p - 1.0, close: p, volume: 100.0 }
+        }).collect();
+        let candles: Vec<Candle> = flat.into_iter().chain(rise).collect();
         let ir = sma_cross_ir(3, 10);
         let decisions = eval_ir(&ir, &candles);
         assert!(decisions.iter().any(|d| d.action == IrAction::Buy));
@@ -324,6 +334,59 @@ mod tests {
             provenance: HashMap::new(),
         };
         let decisions = eval_ir(&ir, &candles);
+        assert!(decisions.iter().any(|d| d.action == IrAction::Buy));
+    }
+
+    #[test]
+    fn eval_cross_under_produces_sell() {
+        // Flat warm-up → sharp rise (crossover Buy) → sharp fall (crossunder Sell).
+        let flat: Vec<Candle> = (0..15).map(|i| Candle {
+            ts_ms: i as i64 * 300_000,
+            open: 100.0, high: 101.0, low: 99.0, close: 100.0, volume: 100.0,
+        }).collect();
+        let rise: Vec<Candle> = (0..20).map(|i| {
+            let p = 100.0 + (i + 1) as f64 * 10.0;
+            Candle { ts_ms: (i + 15) as i64 * 300_000, open: p, high: p + 1.0, low: p - 1.0, close: p, volume: 100.0 }
+        }).collect();
+        let fall: Vec<Candle> = (0..25).map(|i| {
+            let p = 300.0 - (i + 1) as f64 * 10.0;
+            Candle { ts_ms: (i + 35) as i64 * 300_000, open: p, high: p + 1.0, low: p - 1.0, close: p, volume: 100.0 }
+        }).collect();
+        let candles: Vec<Candle> = flat.into_iter().chain(rise).chain(fall).collect();
+        let ir = sma_cross_ir(3, 10);
+        let decisions = eval_ir(&ir, &candles);
+        assert!(decisions.iter().any(|d| d.action == IrAction::Buy), "expected at least one Buy");
+        assert!(decisions.iter().any(|d| d.action == IrAction::Sell), "expected at least one Sell");
+    }
+
+    #[test]
+    fn eval_rule_any_fires_on_either_condition() {
+        // RuleNode::Any: entry fires when EITHER close > 150 OR close > 200.
+        // With prices rising from 100 to 200, close > 150 fires first.
+        let candles = candles_rising(50, 100.0, 2.0);
+        let ir = StrategyIrDef {
+            ir_version: IR_VERSION,
+            name: "any-test".into(),
+            product_id: "BTC-USD".into(),
+            granularity_sec: 300,
+            entry_rule: RuleNode::Any {
+                conditions: vec![
+                    CompareNode::AboveThreshold {
+                        source: InputNode::Close,
+                        threshold: 150.0,
+                    },
+                    CompareNode::AboveThreshold {
+                        source: InputNode::Close,
+                        threshold: 200.0,
+                    },
+                ],
+            },
+            exit_rule: RuleNode::Never,
+            sizing: None,
+            provenance: HashMap::new(),
+        };
+        let decisions = eval_ir(&ir, &candles);
+        // At price 152 (bar 26), close > 150 → Buy should fire
         assert!(decisions.iter().any(|d| d.action == IrAction::Buy));
     }
 }
