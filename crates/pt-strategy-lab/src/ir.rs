@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub const IR_VERSION: u32 = 1;
 
@@ -67,7 +68,7 @@ pub struct StrategyIrDef {
     pub entry_rule: RuleNode,
     pub exit_rule: RuleNode,
     pub sizing: Option<SizingHint>,
-    pub provenance: std::collections::HashMap<String, String>,
+    pub provenance: HashMap<String, String>,
 }
 
 /// Action produced by IR evaluation at a single bar.
@@ -89,6 +90,7 @@ pub struct IrDecision {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn sma_crossover_ir() -> StrategyIrDef {
         StrategyIrDef {
@@ -125,7 +127,7 @@ mod tests {
                 }],
             },
             sizing: Some(SizingHint::FixedFraction { fraction: 0.10 }),
-            provenance: std::collections::HashMap::new(),
+            provenance: HashMap::new(),
         }
     }
 
@@ -142,7 +144,8 @@ mod tests {
     fn ir_version_field_is_present_in_json() {
         let ir = sma_crossover_ir();
         let json = serde_json::to_string(&ir).expect("serialize");
-        assert!(json.contains("\"ir_version\""));
+        let v: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        assert_eq!(v["ir_version"], IR_VERSION);
     }
 
     #[test]
@@ -171,7 +174,7 @@ mod tests {
                 }],
             },
             sizing: None,
-            provenance: std::collections::HashMap::new(),
+            provenance: HashMap::new(),
         };
         let json = serde_json::to_string(&ir).expect("serialize");
         let restored: StrategyIrDef = serde_json::from_str(&json).expect("deserialize");
