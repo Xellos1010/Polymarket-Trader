@@ -14,6 +14,7 @@ fn resolve(node: &InputNode, candles: &[Candle]) -> Vec<Option<f64>> {
             period,
         } => {
             let src = resolve(source, candles);
+            // FIXME: None warmup bars are mapped to 0.0 — correct for leaf nodes but distorts nested MA-of-MA inputs.
             let vals: Vec<f64> = src.iter().map(|v| v.unwrap_or(0.0)).collect();
             let vols: Vec<f64> = candles.iter().map(|c| c.volume).collect();
             let rust_ma_type = match ma_type {
@@ -31,6 +32,7 @@ fn resolve(node: &InputNode, candles: &[Candle]) -> Vec<Option<f64>> {
         }
         InputNode::Rsi { source, period } => {
             let src = resolve(source, candles);
+            // FIXME: None warmup bars are mapped to 0.0 — correct for leaf nodes but distorts nested MA-of-MA inputs.
             let vals: Vec<f64> = src.iter().map(|v| v.unwrap_or(0.0)).collect();
             indicators::rsi(&vals, *period)
         }
@@ -140,6 +142,7 @@ fn eval_rule(rule: &RuleNode, candles: &[Candle]) -> Vec<bool> {
 /// Returns one `IrDecision` per candle. A position is modelled as a simple
 /// long-only state machine: `Buy` opens, `Sell` closes, `Hold` does nothing.
 /// Exit takes priority if already in position.
+/// Note: `StrategyIrDef::sizing` is not applied by this evaluator — all positions use the caller's size.
 pub fn eval_ir(ir: &StrategyIrDef, candles: &[Candle]) -> Vec<IrDecision> {
     let entry = eval_rule(&ir.entry_rule, candles);
     let exit = eval_rule(&ir.exit_rule, candles);
