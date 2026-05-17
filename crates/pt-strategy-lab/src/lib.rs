@@ -2,6 +2,7 @@ pub mod backtest;
 pub mod data;
 pub mod indicators;
 pub mod ir;
+pub mod ir_adapter;
 pub mod persistence;
 pub mod signals;
 pub mod tuning;
@@ -9,6 +10,7 @@ pub mod types;
 pub mod web;
 
 pub use backtest::run_backtest;
+pub use ir_adapter::{from_profile, from_promotion_json};
 pub use ir::{
     CompareNode, InputNode, IrAction, IrDecision, MaKind, RuleNode,
     SizingHint, StrategyIrDef, IR_VERSION,
