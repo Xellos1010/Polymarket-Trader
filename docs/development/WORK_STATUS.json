@@ -1,6 +1,6 @@
 {
   "schema_version": 9,
-  "updated_on": "2026-05-16",
+  "updated_on": "2026-05-17",
   "direction": {
     "roadmap_repository_path": "ROADMAP.md",
     "role": "ROADMAP.md is the source of truth for product and technical direction; WORK_STATUS tracks execution state."
@@ -31,16 +31,22 @@
     "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "phase1_strategy_artifact_handoff",
-    "label": "Strategy-lab handoff into Coinbase paper runtime",
+    "id": "phase1_strategy_ir_adapter",
+    "label": "Rust-native strategy IR and adapter layer for strategy AI",
     "requires_human_decision": false,
     "blocker_type": null,
     "execution_status": "ready_for_next_pr",
-    "active_now_queue_order": 5,
-    "active_issue": 53,
-    "environment_note": "After PR #62 merges to main, start issue #53 from updated main. This status update records issue and queue state plus agent validation on the PR #62 branch."
+    "active_now_queue_order": 6,
+    "active_issue": 58,
+    "environment_note": "Issue #53 closed May 17 2026 with full artifact-lineage smoke evidence. CDP key wired via config/cdp_api_key.json. Next: implement strategy IR in pt-strategy-lab."
   },
   "recently_closed_issues": [
+    {
+      "issue": 53,
+      "label": "Strengthen strategy-lab handoff into Coinbase paper runtime",
+      "closed_on": "2026-05-17",
+      "evidence": "Full artifact-lineage smoke: backtest → overlap → optimize → promote → replay_acceptance PASS → paper runtime starts cleanly (mode=Paper). CDP key via config/cdp_api_key.json."
+    },
     {
       "issue": 23,
       "label": "Add deterministic tests for risk-engine and quote-engine failure paths",
@@ -144,14 +150,14 @@
       "order": 5,
       "label": "Strategy-lab handoff into Coinbase paper runtime",
       "source": "issue #53",
-      "status": "active_now",
+      "status": "completed",
       "requires_human_decision": false
     },
     {
       "order": 6,
       "label": "Rust-native strategy IR and adapter layer",
       "source": "issue #58",
-      "status": "queued",
+      "status": "active_now",
       "requires_human_decision": false
     },
     {
