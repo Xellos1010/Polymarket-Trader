@@ -9,16 +9,16 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Issues #22 and #23 closed with full test evidence (May 16 2026). Issues #6 and #9 closed as superseded/implemented. Fresh post-PR-#63 validation evidence posted to issue #53. Rust/frontend validation gate is cleared; remaining #53 gate item is artifact-lineage smoke requiring Coinbase sandbox credentials.",
+  "current_audit_finding": "Issue #58 closed May 17 2026 with full IR implementation: ir.rs, ir_adapter.rs, ir_exec.rs — 17 new tests, all workspace tests pass. Next: issue #59 (bounded AI optimizer objective and candidate sweep lane).",
   "audit": {
-    "last_audited_on": "2026-05-16",
+    "last_audited_on": "2026-05-17",
     "audit_source": [
       "GitHub issue state",
-      "local validation run on main commit ce8c39d",
-      "direct cargo test / npm test execution",
-      "adversarial review document audit"
+      "local validation run on main commit 6fd933b",
+      "direct cargo test --workspace execution",
+      "subagent-driven development with spec + code quality review per task"
     ],
-    "validation_evidence_state": "fresh_local_run_main_ce8c39d_may_16_2026_rust_and_frontend_pass",
+    "validation_evidence_state": "fresh_local_run_main_6fd933b_may_17_2026_rust_pass_17_new_ir_tests",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -31,16 +31,22 @@
     "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "phase1_strategy_ir_adapter",
-    "label": "Rust-native strategy IR and adapter layer for strategy AI",
+    "id": "phase1_ai_optimizer_lane",
+    "label": "Bounded AI optimizer objective and candidate sweep lane",
     "requires_human_decision": false,
     "blocker_type": null,
     "execution_status": "ready_for_next_pr",
-    "active_now_queue_order": 6,
-    "active_issue": 58,
-    "environment_note": "Issue #53 closed May 17 2026 with full artifact-lineage smoke evidence. CDP key wired via config/cdp_api_key.json. Next: implement strategy IR in pt-strategy-lab."
+    "active_now_queue_order": 7,
+    "active_issue": 59,
+    "environment_note": "Issue #58 closed May 17 2026. IR layer complete on main (ir.rs, ir_adapter.rs, ir_exec.rs). Next: issue #59 — bounded AI optimizer objective and candidate sweep lane."
   },
   "recently_closed_issues": [
+    {
+      "issue": 58,
+      "label": "Rust-native strategy IR and adapter layer for strategy AI",
+      "closed_on": "2026-05-17",
+      "evidence": "ir.rs (IR types), ir_adapter.rs (from_profile/from_promotion_json), ir_exec.rs (eval_ir). 17 new tests, all workspace tests pass on commit 6fd933b."
+    },
     {
       "issue": 53,
       "label": "Strengthen strategy-lab handoff into Coinbase paper runtime",
@@ -93,8 +99,8 @@
     }
   },
   "active_next_step": {
-    "label": "Strengthen strategy-lab handoff into Coinbase paper runtime",
-    "source": "issue #53",
+    "label": "Bounded AI optimizer objective and candidate sweep lane",
+    "source": "issue #59",
     "queue_state": "active_now",
     "constraints": [
       "sandbox and paper only",
@@ -103,18 +109,12 @@
       "do not raise risk caps",
       "do not let AI bypass risk controls",
       "do not treat chart-derived fixture bars as replay or paper evidence"
-    ],
-    "required_outputs": [
-      "strategy artifact schema or hardened model",
-      "active artifact traceability in Coinbase paper runtime",
-      "dashboard/API active artifact exposure",
-      "replay and paper evidence linked to exact artifact ids"
     ]
   },
   "queue_summary": {
-    "completed": 4,
+    "completed": 6,
     "active_now": 1,
-    "queued_after_current_stage": 4,
+    "queued_after_current_stage": 3,
     "blocked_on_human_decision": 0
   },
   "queue": [
@@ -157,14 +157,14 @@
       "order": 6,
       "label": "Rust-native strategy IR and adapter layer",
       "source": "issue #58",
-      "status": "active_now",
+      "status": "completed",
       "requires_human_decision": false
     },
     {
       "order": 7,
       "label": "Bounded AI optimizer objective and candidate sweep lane",
       "source": "issue #59",
-      "status": "queued",
+      "status": "active_now",
       "requires_human_decision": false
     },
     {
