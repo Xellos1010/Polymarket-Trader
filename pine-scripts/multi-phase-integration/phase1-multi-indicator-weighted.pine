@@ -180,6 +180,10 @@ inDateRange = time >= startTime and time <= endTime
 signalGate = not confirmedOnly or barstate.isconfirmed
 
 trendMA = f_ma(close, trendLen, maType)
+// HTF access: lookahead_off is intentional — this script is the Phase 1 weighted-signal spec and uses
+// the live (in-progress) HTF bar value for parity comparison with the chart timeframe. This script does
+// NOT gate live orders; it is a research/spec reference only. For production use in the day-trading
+// scripts see the nonRepaintHTF toggle (lookahead_on + [1]) which avoids intra-bar repaint.
 htfMA = request.security(syminfo.tickerid, htfTf, f_ma(close, trendLen, maType), barmerge.gaps_off, barmerge.lookahead_off)
 
 trendBull = close > trendMA and trendMA >= trendMA[1]
@@ -302,6 +306,9 @@ sellLongMsg = f_json("SELL")
 sellShortMsg = f_json("SELL_SHORT")
 buyCoverMsg = f_json("BUY_TO_COVER")
 
+// Entry fill semantics: signal fires on bar *close* (gated by barstate.isconfirmed via signalGate).
+// TradingView fills strategy.entry at the *open of the next bar* (market order, 1-tick slippage default).
+// This script is a Phase 1 spec reference; fills are approximate and not used for live order routing.
 if longSignal
     strategy.entry("L", strategy.long, alert_message = buyLongMsg, comment = "Long: weighted")
 
