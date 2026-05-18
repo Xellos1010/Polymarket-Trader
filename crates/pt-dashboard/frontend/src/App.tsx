@@ -298,9 +298,18 @@ type CandleView = {
 };
 
 type EquityPoint = { ts_ms: number; equity: number };
+type TradeFill = {
+  ts_ms: number;
+  action: "buy" | "sell";
+  price: number;
+  qty: number;
+};
 
 type StrategyRunReport = {
   run_id: string;
+  params_hash: string;
+  candle_start_ms: number;
+  candle_end_ms: number;
   product_id: string;
   granularity_sec: number;
   total_return_pct: number;
@@ -309,6 +318,7 @@ type StrategyRunReport = {
   win_rate: number;
   pnl: number;
   equity_curve: EquityPoint[];
+  fills: TradeFill[];
 };
 
 const GRANULARITIES = [
@@ -1197,9 +1207,13 @@ export default function App() {
                     >
                       {(() => {
                         const curve = backtestReport.equity_curve;
+                        const fills = backtestReport.fills ?? [];
                         const minEq = Math.min(...curve.map((p) => p.equity));
                         const maxEq = Math.max(...curve.map((p) => p.equity));
                         const range = Math.max(maxEq - minEq, 1);
+                        const tMin = curve[0].ts_ms;
+                        const tMax = curve[curve.length - 1].ts_ms;
+                        const tRange = Math.max(tMax - tMin, 1);
                         const pts = curve
                           .map((p, i) => {
                             const x = (i / (curve.length - 1)) * 290 + 5;
@@ -1211,6 +1225,23 @@ export default function App() {
                           <>
                             <polyline points={pts} fill="none" stroke="#77e6ff" strokeWidth="1.5" />
                             <line x1="5" y1="75" x2="295" y2="75" stroke="#333" strokeWidth="0.5" />
+                            {fills.map((f, fi) => {
+                              const x = ((f.ts_ms - tMin) / tRange) * 290 + 5;
+                              const isBuy = f.action === "buy";
+                              return (
+                                <text
+                                  key={fi}
+                                  x={x}
+                                  y={isBuy ? 74 : 8}
+                                  textAnchor="middle"
+                                  fontSize="8"
+                                  fill={isBuy ? "#4ade80" : "#f87171"}
+                                  aria-label={isBuy ? "buy" : "sell"}
+                                >
+                                  {isBuy ? "▲" : "▼"}
+                                </text>
+                              );
+                            })}
                           </>
                         );
                       })()}

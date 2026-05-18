@@ -371,6 +371,9 @@ function installFetchMock(overrides?: Record<string, Response>) {
     if (init?.method === "POST" && url === "/api/v1/backtest/run") {
       return Promise.resolve(jsonResponse({
         run_id: "test-run-id",
+        params_hash: "aabbccdd",
+        candle_start_ms: 1000000,
+        candle_end_ms: 2000000,
         product_id: "BTC-USD",
         granularity_sec: 3600,
         total_return_pct: 0.05,
@@ -379,7 +382,10 @@ function installFetchMock(overrides?: Record<string, Response>) {
         win_rate: 0.6,
         pnl: 50.0,
         equity_curve: [{ ts_ms: 1000000, equity: 1000.0 }, { ts_ms: 2000000, equity: 1050.0 }],
-        fills: [],
+        fills: [
+          { ts_ms: 1200000, action: "buy", price: 100.0, qty: 10.0 },
+          { ts_ms: 1800000, action: "sell", price: 105.0, qty: 10.0 },
+        ],
         candles: [],
         decisions: [],
         profile_id: "default",
