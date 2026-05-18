@@ -31,8 +31,9 @@ strategy(
 //   slippage = 1 tick (TradingView "points"). For crypto tick = smallest price increment.
 //     Real market-order slippage on non-trivial size is typically larger; 1-tick understates cost.
 //   initial_capital = $100 (research-scale; NOT representative of live notional).
-//   default_qty_value = 100% of equity per trade (full Kelly equivalent).
-//     Use fractional sizing (10-25%) for live; 100% is appropriate only for research ratios.
+//   default_qty_value = 100% of equity per trade (full Kelly equivalent) when researchSizingMode = true.
+//     Use fractional sizing (10-25%) for live; disable researchSizingMode and set liveQtyPct instead.
+//     The override is applied at strategy.entry via explicit qty; strategy() declaration is unchanged.
 //   These values affect absolute P&L and drawdown numbers but not signal timing or direction.
 //
 // Major systems:
@@ -107,6 +108,13 @@ showResearchZones = input.bool(true, "Shade research segments", group = G_RESEAR
 // OOS segment transition markers: labels at the first bar of each segment so parity review can
 // identify IS/OOS/Paper boundaries in screenshots and reports without relying on background color alone.
 showOOSMarkers = input.bool(true, "Show IS/OOS/Paper transition markers", group = G_RESEARCH)
+// Position sizing: research mode uses 100% equity per trade (strategy() default) for clean ratio math.
+// Operators switching to live use must disable research mode and set a conservative live size.
+// Because strategy() default_qty_value is static, the live override is applied via explicit qty at entry.
+researchSizingMode = input.bool(true, "Research sizing (100% equity)", group = G_RESEARCH,
+     tooltip = "True = 100% of equity per trade (backtest/research only). False = use live position size below.")
+liveQtyPct = input.float(5.0, "Live position size (% equity)", minval = 0.1, maxval = 25.0, step = 0.5, group = G_RESEARCH,
+     tooltip = "Only active when Research sizing is disabled. Set to your intended live risk per trade.")
 
 // === MODULE ACTIVATION ===
 enableRSI       = input.bool(true, "Enable RSI", group = G_MODULES)
@@ -687,10 +695,14 @@ buyCoverMsg = f_json("BUY_TO_COVER", longScore, shortScore)
 // Simulated slippage = strategy() slippage param (default 1 tick).
 // Zone-based entry: longSignal requires price to be inside or approaching a support zone; the assumed
 // fill is next-bar open, not the zone boundary. Backtests may show fills slightly above/below zone edge.
+// Position sizing: researchSizingMode = true uses 100% equity (research ratios); false uses liveQtyPct.
+// qty is computed in base-asset units so it works regardless of default_qty_type in strategy().
+positionQtyPct = researchSizingMode ? 100.0 : liveQtyPct
+entryQty = close > 0.0 ? strategy.equity * (positionQtyPct / 100.0) / close : na
 if longSignal
-    strategy.entry("L", strategy.long, alert_message = buyLongMsg, comment = "Long weighted S/R day trade")
+    strategy.entry("L", strategy.long, qty = entryQty, alert_message = buyLongMsg, comment = "Long weighted S/R day trade")
 if shortSignal
-    strategy.entry("S", strategy.short, alert_message = sellShortMsg, comment = "Short weighted S/R day trade")
+    strategy.entry("S", strategy.short, qty = entryQty, alert_message = sellShortMsg, comment = "Short weighted S/R day trade")
 
 // === RISK ENGINE ===
 // Freeze semantics (requires freezeRiskAtEntry = true):

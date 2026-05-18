@@ -25,13 +25,31 @@ strategy(
 // Difference from day version: no intraday max-time auto-exit, broader HTF filters,
 // slower entries, optional DCA-style pyramiding, trend invalidation exits.
 // Research only. Not financial advice.
+//
+// RESEARCH ASSUMPTIONS — not live-execution defaults:
+//   commission = 0.05% per side (Coinbase Advanced Trade maker rate; taker is ~0.08%).
+//     Adjust for your actual fee tier. Long-hold strategies should target maker fills;
+//     this value reflects a realistic accumulation scenario. Does not model rebates.
+//   slippage = 1 tick (TradingView "points"). For crypto tick = smallest price increment.
+//     Real market-order slippage on non-trivial size is typically larger; 1-tick understates cost.
+//   initial_capital = $100 (research-scale; NOT representative of live notional).
+//   default_qty_value = 33.33% of equity per trade (1/3-position sizing for long-hold legs).
+//     This represents a three-tranche accumulation model (initial + 2 DCA adds = full position).
+//     Use conservative sizing (5-15% per tranche) for live; 33.33% per leg is research-mode only.
+//     Live sizing must be set by the operator based on account size, risk tolerance, and exchange rules.
+//   Trade frequency: this script generates approximately 10-30 trades per year on daily/weekly charts.
+//     Backtest statistical significance is LOW at this frequency. Require at minimum 5+ years of
+//     history for any research conclusion and 30+ completed trades before considering promotion to
+//     paper or live. Short backtest windows (< 2 years) are insufficient for long-hold strategy research.
+//   These values affect absolute P&L and drawdown numbers but not signal timing or direction.
 // -----------------------------------------------------------------------------
 
-const string G_EXEC = "01. Execution"
-const string G_ACC  = "02. Accumulation Logic"
-const string G_SR   = "03. Support / Resistance"
-const string G_RISK = "04. Long-Hold Risk"
-const string G_VIS  = "05. Visuals"
+const string G_EXEC   = "01. Execution"
+const string G_ACC    = "02. Accumulation Logic"
+const string G_SR     = "03. Support / Resistance"
+const string G_REGIME = "03b. Multi-TF Regime Filter"
+const string G_RISK   = "04. Long-Hold Risk"
+const string G_VIS    = "05. Visuals"
 
 startTime = input.time(1704067200000, "Research start", group = G_EXEC) // 2024-01-01 UTC
 endTime   = input.time(1893455940000, "Research end", group = G_EXEC)   // 2029-12-31 UTC
@@ -55,6 +73,14 @@ srLeft = input.int(10, "Pivot left", minval = 2, maxval = 100, group = G_SR)
 srRight = input.int(10, "Pivot right", minval = 2, maxval = 100, group = G_SR)
 srAtrMult = input.float(0.50, "Zone ATR thickness", minval = 0.01, maxval = 10, group = G_SR)
 srExtend = input.int(500, "Zone extension bars", minval = 50, maxval = 1000, group = G_SR)
+
+enableMtfRegime   = input.bool(true, "Enable multi-TF regime cascade", group = G_REGIME)
+ema4hLen          = input.int(50, "4H EMA length", minval = 10, maxval = 200, group = G_REGIME)
+emaDailyFastLen   = input.int(50, "Daily fast EMA length", minval = 10, maxval = 200, group = G_REGIME)
+emaDailySlowLen   = input.int(200, "Daily slow EMA length", minval = 50, maxval = 500, group = G_REGIME)
+mtfTransitionSize = input.float(0.5, "Position size multiplier during regime transition", minval = 0.1, maxval = 1.0, step = 0.1, group = G_REGIME)
+
+reduceForWeekend  = input.bool(true, "Reduce position 50% on Friday UTC close", group = G_RISK)
 
 atrLen = input.int(14, "ATR length", minval = 1, group = G_RISK)
 catastrophicStopAtr = input.float(6.0, "Catastrophic stop ATR", minval = 1.0, step = 0.25, group = G_RISK)
@@ -92,6 +118,17 @@ htfSlowRepainting = request.security(syminfo.tickerid, htfTf, ta.ema(close, slow
 htfSlow = nonRepaintHTF ? htfSlowNonRepaint : htfSlowRepainting
 rsi = ta.rsi(close, rsiLen)
 atr = ta.atr(atrLen)
+
+// Multi-TF regime cascade (Bug 14 fix): 4H + Daily EMA alignment prevents slow single-EMA lag.
+// lookahead_off on all HTF requests to avoid future-bar leakage in backtests.
+ema4h     = request.security(syminfo.tickerid, "240", ta.ema(close, ema4hLen),     lookahead = barmerge.lookahead_off)
+ema1dFast = request.security(syminfo.tickerid, "1D",  ta.ema(close, emaDailyFastLen), lookahead = barmerge.lookahead_off)
+ema1dSlow = request.security(syminfo.tickerid, "1D",  ta.ema(close, emaDailySlowLen), lookahead = barmerge.lookahead_off)
+
+mtfBull          = enableMtfRegime ? (ema4h > ema1dFast and ema1dFast > ema1dSlow) : true
+mtfBear          = enableMtfRegime ? (ema4h < ema1dFast and ema1dFast < ema1dSlow) : false
+mtfTransition    = enableMtfRegime ? (not mtfBull and not mtfBear) : false
+mtfSizeMultiplier = mtfTransition ? mtfTransitionSize : 1.0
 
 trendBull = close > slow and fast > slow and slow >= slow[1]
 trendBear = close < slow and fast < slow and slow <= slow[1]
@@ -137,13 +174,16 @@ firstLong = strategy.position_size == 0 and baseLong
 // TradingView fills strategy.entry at the *open of the next bar* (market order, 1-tick slippage default).
 // nearSupport zone check uses close vs. zone bounds; the actual fill is next-bar open, which may be
 // slightly outside the zone. Pyramiding adds at most once per minBarsBetweenAdds bars.
+// mtfSizeMultiplier scales the 33.33% base tranche down to mtfTransitionSize when the regime is in
+// transition (neither full bull nor full bear across the 4H and Daily EMA cascade).
+entryQty = strategy.equity * 0.3333 * mtfSizeMultiplier / close
 if firstLong or addLong
-    strategy.entry("L-HOLD", strategy.long, comment = firstLong ? "Initial accumulation" : "DCA accumulation")
+    strategy.entry("L-HOLD", strategy.long, qty = entryQty, comment = firstLong ? "Initial accumulation" : "DCA accumulation")
     lastAddBar := bar_index
 
 shortResearch = allowShortResearch and inRange and signalGate and trendBear and htfBear and rsi >= rsiDistributionMin and nearResistance and strategy.position_size == 0
 if shortResearch
-    strategy.entry("S-HOLD", strategy.short, comment = "Long-hold short research")
+    strategy.entry("S-HOLD", strategy.short, qty = entryQty, comment = "Long-hold short research")
 
 // === RISK ENGINE (freeze-at-entry) ===
 var float entryAtr = na
@@ -178,6 +218,12 @@ if shortTrendExit
     strategy.close("S-HOLD", comment = "Short hold invalidated")
 if not inRange and strategy.position_size != 0
     strategy.close_all(comment = "Outside research range")
+
+// Weekend de-risking (Bug 15 fix): reduce to 50% on Friday UTC 22:00 close to avoid
+// weekend funding-rate spikes on leveraged derivatives. No-op for spot unless explicitly enabled.
+isFridayUtc22 = dayofweek(time, "UTC") == dayofweek.friday and hour(time, "UTC") >= 22
+if strategy.position_size > 0 and reduceForWeekend and isFridayUtc22
+    strategy.close("L-HOLD", qty_percent = 50, comment = "WEEKEND_DERISK")
 
 plot(fast, "Fast EMA", color = color.new(color.aqua, 0), linewidth = 2)
 plot(slow, "Slow EMA", color = color.new(color.orange, 0), linewidth = 2)

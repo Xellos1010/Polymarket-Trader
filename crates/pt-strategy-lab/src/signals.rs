@@ -312,6 +312,7 @@ pub fn build_decisions(candles: &[Candle], profile: &StrategyProfile) -> Vec<Fus
         for s in &signals {
             let w = profile.weights.get(&s.name).copied().unwrap_or(0.0);
             numerator += w * s.bias * s.confidence;
+            // abs() normalises: weight magnitude controls influence, weight sign flips bias direction.
             denominator += w.abs() * s.confidence;
             votes.push((&s.regime_vote, (w.abs() * s.confidence).max(0.01)));
         }

@@ -398,11 +398,17 @@ pub fn stoch_rsi(rsi_values: &[Option<f64>], len: usize, smooth: usize) -> Vec<O
     }
 
     if smooth > 1 {
-        let raw: Vec<f64> = out.iter().map(|v| v.unwrap_or(0.0)).collect();
-        return sma(&raw, smooth)
-            .into_iter()
-            .map(|v| v.map(|x| x.clamp(0.0, 1.0)))
-            .collect();
+        // Only smooth over the valid (non-None) range to avoid seeding the SMA
+        // with 0.0 fill during warmup, which would bias results downward.
+        let first_valid = out.iter().position(|v| v.is_some());
+        if let Some(start) = first_valid {
+            let valid_vals: Vec<f64> = out[start..].iter().map(|v| v.unwrap_or(0.0)).collect();
+            let smoothed = sma(&valid_vals, smooth);
+            let mut result = vec![None; start];
+            result.extend(smoothed.into_iter().map(|v| v.map(|x| x.clamp(0.0, 1.0))));
+            return result;
+        }
+        return out.into_iter().map(|v| v.map(|x| x.clamp(0.0, 1.0))).collect();
     }
 
     out.into_iter()
@@ -415,6 +421,36 @@ pub fn cumulative_vwap(candles: &[Candle]) -> Vec<Option<f64>> {
     let mut pv = 0.0;
     let mut vv = 0.0;
     for (i, c) in candles.iter().enumerate() {
+        let typ = (c.high + c.low + c.close) / 3.0;
+        pv += typ * c.volume;
+        vv += c.volume;
+        if vv > 0.0 {
+            out[i] = Some(pv / vv);
+        }
+    }
+    out
+}
+
+/// Session VWAP: resets the running pv/vv accumulator each time the UTC session
+/// day rolls over.  `session_start_hour_utc` shifts the epoch before bucketing so
+/// that, e.g., a value of 0 means UTC midnight and a value of 6 means 06:00 UTC.
+///
+/// The session-day bucket is: `(ts_ms - session_start_hour_utc * 3_600_000) / 86_400_000`.
+pub fn session_vwap(candles: &[Candle], session_start_hour_utc: u32) -> Vec<Option<f64>> {
+    let mut out = vec![None; candles.len()];
+    let mut pv = 0.0_f64;
+    let mut vv = 0.0_f64;
+    let offset_ms = session_start_hour_utc as i64 * 3_600_000;
+    let mut current_day: Option<i64> = None;
+
+    for (i, c) in candles.iter().enumerate() {
+        let session_day = (c.ts_ms - offset_ms) / 86_400_000;
+        if current_day != Some(session_day) {
+            // New session: reset accumulators.
+            pv = 0.0;
+            vv = 0.0;
+            current_day = Some(session_day);
+        }
         let typ = (c.high + c.low + c.close) / 3.0;
         pv += typ * c.volume;
         vv += c.volume;
@@ -601,7 +637,7 @@ pub fn keltner(candles: &[Candle], len: usize, atr_len: usize, mult: f64) -> Kel
 
 #[cfg(test)]
 mod tests {
-    use super::{cci, keltner, macd, williams_r};
+    use super::{cci, cumulative_vwap, keltner, macd, session_vwap, stoch_rsi, williams_r};
     use crate::types::Candle;
 
     fn flat_candles(n: usize, price: f64) -> Vec<Candle> {
@@ -700,5 +736,108 @@ mod tests {
 
         assert!((actual_signal - expected_seed).abs() < 1e-12);
         assert!((actual_hist - (line[6].expect("macd line") - actual_signal)).abs() < 1e-12);
+    }
+
+    // ---------- stoch_rsi tests ----------
+
+    fn make_rsi_inputs(n: usize) -> Vec<Option<f64>> {
+        // Produce a simple rising sequence wrapped in Some for use as synthetic RSI values.
+        (0..n)
+            .map(|i| Some(30.0 + (i as f64) * (40.0 / n as f64)))
+            .collect()
+    }
+
+    #[test]
+    fn stoch_rsi_smoothed_warmup_is_none_not_zero_biased() {
+        // rsi len=5, smooth=3  =>  first valid stoch bar at index 4,
+        // after SMA(3) the first Some is at index 4+3-1 = 6.
+        // Everything before that must be None, not 0.0.
+        let rsi_vals = make_rsi_inputs(30);
+        let out = stoch_rsi(&rsi_vals, 5, 3);
+        // First 6 slots must all be None.
+        assert!(
+            out[..6].iter().all(Option::is_none),
+            "expected None in warmup, got {:?}",
+            &out[..6]
+        );
+        // At least one value after warmup must be Some.
+        assert!(out[6..].iter().any(Option::is_some));
+        // No smoothed value should be exactly 0.0 (the seed-bias artifact).
+        for v in out.into_iter().flatten() {
+            assert!(
+                v > 0.0,
+                "stoch_rsi returned 0.0 — likely seed-bias from unwrap_or(0.0): {v}"
+            );
+        }
+    }
+
+    #[test]
+    fn stoch_rsi_unsmoothed_warmup_is_none() {
+        let rsi_vals = make_rsi_inputs(20);
+        let out = stoch_rsi(&rsi_vals, 5, 1);
+        // With smooth=1 first Some is at index 4 (len-1).
+        assert!(out[..4].iter().all(Option::is_none));
+        assert!(out[4].is_some());
+    }
+
+    // ---------- session_vwap tests ----------
+
+    fn make_candle(ts_ms: i64, price: f64, volume: f64) -> Candle {
+        Candle {
+            ts_ms,
+            open: price,
+            high: price + 0.5,
+            low: price - 0.5,
+            close: price,
+            volume,
+        }
+    }
+
+    #[test]
+    fn session_vwap_resets_at_session_boundary() {
+        // Day 0: ts_ms = 0  (midnight 1970-01-01)
+        // Day 1: ts_ms = 86_400_000  (midnight 1970-01-02)
+        let candles = vec![
+            make_candle(0, 100.0, 1.0),
+            make_candle(3_600_000, 110.0, 1.0),  // same day, 01:00 UTC
+            make_candle(86_400_000, 200.0, 1.0), // new day — session resets
+        ];
+        let out = session_vwap(&candles, 0);
+        // First two bars accumulate together.
+        let vwap_day0_bar1 = out[1].expect("day0 bar1 should be Some");
+        // Day 1 bar should reset: typical = (200.5 + 199.5 + 200.0)/3 = 200.0
+        let vwap_day1 = out[2].expect("day1 bar should be Some");
+        // The day-1 VWAP must not reflect the day-0 candles.
+        let cumulative = cumulative_vwap(&candles);
+        let cumulative_day1 = cumulative[2].expect("cumulative day1 Some");
+        assert!(
+            (vwap_day1 - cumulative_day1).abs() > 1.0,
+            "session_vwap should differ from cumulative_vwap across session boundary: \
+             session={vwap_day1}, cumulative={cumulative_day1}"
+        );
+        // Sanity: first bar of the session is just its own typical price.
+        let typ_day0_bar0 = (100.5 + 99.5 + 100.0) / 3.0;
+        assert!((out[0].unwrap() - typ_day0_bar0).abs() < 1e-9);
+        let _ = vwap_day0_bar1; // suppress unused warning
+    }
+
+    #[test]
+    fn session_vwap_basic_correctness_single_session() {
+        // Two candles on the same UTC day; result should match cumulative_vwap.
+        let candles = vec![
+            make_candle(1_000, 50.0, 2.0),
+            make_candle(2_000, 60.0, 3.0),
+        ];
+        let session_out = session_vwap(&candles, 0);
+        let cum_out = cumulative_vwap(&candles);
+        for (s, c) in session_out.iter().zip(cum_out.iter()) {
+            match (s, c) {
+                (Some(sv), Some(cv)) => {
+                    assert!((sv - cv).abs() < 1e-9, "session vs cumulative mismatch: {sv} vs {cv}")
+                }
+                (None, None) => {}
+                _ => panic!("session_vwap and cumulative_vwap disagree on Some/None"),
+            }
+        }
     }
 }

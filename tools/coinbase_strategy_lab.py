@@ -21,6 +21,15 @@ from dataclasses import dataclass
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+# Optional Bayesian optimisation back-end (pip install optuna).
+# Falls back to grid search silently when not installed.
+try:
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    OPTUNA_AVAILABLE = True
+except ImportError:
+    OPTUNA_AVAILABLE = False
+
 UTC = dt.timezone.utc
 
 
@@ -1166,12 +1175,268 @@ def objective_meta(config: dict, variants_considered: Sequence[str], markets_con
     }
 
 
+def _score_candidate(
+    short_window: int,
+    long_window: int,
+    variant: dict,
+    market_candles: Dict[str, List[Candle]],
+    strategy: dict,
+    drawdown_penalty: float,
+    turnover_penalty: float,
+    stability_penalty_weight: float,
+    stability_splits: int,
+    min_gap: int,
+) -> Optional[Tuple[float, dict]]:
+    """Evaluate a single (short_window, long_window) candidate across all markets for a variant.
+
+    Returns ``(final_score, ranking_entry)`` or ``None`` if the candidate is
+    invalid (e.g. gap constraint violated or no markets have enough bars).
+    """
+    if long_window <= short_window + min_gap:
+        return None
+
+    bias_gain = float(variant.get("bias_gain", 0.0))
+    plugins = variant.get("plugins", [])
+
+    per_market = []
+    for market, candles in market_candles.items():
+        if len(candles) < long_window + 2:
+            continue
+
+        combined_bias, _, _ = build_combined_bias_series(candles, plugins)
+        bias_series = combined_bias if (plugins and abs(bias_gain) > 1e-12) else None
+
+        bt_res = backtest_sma_crossover(
+            candles,
+            short_window=short_window,
+            long_window=long_window,
+            fee_bps=strategy["fee_bps"],
+            slippage_bps=strategy["slippage_bps"],
+            starting_equity=strategy["starting_equity"],
+            bias_series=bias_series,
+            bias_gain=bias_gain,
+        )
+        metrics = bt_res["metrics"]
+        trade_rate = metrics["trades"] / max(1, metrics["bars"])
+
+        window_scores = []
+        window_returns = []
+        for start, end in optimize_window_slices(len(candles), stability_splits):
+            window_candles = candles[start:end]
+            if len(window_candles) < long_window + 2:
+                continue
+            window_bias = bias_series[start:end] if bias_series is not None else None
+            window_result = backtest_sma_crossover(
+                window_candles,
+                short_window=short_window,
+                long_window=long_window,
+                fee_bps=strategy["fee_bps"],
+                slippage_bps=strategy["slippage_bps"],
+                starting_equity=strategy["starting_equity"],
+                bias_series=window_bias,
+                bias_gain=bias_gain,
+            )
+            window_metrics = window_result["metrics"]
+            window_trade_rate = window_metrics["trades"] / max(1, window_metrics["bars"])
+            window_score = (
+                window_metrics["total_return"]
+                - drawdown_penalty * window_metrics["max_drawdown"]
+                - turnover_penalty * window_trade_rate
+            )
+            window_scores.append(window_score)
+            window_returns.append(float(window_metrics["total_return"]))
+
+        score = (
+            metrics["total_return"]
+            - drawdown_penalty * metrics["max_drawdown"]
+            - turnover_penalty * trade_rate
+        )
+        score_stddev = statistics.pstdev(window_scores) if len(window_scores) > 1 else 0.0
+        return_stddev = statistics.pstdev(window_returns) if len(window_returns) > 1 else 0.0
+        stability_penalty = stability_penalty_weight * score_stddev
+        per_market.append(
+            {
+                "market": market,
+                "score": score,
+                "metrics": metrics,
+                "trade_rate": trade_rate,
+                "window_scores": window_scores,
+                "window_returns": window_returns,
+                "stability": {
+                    "splits_requested": stability_splits,
+                    "splits_evaluated": len(window_scores),
+                    "score_stddev": score_stddev,
+                    "return_stddev": return_stddev,
+                    "positive_windows": sum(1 for value in window_returns if value > 0),
+                    "penalty": stability_penalty,
+                },
+            }
+        )
+
+    if not per_market:
+        return None
+
+    avg_score = statistics.fmean(x["score"] for x in per_market)
+    avg_return = statistics.fmean(x["metrics"]["total_return"] for x in per_market)
+    avg_drawdown = statistics.fmean(x["metrics"]["max_drawdown"] for x in per_market)
+    avg_trades = statistics.fmean(x["metrics"]["trades"] for x in per_market)
+    avg_trade_rate = statistics.fmean(x["trade_rate"] for x in per_market)
+    stability_score_stddev = statistics.fmean(x["stability"]["score_stddev"] for x in per_market)
+    stability_return_stddev = statistics.fmean(x["stability"]["return_stddev"] for x in per_market)
+    stability_penalty = stability_penalty_weight * stability_score_stddev
+    final_score = avg_score - stability_penalty
+
+    entry = {
+        "variant": variant["name"],
+        "params": {"short_window": short_window, "long_window": long_window},
+        "score": final_score,
+        "avg_return": avg_return,
+        "avg_drawdown": avg_drawdown,
+        "avg_trades": avg_trades,
+        "avg_trade_rate": avg_trade_rate,
+        "market_count": len(per_market),
+        "objective_breakdown": {
+            "net_return_after_costs": avg_return,
+            "drawdown_penalty": drawdown_penalty * avg_drawdown,
+            "turnover_penalty": turnover_penalty * avg_trade_rate,
+            "stability_penalty": stability_penalty,
+            "final_score": final_score,
+        },
+        "stability": {
+            "splits_requested": stability_splits,
+            "score_stddev": stability_score_stddev,
+            "return_stddev": stability_return_stddev,
+            "penalty": stability_penalty,
+            "positive_windows": sum(x["stability"]["positive_windows"] for x in per_market),
+        },
+        "per_market": per_market,
+        # risk/promotion fields are filled in by the caller
+        "_stability_score_stddev": stability_score_stddev,
+        "_stability_return_stddev": stability_return_stddev,
+    }
+    return final_score, entry
+
+
+def run_optuna_optimization(
+    config: dict,
+    market_candles: Dict[str, List[Candle]],
+    strategy: dict,
+    variant: dict,
+    short_windows: List[int],
+    long_windows: List[int],
+    min_gap: int,
+    drawdown_penalty: float,
+    turnover_penalty: float,
+    stability_penalty_weight: float,
+    stability_splits: int,
+    n_trials: int,
+    seed: int = 42,
+) -> List[Tuple[float, dict]]:
+    """Bayesian (TPE) parameter search via Optuna.
+
+    Returns a list of ``(final_score, ranking_entry)`` tuples for every trial
+    that produced a valid result, sorted descending by score.
+    """
+    import optuna  # already confirmed available at call site
+
+    short_lo, short_hi = min(short_windows), max(short_windows)
+    long_lo, long_hi = min(long_windows), max(long_windows)
+
+    results: List[Tuple[float, dict]] = []
+
+    def objective(trial: "optuna.Trial") -> float:  # type: ignore[name-defined]
+        short_window = trial.suggest_int("short_window", short_lo, short_hi)
+        long_window = trial.suggest_int("long_window", long_lo, long_hi)
+
+        result = _score_candidate(
+            short_window=short_window,
+            long_window=long_window,
+            variant=variant,
+            market_candles=market_candles,
+            strategy=strategy,
+            drawdown_penalty=drawdown_penalty,
+            turnover_penalty=turnover_penalty,
+            stability_penalty_weight=stability_penalty_weight,
+            stability_splits=stability_splits,
+            min_gap=min_gap,
+        )
+        if result is None:
+            return float("-inf")
+
+        final_score, entry = result
+        results.append((final_score, entry))
+        return final_score
+
+    study = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(seed=seed),
+    )
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+
+    results.sort(key=lambda t: t[0], reverse=True)
+    return results
+
+
+def _apply_gates_to_entry(
+    entry: dict,
+    per_market: List[dict],
+    stability_score_stddev: float,
+    stability_return_stddev: float,
+    max_drawdown: float,
+    max_trade_rate: float,
+    min_total_return: float,
+    min_sharpe_like: Optional[float],
+    requires_replay_acceptance: bool,
+) -> dict:
+    """Attach risk_gate, promotion_gate and rejection_reasons to a ranking entry in-place."""
+    rejection_reasons: List[str] = []
+    risk_gate, risk_rejections = evaluate_risk_gate(
+        per_market,
+        max_drawdown=max_drawdown,
+        max_trade_rate=max_trade_rate,
+        min_total_return=min_total_return,
+        min_sharpe_like=min_sharpe_like,
+    )
+    rejection_reasons.extend(risk_rejections)
+    if stability_score_stddev > 0.12:
+        rejection_reasons.append("stability:score_stddev_above_threshold")
+    if stability_return_stddev > 0.12:
+        rejection_reasons.append("stability:return_stddev_above_threshold")
+    promotion_gate = build_promotion_gate(
+        risk_gate,
+        rejection_reasons,
+        requires_replay_acceptance=requires_replay_acceptance,
+    )
+    final_score = entry["score"]
+    ranking_score = final_score if not rejection_reasons else final_score - 1000.0
+    entry["risk_gate"] = risk_gate
+    entry["promotion_gate"] = promotion_gate
+    entry["rejection_reasons"] = rejection_reasons
+    entry["ranking_score"] = ranking_score
+    # Remove internal helpers that were stored by _score_candidate
+    entry.pop("_stability_score_stddev", None)
+    entry.pop("_stability_return_stddev", None)
+    return entry
+
+
 def run_optimize_data(config: dict) -> dict:
     provider = config.get("provider", "coinbase")
     granularity = int(config.get("granularity_sec", 300))
     backtest = config.get("backtest", {})
     markets = backtest.get("markets", [])
     limit = int(backtest.get("limit", 300))
+
+    # Resolve search strategy: tpe (default) or random/grid.
+    search_strategy = str(config.get("_search", "tpe")).lower()
+    use_tpe = search_strategy == "tpe"
+    if use_tpe and not OPTUNA_AVAILABLE:
+        import warnings
+        warnings.warn(
+            "Optuna is not installed — falling back to grid search. "
+            "Install with: pip install optuna",
+            stacklevel=2,
+        )
+        use_tpe = False
 
     strategy = strategy_settings(config)
     variants = resolve_variants(config)
@@ -1214,179 +1479,94 @@ def run_optimize_data(config: dict) -> dict:
             continue
         market_candles[market] = candles
 
-    rankings = []
+    rankings: List[dict] = []
     candidate_count = 0
     runtime_limited = False
+
+    # ------------------------------------------------------------------ #
+    # Helper: finalise a raw entry from _score_candidate into a full      #
+    # ranking row with gates, then append it to rankings.                 #
+    # ------------------------------------------------------------------ #
+    def _finalise_and_append(final_score: float, entry: dict) -> None:
+        nonlocal candidate_count
+        per_market_rows = entry.get("per_market", [])
+        stability_score_stddev = entry.pop("_stability_score_stddev", 0.0)
+        stability_return_stddev = entry.pop("_stability_return_stddev", 0.0)
+        _apply_gates_to_entry(
+            entry=entry,
+            per_market=per_market_rows,
+            stability_score_stddev=stability_score_stddev,
+            stability_return_stddev=stability_return_stddev,
+            max_drawdown=max_drawdown,
+            max_trade_rate=max_trade_rate,
+            min_total_return=min_total_return,
+            min_sharpe_like=min_sharpe_like,
+            requires_replay_acceptance=requires_replay_acceptance,
+        )
+        rankings.append(entry)
+        candidate_count += 1
+
     for variant in bounded_variants:
-        variant_name = variant["name"]
-        bias_gain = float(variant.get("bias_gain", 0.0))
-        plugins = variant.get("plugins", [])
-
-        variant_bias_cache: Dict[str, List[float]] = {}
-        for market, candles in market_candles.items():
-            combined_bias, _, _ = build_combined_bias_series(candles, plugins)
-            variant_bias_cache[market] = combined_bias
-
-        for short_window in short_windows:
-            for long_window in long_windows:
-                if candidate_count >= max_candidates:
-                    break
+        if use_tpe:
+            # ---------------------------------------------------------- #
+            # Bayesian (TPE) path via Optuna                              #
+            # ---------------------------------------------------------- #
+            n_trials = max_candidates  # honour the same budget
+            tpe_results = run_optuna_optimization(
+                config=config,
+                market_candles=market_candles,
+                strategy=strategy,
+                variant=variant,
+                short_windows=short_windows,
+                long_windows=long_windows,
+                min_gap=min_gap,
+                drawdown_penalty=drawdown_penalty,
+                turnover_penalty=turnover_penalty,
+                stability_penalty_weight=stability_penalty_weight,
+                stability_splits=stability_splits,
+                n_trials=n_trials,
+                seed=42,
+            )
+            for final_score, entry in tpe_results:
                 if max_runtime_sec is not None and (time.monotonic() - started_at) >= max_runtime_sec:
                     runtime_limited = True
                     break
-                if long_window <= short_window + min_gap:
-                    continue
+                _finalise_and_append(final_score, entry)
+            if runtime_limited:
+                break
+        else:
+            # ---------------------------------------------------------- #
+            # Grid-search path (original behaviour)                       #
+            # ---------------------------------------------------------- #
+            for short_window in short_windows:
+                for long_window in long_windows:
+                    if candidate_count >= max_candidates:
+                        break
+                    if max_runtime_sec is not None and (time.monotonic() - started_at) >= max_runtime_sec:
+                        runtime_limited = True
+                        break
 
-                per_market = []
-                for market, candles in market_candles.items():
-                    if len(candles) < long_window + 2:
-                        continue
-
-                    bias_series = variant_bias_cache[market] if (plugins and abs(bias_gain) > 1e-12) else None
-                    bt_res = backtest_sma_crossover(
-                        candles,
+                    result = _score_candidate(
                         short_window=short_window,
                         long_window=long_window,
-                        fee_bps=strategy["fee_bps"],
-                        slippage_bps=strategy["slippage_bps"],
-                        starting_equity=strategy["starting_equity"],
-                        bias_series=bias_series,
-                        bias_gain=bias_gain,
+                        variant=variant,
+                        market_candles=market_candles,
+                        strategy=strategy,
+                        drawdown_penalty=drawdown_penalty,
+                        turnover_penalty=turnover_penalty,
+                        stability_penalty_weight=stability_penalty_weight,
+                        stability_splits=stability_splits,
+                        min_gap=min_gap,
                     )
-                    metrics = bt_res["metrics"]
-                    trade_rate = metrics["trades"] / max(1, metrics["bars"])
-                    window_scores = []
-                    window_returns = []
-                    for start, end in optimize_window_slices(len(candles), stability_splits):
-                        window_candles = candles[start:end]
-                        if len(window_candles) < long_window + 2:
-                            continue
-                        window_bias = bias_series[start:end] if bias_series is not None else None
-                        window_result = backtest_sma_crossover(
-                            window_candles,
-                            short_window=short_window,
-                            long_window=long_window,
-                            fee_bps=strategy["fee_bps"],
-                            slippage_bps=strategy["slippage_bps"],
-                            starting_equity=strategy["starting_equity"],
-                            bias_series=window_bias,
-                            bias_gain=bias_gain,
-                        )
-                        window_metrics = window_result["metrics"]
-                        window_trade_rate = window_metrics["trades"] / max(1, window_metrics["bars"])
-                        window_score = (
-                            window_metrics["total_return"]
-                            - drawdown_penalty * window_metrics["max_drawdown"]
-                            - turnover_penalty * window_trade_rate
-                        )
-                        window_scores.append(window_score)
-                        window_returns.append(float(window_metrics["total_return"]))
+                    if result is None:
+                        continue
+                    final_score, entry = result
+                    _finalise_and_append(final_score, entry)
 
-                    score = (
-                        metrics["total_return"]
-                        - drawdown_penalty * metrics["max_drawdown"]
-                        - turnover_penalty * trade_rate
-                    )
-                    score_stddev = (
-                        statistics.pstdev(window_scores) if len(window_scores) > 1 else 0.0
-                    )
-                    return_stddev = (
-                        statistics.pstdev(window_returns) if len(window_returns) > 1 else 0.0
-                    )
-                    stability_penalty = stability_penalty_weight * score_stddev
-                    per_market.append(
-                        {
-                            "market": market,
-                            "score": score,
-                            "metrics": metrics,
-                            "trade_rate": trade_rate,
-                            "window_scores": window_scores,
-                            "window_returns": window_returns,
-                            "stability": {
-                                "splits_requested": stability_splits,
-                                "splits_evaluated": len(window_scores),
-                                "score_stddev": score_stddev,
-                                "return_stddev": return_stddev,
-                                "positive_windows": sum(1 for value in window_returns if value > 0),
-                                "penalty": stability_penalty,
-                            },
-                        }
-                    )
-
-                if not per_market:
-                    continue
-
-                avg_score = statistics.fmean(x["score"] for x in per_market)
-                avg_return = statistics.fmean(x["metrics"]["total_return"] for x in per_market)
-                avg_drawdown = statistics.fmean(x["metrics"]["max_drawdown"] for x in per_market)
-                avg_trades = statistics.fmean(x["metrics"]["trades"] for x in per_market)
-                avg_trade_rate = statistics.fmean(x["trade_rate"] for x in per_market)
-                stability_score_stddev = statistics.fmean(
-                    x["stability"]["score_stddev"] for x in per_market
-                )
-                stability_return_stddev = statistics.fmean(
-                    x["stability"]["return_stddev"] for x in per_market
-                )
-                stability_penalty = stability_penalty_weight * stability_score_stddev
-                rejection_reasons: List[str] = []
-                risk_gate, risk_rejections = evaluate_risk_gate(
-                    per_market,
-                    max_drawdown=max_drawdown,
-                    max_trade_rate=max_trade_rate,
-                    min_total_return=min_total_return,
-                    min_sharpe_like=min_sharpe_like,
-                )
-                rejection_reasons.extend(risk_rejections)
-                if stability_score_stddev > 0.12:
-                    rejection_reasons.append("stability:score_stddev_above_threshold")
-                if stability_return_stddev > 0.12:
-                    rejection_reasons.append("stability:return_stddev_above_threshold")
-                final_score = avg_score - stability_penalty
-                promotion_gate = build_promotion_gate(
-                    risk_gate,
-                    rejection_reasons,
-                    requires_replay_acceptance=requires_replay_acceptance,
-                )
-                ranking_score = final_score if not rejection_reasons else final_score - 1000.0
-
-                rankings.append(
-                    {
-                        "variant": variant_name,
-                        "params": {"short_window": short_window, "long_window": long_window},
-                        "score": final_score,
-                        "ranking_score": ranking_score,
-                        "avg_return": avg_return,
-                        "avg_drawdown": avg_drawdown,
-                        "avg_trades": avg_trades,
-                        "avg_trade_rate": avg_trade_rate,
-                        "market_count": len(per_market),
-                        "objective_breakdown": {
-                            "net_return_after_costs": avg_return,
-                            "drawdown_penalty": drawdown_penalty * avg_drawdown,
-                            "turnover_penalty": turnover_penalty * avg_trade_rate,
-                            "stability_penalty": stability_penalty,
-                            "final_score": final_score,
-                        },
-                        "stability": {
-                            "splits_requested": stability_splits,
-                            "score_stddev": stability_score_stddev,
-                            "return_stddev": stability_return_stddev,
-                            "penalty": stability_penalty,
-                            "positive_windows": sum(
-                                x["stability"]["positive_windows"] for x in per_market
-                            ),
-                        },
-                        "risk_gate": risk_gate,
-                        "promotion_gate": promotion_gate,
-                        "rejection_reasons": rejection_reasons,
-                        "per_market": per_market,
-                    }
-                )
-                candidate_count += 1
+                if candidate_count >= max_candidates or runtime_limited:
+                    break
             if candidate_count >= max_candidates or runtime_limited:
                 break
-        if candidate_count >= max_candidates or runtime_limited:
-            break
 
     rankings.sort(key=lambda x: x["ranking_score"], reverse=True)
     top = rankings[:top_n]
@@ -1403,6 +1583,7 @@ def run_optimize_data(config: dict) -> dict:
             "top_n": top_n,
             "objective": objective_descriptor,
             "candidate_count": candidate_count,
+            "search_strategy": "tpe" if use_tpe else "grid",
             "bounded_search": {
                 "max_candidates": max_candidates,
                 "max_markets": max_markets,
@@ -1732,6 +1913,16 @@ def main() -> int:
     p.add_argument("--journal-path", default=None, help="override journal sqlite path")
 
     p.add_argument("--serve", type=int, default=None, help="optional local static server port")
+    p.add_argument(
+        "--search",
+        choices=["random", "tpe"],
+        default="tpe",
+        help=(
+            "Search strategy for the 'optimize' mode: "
+            "'tpe' uses Optuna Bayesian optimization (default, requires: pip install optuna), "
+            "'random' uses the original grid search over configured window lists."
+        ),
+    )
 
     args = p.parse_args()
 
@@ -1743,6 +1934,9 @@ def main() -> int:
         )
 
     config = apply_cli_overrides(read_config(str(cfg_path)), args)
+    # Inject search strategy into config so run_optimize_data can read it.
+    # We normalise "random" -> "grid" internally; both mean grid/exhaustive search.
+    config["_search"] = "tpe" if args.search == "tpe" else "grid"
     out_dir = pathlib.Path(args.out)
 
     outputs = run_mode(args.mode, config, out_dir)
