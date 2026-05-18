@@ -40,3 +40,6 @@ aws-config = "1.8"
 aws-sdk-secretsmanager = { version = "1.78", default-features = false, features = ["default-https-client", "rt-tokio"] }
 rustls = { version = "0.23", features = ["aws_lc_rs", "ring"] }
 p256 = { version = "0.13", features = ["pem", "pkcs8"] }
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"

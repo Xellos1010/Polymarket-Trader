@@ -7,6 +7,9 @@ authors.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+hex.workspace = true
 arrow-array.workspace = true
 arrow-schema.workspace = true
 axum.workspace = true
@@ -34,3 +37,7 @@ pt-order-manager = { path = "../pt-order-manager" }
 pt-route = { path = "../pt-route" }
 pt-kraken = { path = "../pt-kraken" }
 pt-gemini = { path = "../pt-gemini" }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

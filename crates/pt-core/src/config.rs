@@ -136,6 +136,18 @@ pub struct TradingViewSignalConfig {
     pub endpoint_secret: Option<String>,
     pub k_wallet: f64,
     pub k_tv: f64,
+    /// If non-empty, only requests from these IPs are accepted (exact string match on peer IP).
+    /// Set to ["127.0.0.1"] when behind Cloudflare Tunnel (cloudflared connects from localhost).
+    #[serde(default)]
+    pub ip_allowlist: Vec<String>,
+    /// Nonce replay window in seconds. Nonces seen within this window are rejected as replays.
+    /// Defaults to 300 (5 minutes). Set to 0 to disable nonce enforcement.
+    #[serde(default = "default_nonce_window_secs")]
+    pub nonce_window_secs: u64,
+}
+
+fn default_nonce_window_secs() -> u64 {
+    300
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

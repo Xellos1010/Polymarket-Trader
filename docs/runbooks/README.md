@@ -6,6 +6,10 @@ Operational procedures for running, deploying, and recovering the system.
 
 - **[AGGREGATED_OPERATIONS.md](AGGREGATED_OPERATIONS.md)** — Single consolidated runbook: validation, startup modes, deployment, health checks, incidents, tiny live pilot, handoff artifacts.
 
+## Pi Operator Path
+
+- **[PI_CLOUDFLARE_TUNNEL.md](PI_CLOUDFLARE_TUNNEL.md)** — Cloudflare Tunnel topology, Tailscale fallback, SSH port-forward, and fallback drill procedure for Pi-hosted operator path (#83).
+
 ## Canonical sources (detail)
 
 | Topic | Document |

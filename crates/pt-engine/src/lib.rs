@@ -1,6 +1,14 @@
 use arrow_array::{ArrayRef, Float64Array, RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
-use axum::{extract::State, http::HeaderMap, response::IntoResponse, routing::post, Router};
+use axum::{
+    extract::{ConnectInfo, State},
+    http::HeaderMap,
+    response::IntoResponse,
+    routing::post,
+    Router,
+};
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 use chrono::{DateTime, Utc};
 use parking_lot::{Mutex, RwLock};
 use parquet::arrow::ArrowWriter;
@@ -25,7 +33,7 @@ use rusqlite::{params, Connection};
 use std::{
     collections::HashMap,
     fs,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     path::Path,
     sync::Arc,
     time::{Duration, Instant},
@@ -260,6 +268,9 @@ struct TvWebhookState {
     tv_bias: Arc<RwLock<Option<TradingViewBias>>>,
     secret: Option<String>,
     metrics: Arc<MetricsRegistry>,
+    ip_allowlist: Vec<IpAddr>,
+    seen_nonces: Arc<Mutex<HashMap<String, Instant>>>,
+    nonce_window: Duration,
 }
 
 pub struct TradingEngine {
@@ -529,10 +540,23 @@ impl TradingEngine {
 
     fn spawn_tradingview_server(&self) -> JoinHandle<()> {
         let bind = self.cfg.signals.tradingview.bind_addr.clone();
+        let ip_allowlist: Vec<IpAddr> = self
+            .cfg
+            .signals
+            .tradingview
+            .ip_allowlist
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        let nonce_window =
+            Duration::from_secs(self.cfg.signals.tradingview.nonce_window_secs);
         let tv_state = TvWebhookState {
             tv_bias: self.state.tv_bias.clone(),
             secret: self.cfg.signals.tradingview.endpoint_secret.clone(),
             metrics: self.metrics.clone(),
+            ip_allowlist,
+            seen_nonces: Arc::new(Mutex::new(HashMap::new())),
+            nonce_window,
         };
 
         tokio::spawn(async move {
@@ -556,7 +580,12 @@ impl TradingEngine {
                 }
             };
 
-            if let Err(e) = axum::serve(listener, app).await {
+            if let Err(e) = axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            {
                 error!(%e, "tradingview listener failed");
             }
         })
@@ -948,17 +977,63 @@ fn push_market_history(
 
 async fn tradingview_webhook(
     State(state): State<TvWebhookState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     body: String,
 ) -> impl IntoResponse {
+    // #84: IP allowlist — reject if configured and peer not in list.
+    if !state.ip_allowlist.is_empty() && !state.ip_allowlist.contains(&peer.ip()) {
+        state.metrics.inc_counter("tv_webhook_ip_rejected", 1.0);
+        return (axum::http::StatusCode::UNAUTHORIZED, "ip not allowed");
+    }
+
+    // Auth: prefer HMAC-SHA256 signature over plain secret when both header and secret present.
     if let Some(secret) = &state.secret {
-        let provided = headers
-            .get("x-tv-secret")
-            .and_then(|h| h.to_str().ok())
-            .unwrap_or_default();
-        if provided != secret {
-            state.metrics.inc_counter("tv_webhook_unauthorized", 1.0);
-            return (axum::http::StatusCode::UNAUTHORIZED, "invalid secret");
+        let sig_header = headers
+            .get("x-tv-signature")
+            .and_then(|h| h.to_str().ok());
+
+        if let Some(sig_hex) = sig_header {
+            // #85: HMAC-SHA256 verification.
+            let sig_bytes = match hex::decode(sig_hex) {
+                Ok(b) => b,
+                Err(_) => {
+                    state.metrics.inc_counter("tv_webhook_unauthorized", 1.0);
+                    return (axum::http::StatusCode::UNAUTHORIZED, "invalid signature encoding");
+                }
+            };
+            let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+                .expect("HMAC accepts any key length");
+            mac.update(body.as_bytes());
+            if mac.verify_slice(&sig_bytes).is_err() {
+                state.metrics.inc_counter("tv_webhook_unauthorized", 1.0);
+                return (axum::http::StatusCode::UNAUTHORIZED, "invalid signature");
+            }
+        } else {
+            // Fallback: plain x-tv-secret header comparison.
+            let provided = headers
+                .get("x-tv-secret")
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or_default();
+            if provided != secret {
+                state.metrics.inc_counter("tv_webhook_unauthorized", 1.0);
+                return (axum::http::StatusCode::UNAUTHORIZED, "invalid secret");
+            }
+        }
+    }
+
+    // #85: Nonce replay protection — reject duplicate nonces within the window.
+    if !state.nonce_window.is_zero() {
+        if let Some(nonce) = headers.get("x-tv-nonce").and_then(|h| h.to_str().ok()) {
+            let now = Instant::now();
+            let mut nonces = state.seen_nonces.lock();
+            // Prune expired entries.
+            nonces.retain(|_, seen_at| now.duration_since(*seen_at) < state.nonce_window);
+            if nonces.contains_key(nonce) {
+                state.metrics.inc_counter("tv_webhook_replay_rejected", 1.0);
+                return (axum::http::StatusCode::UNAUTHORIZED, "replay detected");
+            }
+            nonces.insert(nonce.to_owned(), now);
         }
     }
 
@@ -978,7 +1053,177 @@ async fn tradingview_webhook(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::connect_info::MockConnectInfo;
+    use http_body_util::BodyExt;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use tower::ServiceExt;
+
+    fn make_webhook_state(secret: Option<&str>, ip_allowlist: Vec<&str>, nonce_window_secs: u64) -> TvWebhookState {
+        TvWebhookState {
+            tv_bias: Arc::new(RwLock::new(None)),
+            secret: secret.map(|s| s.to_owned()),
+            metrics: Arc::new(MetricsRegistry::default()),
+            ip_allowlist: ip_allowlist
+                .iter()
+                .filter_map(|s| s.parse().ok())
+                .collect(),
+            seen_nonces: Arc::new(Mutex::new(HashMap::new())),
+            nonce_window: Duration::from_secs(nonce_window_secs),
+        }
+    }
+
+    fn webhook_app(state: TvWebhookState, peer: SocketAddr) -> axum::Router {
+        Router::new()
+            .route("/tradingview", post(tradingview_webhook))
+            .with_state(state)
+            .layer(MockConnectInfo(peer))
+    }
+
+    async fn post_webhook(
+        app: axum::Router,
+        headers: Vec<(&str, &str)>,
+        body: &str,
+    ) -> (u16, String) {
+        let mut req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/tradingview");
+        for (k, v) in headers {
+            req = req.header(k, v);
+        }
+        let req = req
+            .body(axum::body::Body::from(body.to_owned()))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let status = resp.status().as_u16();
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        (status, String::from_utf8_lossy(&bytes).to_string())
+    }
+
+    fn hmac_hex(secret: &str, body: &str) -> String {
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(body.as_bytes());
+        hex::encode(mac.finalize().into_bytes())
+    }
+
+    const VALID_BODY: &str = r#"{"order_action":"buy","contracts":"0.5","ticker":"BTC-USD"}"#;
+    const PEER: &str = "127.0.0.1:12345";
+
+    #[tokio::test]
+    async fn webhook_no_secret_accepts_any_request() {
+        let state = make_webhook_state(None, vec![], 0);
+        let app = webhook_app(state, PEER.parse().unwrap());
+        let (status, _) = post_webhook(app, vec![], VALID_BODY).await;
+        assert_eq!(status, 200);
+    }
+
+    #[tokio::test]
+    async fn webhook_plain_secret_accepted() {
+        let state = make_webhook_state(Some("mysecret"), vec![], 0);
+        let app = webhook_app(state, PEER.parse().unwrap());
+        let (status, _) = post_webhook(
+            app,
+            vec![("x-tv-secret", "mysecret")],
+            VALID_BODY,
+        )
+        .await;
+        assert_eq!(status, 200);
+    }
+
+    #[tokio::test]
+    async fn webhook_plain_secret_rejected() {
+        let state = make_webhook_state(Some("mysecret"), vec![], 0);
+        let app = webhook_app(state, PEER.parse().unwrap());
+        let (status, _) = post_webhook(
+            app,
+            vec![("x-tv-secret", "wrong")],
+            VALID_BODY,
+        )
+        .await;
+        assert_eq!(status, 401);
+    }
+
+    #[tokio::test]
+    async fn webhook_hmac_signature_accepted() {
+        let body = VALID_BODY;
+        let sig = hmac_hex("mysecret", body);
+        let state = make_webhook_state(Some("mysecret"), vec![], 0);
+        let app = webhook_app(state, PEER.parse().unwrap());
+        let (status, _) = post_webhook(
+            app,
+            vec![("x-tv-signature", &sig)],
+            body,
+        )
+        .await;
+        assert_eq!(status, 200);
+    }
+
+    #[tokio::test]
+    async fn webhook_hmac_signature_rejected_wrong_key() {
+        let body = VALID_BODY;
+        let sig = hmac_hex("wrongkey", body);
+        let state = make_webhook_state(Some("mysecret"), vec![], 0);
+        let app = webhook_app(state, PEER.parse().unwrap());
+        let (status, _) = post_webhook(
+            app,
+            vec![("x-tv-signature", &sig)],
+            body,
+        )
+        .await;
+        assert_eq!(status, 401);
+    }
+
+    #[tokio::test]
+    async fn webhook_hmac_invalid_hex_encoding_rejected() {
+        let state = make_webhook_state(Some("mysecret"), vec![], 0);
+        let app = webhook_app(state, PEER.parse().unwrap());
+        let (status, _) = post_webhook(
+            app,
+            vec![("x-tv-signature", "not-valid-hex!")],
+            VALID_BODY,
+        )
+        .await;
+        assert_eq!(status, 401);
+    }
+
+    #[tokio::test]
+    async fn webhook_nonce_replay_rejected() {
+        let state = make_webhook_state(None, vec![], 300);
+        let nonce = "unique-nonce-abc";
+        // First request accepted.
+        let app = webhook_app(state.clone(), PEER.parse().unwrap());
+        let (status, _) = post_webhook(
+            app,
+            vec![("x-tv-nonce", nonce)],
+            VALID_BODY,
+        )
+        .await;
+        assert_eq!(status, 200);
+        // Second request with same nonce rejected.
+        let app2 = webhook_app(state, PEER.parse().unwrap());
+        let (status2, _) = post_webhook(
+            app2,
+            vec![("x-tv-nonce", nonce)],
+            VALID_BODY,
+        )
+        .await;
+        assert_eq!(status2, 401);
+    }
+
+    #[tokio::test]
+    async fn webhook_ip_allowlist_accepted() {
+        let state = make_webhook_state(None, vec!["127.0.0.1"], 0);
+        let app = webhook_app(state, "127.0.0.1:9999".parse().unwrap());
+        let (status, _) = post_webhook(app, vec![], VALID_BODY).await;
+        assert_eq!(status, 200);
+    }
+
+    #[tokio::test]
+    async fn webhook_ip_allowlist_rejected() {
+        let state = make_webhook_state(None, vec!["10.0.0.1"], 0);
+        let app = webhook_app(state, "192.168.1.50:9999".parse().unwrap());
+        let (status, _) = post_webhook(app, vec![], VALID_BODY).await;
+        assert_eq!(status, 401);
+    }
 
     fn test_config() -> AppConfig {
         let raw = include_str!("../../../config/config.example.toml");

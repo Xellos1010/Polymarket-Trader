@@ -78,6 +78,12 @@ bind_addr = "127.0.0.1:8090"
 endpoint_secret = "replace-me"
 k_wallet = 0.7
 k_tv = 0.3
+# ip_allowlist: if non-empty, only these peer IPs are accepted.
+# Behind Cloudflare Tunnel, set to ["127.0.0.1"] (cloudflared connects from localhost).
+# Empty = all IPs allowed (rely on x-tv-secret / x-tv-signature for auth).
+ip_allowlist = []
+# nonce_window_secs: replay window for x-tv-nonce header (0 = disable).
+nonce_window_secs = 300
 
 [risk]
 deployed_capital_usd = 1000.0

@@ -14,7 +14,7 @@ use pt_core::{
     WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 
 #[derive(Clone)]
@@ -27,6 +27,7 @@ pub struct CoinbaseDashboardHandles {
     pub orders: Arc<RwLock<Vec<WorkstationOrder>>>,
     pub strategies: Arc<RwLock<Vec<ProductStrategyConfigView>>>,
     pub imports: Arc<RwLock<Vec<StrategyLabImportSummary>>>,
+    pub strategy_candidates: Arc<RwLock<Vec<StrategyCandidateReviewView>>>,
 }
 
 impl Default for CoinbaseDashboardHandles {
@@ -40,6 +41,7 @@ impl Default for CoinbaseDashboardHandles {
             orders: Arc::new(RwLock::new(Vec::new())),
             strategies: Arc::new(RwLock::new(Vec::new())),
             imports: Arc::new(RwLock::new(Vec::new())),
+            strategy_candidates: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -83,6 +85,7 @@ pub struct CoinbaseDashboardState {
     pub orders: Arc<RwLock<Vec<WorkstationOrder>>>,
     pub strategies: Arc<RwLock<Vec<ProductStrategyConfigView>>>,
     pub imports: Arc<RwLock<Vec<StrategyLabImportSummary>>>,
+    pub strategy_candidates: Arc<RwLock<Vec<StrategyCandidateReviewView>>>,
 }
 
 #[derive(Clone)]
@@ -118,6 +121,7 @@ impl DashboardState {
                 orders: handles.coinbase.orders,
                 strategies: handles.coinbase.strategies,
                 imports: handles.coinbase.imports,
+                strategy_candidates: handles.coinbase.strategy_candidates,
             },
         }
     }
@@ -204,6 +208,78 @@ struct StrategiesResponse {
     active_imports: Vec<ProductImportActivationView>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrategyCandidateObjectiveBreakdown {
+    pub net_return_after_costs: f64,
+    pub drawdown_penalty: f64,
+    pub turnover_penalty: f64,
+    pub stability_penalty: f64,
+    pub final_score: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrategyCandidateStabilityView {
+    pub splits_requested: usize,
+    pub score_stddev: f64,
+    pub return_stddev: f64,
+    pub penalty: f64,
+    pub positive_windows: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrategyCandidateRiskGateView {
+    pub status: String,
+    pub failure_count: usize,
+    #[serde(default)]
+    pub reason_codes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrategyCandidatePromotionGateView {
+    pub status: String,
+    pub requires_replay_acceptance: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replay_acceptance_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub promotion_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_run_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrategyCandidateReviewView {
+    pub rank: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub product_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_market: Option<String>,
+    pub variant: String,
+    #[serde(default)]
+    pub params: Map<String, Value>,
+    pub score: f64,
+    pub objective_breakdown: StrategyCandidateObjectiveBreakdown,
+    pub stability: StrategyCandidateStabilityView,
+    pub risk_gate: StrategyCandidateRiskGateView,
+    pub promotion_gate: StrategyCandidatePromotionGateView,
+    #[serde(default)]
+    pub rejection_reasons: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_report_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cycle_summary_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct StrategyCandidatesResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub product_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_report_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cycle_summary_path: Option<String>,
+    pub candidates: Vec<StrategyCandidateReviewView>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct ActionResponse {
     ok: bool,
@@ -219,6 +295,11 @@ struct HistoryQuery {
 #[derive(Debug, Clone, Deserialize)]
 struct ModeRequest {
     mode: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct StrategyCandidatesQuery {
+    product_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -269,6 +350,7 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/products/:product_id", get(get_product_detail))
         .route("/api/v1/orders", get(get_orders).post(post_order))
         .route("/api/v1/strategies", get(get_strategies))
+        .route("/api/v1/strategy-candidates", get(get_strategy_candidates))
         .route("/api/v1/mode", post(post_mode))
         .route("/api/v1/live/arm", post(post_live_arm))
         .route("/api/v1/live/disarm", post(post_live_disarm))
@@ -540,6 +622,16 @@ async fn get_strategies(State(state): State<DashboardState>) -> Json<StrategiesR
         imports,
         active_imports,
     })
+}
+
+async fn get_strategy_candidates(
+    State(state): State<DashboardState>,
+    Query(query): Query<StrategyCandidatesQuery>,
+) -> Json<StrategyCandidatesResponse> {
+    Json(load_strategy_candidates(
+        &state,
+        query.product_id.as_deref(),
+    ))
 }
 
 async fn post_mode(
@@ -966,6 +1058,289 @@ fn strategy_view_to_vector(view: &ProductStrategyConfigView) -> pt_core::Strateg
         action: Some(TradeAction::Hold),
         ..pt_core::StrategyVector::default()
     }
+}
+
+fn load_strategy_candidates(
+    state: &DashboardState,
+    product_filter: Option<&str>,
+) -> StrategyCandidatesResponse {
+    let in_memory = state.coinbase.strategy_candidates.read().clone();
+    if !in_memory.is_empty() {
+        let filtered = filter_strategy_candidates(in_memory, product_filter);
+        return StrategyCandidatesResponse {
+            product_id: product_filter.map(str::to_string),
+            source_report_path: None,
+            cycle_summary_path: None,
+            candidates: filtered,
+        };
+    }
+
+    load_strategy_candidates_from_files(product_filter)
+}
+
+fn filter_strategy_candidates(
+    candidates: Vec<StrategyCandidateReviewView>,
+    product_filter: Option<&str>,
+) -> Vec<StrategyCandidateReviewView> {
+    match product_filter.map(str::to_ascii_lowercase) {
+        Some(product) => candidates
+            .into_iter()
+            .filter(|candidate| {
+                candidate
+                    .product_id
+                    .as_ref()
+                    .map(|value| value.eq_ignore_ascii_case(&product))
+                    .unwrap_or(false)
+                    || candidate
+                        .selected_market
+                        .as_ref()
+                        .map(|value| value.eq_ignore_ascii_case(&product))
+                        .unwrap_or(false)
+            })
+            .collect(),
+        None => candidates,
+    }
+}
+
+fn load_strategy_candidates_from_files(product_filter: Option<&str>) -> StrategyCandidatesResponse {
+    let Some(optimize_path) =
+        latest_matching_file(PathBuf::from("data/strategy_lab"), "optimize-", ".json")
+    else {
+        return StrategyCandidatesResponse {
+            product_id: product_filter.map(str::to_string),
+            source_report_path: None,
+            cycle_summary_path: None,
+            candidates: Vec::new(),
+        };
+    };
+
+    let optimize_payload = fs::read_to_string(&optimize_path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
+    let cycle_summary_path =
+        latest_non_acceptance_cycle_file(PathBuf::from("data/strategy_lab/hourly_optimizer_runs"));
+    let cycle_summary = cycle_summary_path
+        .as_ref()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
+
+    let mut candidates = optimize_payload
+        .as_ref()
+        .and_then(|payload| payload.get("top"))
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .map(|row| {
+                    candidate_review_from_json(
+                        row,
+                        &optimize_path,
+                        cycle_summary_path.as_deref(),
+                        cycle_summary.as_ref(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    candidates = filter_strategy_candidates(candidates, product_filter);
+
+    StrategyCandidatesResponse {
+        product_id: product_filter.map(str::to_string),
+        source_report_path: Some(optimize_path.display().to_string()),
+        cycle_summary_path: cycle_summary_path.map(|path| path.display().to_string()),
+        candidates,
+    }
+}
+
+fn latest_matching_file(dir: PathBuf, prefix: &str, suffix: &str) -> Option<PathBuf> {
+    let mut files = fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| entry.ok().map(|row| row.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with(prefix) && name.ends_with(suffix))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    files.pop()
+}
+
+fn latest_non_acceptance_cycle_file(dir: PathBuf) -> Option<PathBuf> {
+    let mut files = fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| entry.ok().map(|row| row.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| {
+                    name.starts_with("cycle-")
+                        && name.ends_with(".json")
+                        && !name.contains(".acceptance.")
+                })
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    files.pop()
+}
+
+fn candidate_review_from_json(
+    row: &Value,
+    optimize_path: &std::path::Path,
+    cycle_summary_path: Option<&std::path::Path>,
+    cycle_summary: Option<&Value>,
+) -> StrategyCandidateReviewView {
+    let selected_market = row
+        .get("per_market")
+        .and_then(Value::as_array)
+        .and_then(|rows| {
+            rows.iter().max_by(|a, b| {
+                let a_score = a
+                    .get("score")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(f64::NEG_INFINITY);
+                let b_score = b
+                    .get("score")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(f64::NEG_INFINITY);
+                a_score
+                    .partial_cmp(&b_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+        })
+        .and_then(|entry| entry.get("market"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    let cycle_candidate = cycle_summary.and_then(|summary| summary.get("candidate"));
+    let is_selected = cycle_candidate
+        .map(|candidate| candidate_matches_review(candidate, row))
+        .unwrap_or(false);
+    let decision = cycle_summary.and_then(|summary| summary.get("decision"));
+    let acceptance_status = cycle_summary
+        .and_then(|summary| summary.get("acceptance"))
+        .and_then(|value| value.get("status"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+
+    let promotion_status = if is_selected {
+        cycle_summary
+            .and_then(|summary| summary.get("status"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    } else {
+        Some("not_selected".to_string())
+    };
+
+    let mut reason_codes = row
+        .get("rejection_reasons")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(Value::as_str)
+                .map(|value| {
+                    value
+                        .split('@')
+                        .next()
+                        .unwrap_or(value)
+                        .replace("risk:", "")
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if is_selected {
+        if let Some(code) = decision
+            .and_then(|value| value.get("reason_code"))
+            .and_then(Value::as_str)
+        {
+            if !reason_codes.iter().any(|existing| existing == code) {
+                reason_codes.push(code.to_string());
+            }
+        }
+    }
+
+    StrategyCandidateReviewView {
+        rank: row.get("rank").and_then(Value::as_u64).unwrap_or(0) as usize,
+        product_id: selected_market.clone(),
+        selected_market,
+        variant: row
+            .get("variant")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string(),
+        params: row
+            .get("params")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default(),
+        score: row.get("score").and_then(Value::as_f64).unwrap_or_default(),
+        objective_breakdown: serde_json::from_value(
+            row.get("objective_breakdown")
+                .cloned()
+                .unwrap_or_else(|| Value::Object(Map::new())),
+        )
+        .unwrap_or_default(),
+        stability: serde_json::from_value(
+            row.get("stability")
+                .cloned()
+                .unwrap_or_else(|| Value::Object(Map::new())),
+        )
+        .unwrap_or_default(),
+        risk_gate: StrategyCandidateRiskGateView {
+            status: row
+                .get("risk_gate")
+                .and_then(|value| value.get("status"))
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
+            failure_count: row
+                .get("risk_gate")
+                .and_then(|value| value.get("failures"))
+                .and_then(Value::as_array)
+                .map(Vec::len)
+                .unwrap_or(0),
+            reason_codes,
+        },
+        promotion_gate: StrategyCandidatePromotionGateView {
+            status: row
+                .get("promotion_gate")
+                .and_then(|value| value.get("status"))
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
+            requires_replay_acceptance: row
+                .get("promotion_gate")
+                .and_then(|value| value.get("requires_replay_acceptance"))
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            replay_acceptance_status: acceptance_status,
+            promotion_status,
+            source_run_id: cycle_summary
+                .and_then(|summary| summary.get("cycle_id"))
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        },
+        rejection_reasons: row
+            .get("rejection_reasons")
+            .and_then(Value::as_array)
+            .map(|rows| {
+                rows.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+        source_report_path: Some(optimize_path.display().to_string()),
+        cycle_summary_path: cycle_summary_path.map(|path| path.display().to_string()),
+    }
+}
+
+fn candidate_matches_review(candidate: &Value, review: &Value) -> bool {
+    let variant_match = candidate.get("variant").and_then(Value::as_str)
+        == review.get("variant").and_then(Value::as_str);
+    let params_match = candidate.get("params") == review.get("params");
+    variant_match && params_match
 }
 
 fn parse_side(raw: &str) -> Option<Side> {
