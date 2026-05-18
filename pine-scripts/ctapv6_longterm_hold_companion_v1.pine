@@ -58,6 +58,10 @@ srExtend = input.int(500, "Zone extension bars", minval = 50, maxval = 1000, gro
 
 atrLen = input.int(14, "ATR length", minval = 1, group = G_RISK)
 catastrophicStopAtr = input.float(6.0, "Catastrophic stop ATR", minval = 1.0, step = 0.25, group = G_RISK)
+// Freeze semantics: true (default) captures ATR and catastrophic stop level on the entry bar so the
+// stop zone does not drift as ATR evolves mid-hold. The zone reference stays anchored to entry-bar
+// risk. Reset to na on position close so each accumulation leg starts from a clean baseline.
+freezeRiskAtEntry = input.bool(true, "Freeze catastrophic stop ATR at entry", group = G_RISK)
 exitOnSlowTrendBreak = input.bool(true, "Exit on slow trend break", group = G_RISK)
 exitOnHTFBear = input.bool(true, "Exit on HTF bear regime", group = G_RISK)
 usePartialDistribution = input.bool(false, "Use RSI distribution exit", group = G_RISK)
@@ -141,9 +145,26 @@ shortResearch = allowShortResearch and inRange and signalGate and trendBear and 
 if shortResearch
     strategy.entry("S-HOLD", strategy.short, comment = "Long-hold short research")
 
+// === RISK ENGINE (freeze-at-entry) ===
+var float entryAtr = na
+var float frozenStop = na
+newLongPosition = strategy.position_size > 0 and strategy.position_size[1] <= 0
+closedPosition   = strategy.position_size == 0 and strategy.position_size[1] != 0
+if newLongPosition
+    entryAtr := atr
+if closedPosition
+    entryAtr := na
+    frozenStop := na
+
+riskAtr = freezeRiskAtEntry ? nz(entryAtr, atr) : atr
 avg = strategy.position_avg_price
-longCatStop = avg - atr * catastrophicStopAtr
-shortCatStop = avg + atr * catastrophicStopAtr
+longCatStop = avg - riskAtr * catastrophicStopAtr
+shortCatStop = avg + riskAtr * catastrophicStopAtr
+
+// Capture stop level on entry bar so zone reference does not drift with ATR during a long hold.
+if newLongPosition
+    frozenStop := longCatStop
+
 if strategy.position_size > 0
     strategy.exit("XL Catastrophic", "L-HOLD", stop = longCatStop, comment_loss = "Catastrophic stop")
 if strategy.position_size < 0
@@ -161,7 +182,9 @@ if not inRange and strategy.position_size != 0
 plot(fast, "Fast EMA", color = color.new(color.aqua, 0), linewidth = 2)
 plot(slow, "Slow EMA", color = color.new(color.orange, 0), linewidth = 2)
 plot(htfSlow, "HTF Slow EMA", color = color.new(color.purple, 0), linewidth = 2)
-plot(strategy.position_size > 0 ? longCatStop : na, "Long catastrophic stop", color = color.new(color.red, 0), style = plot.style_linebr)
+// Catastrophic stop displayed as frozen entry-bar level when freezeRiskAtEntry is on; live ATR-derived level otherwise.
+float plotLongStop = strategy.position_size > 0 ? (freezeRiskAtEntry and not na(frozenStop) ? frozenStop : longCatStop) : na
+plot(plotLongStop, "Long catastrophic stop", color = color.new(color.red, 0), style = plot.style_linebr)
 plot(strategy.position_size < 0 ? shortCatStop : na, "Short catastrophic stop", color = color.new(color.red, 0), style = plot.style_linebr)
 plotshape(firstLong, title = "Initial accumulation", location = location.belowbar, style = shape.labelup, text = "ACC", color = color.new(color.green, 0), textcolor = color.white, size = size.tiny)
 plotshape(addLong, title = "Add accumulation", location = location.belowbar, style = shape.labelup, text = "ADD", color = color.new(color.teal, 0), textcolor = color.white, size = size.tiny)

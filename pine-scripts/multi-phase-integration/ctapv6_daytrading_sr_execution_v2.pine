@@ -618,6 +618,13 @@ if shortSignal
     strategy.entry("S", strategy.short, alert_message = sellShortMsg, comment = "Short weighted S/R day trade")
 
 // === RISK ENGINE ===
+// Freeze semantics (requires freezeRiskAtEntry = true):
+//   entryAtr   — ATR value captured on the entry bar; used for all ATR-derived stop/target math.
+//   frozenStop — base stop price computed on the entry bar (before breakeven adjustments); zone does not drift.
+//   frozenTarget — target price computed on the entry bar; zone does not drift.
+// Breakeven adjustments (longBEActive/shortBEActive) operate on top of the live exit path and are
+// intentionally NOT frozen — they represent a separate runtime risk control layer.
+// All three are reset to na when the position closes so the next trade starts clean.
 var float entryAtr = na
 var float frozenStop = na
 var float frozenTarget = na
@@ -636,6 +643,8 @@ if newPosition
     entrySide := newLongPosition ? "LONG" : "SHORT"
 if closedPosition
     entryAtr := na
+    frozenStop := na
+    frozenTarget := na
 
 riskAtr = freezeRiskAtEntry ? nz(entryAtr, atr) : atr
 avg = strategy.position_avg_price
@@ -664,6 +673,16 @@ shortRisk = shortStopBase - avg
 shortTarget = avg - shortRisk * rewardRisk
 shortBEActive = useBreakeven and strategy.position_size < 0 and shortRisk > 0 and low <= avg - shortRisk * breakevenAtR
 shortStop = shortBEActive ? math.min(shortStopBase, avg * (1.0 - breakevenOffsetPct / 100.0)) : shortStopBase
+
+// Capture base stop and target on entry bar so zone state does not drift if ATR changes mid-trade.
+// frozenStop/frozenTarget hold entry-bar levels; actual exit stop can move (e.g. breakeven),
+// but the zone reference stays anchored to the original risk-at-entry calculation.
+if newLongPosition
+    frozenStop := longStopBase
+    frozenTarget := longTarget
+if newShortPosition
+    frozenStop := shortStopBase
+    frozenTarget := shortTarget
 
 if strategy.position_size > 0 and longRisk > 0
     strategy.exit("XL Risk", from_entry = "L", stop = longStop, limit = useTakeProfit ? longTarget : na, alert_message = sellLongMsg, comment_profit = "Long TP", comment_loss = "Long SL")
@@ -737,8 +756,11 @@ if strategy.position_size != 0 and showTradeZoneBoxes and not na(activeProfitBox
     box.set_right(activeProfitBox, plannedRight)
     box.set_right(activeLossBox, plannedRight)
     box.set_right(activeEntryBox, plannedRight)
-    box.set_text(activeProfitBox, "PROFIT ZONE\nTP " + f_fmt(strategy.position_size > 0 ? longTarget : shortTarget))
-    box.set_text(activeLossBox, "LOSS ZONE\nSL " + f_fmt(strategy.position_size > 0 ? longStop : shortStop))
+    // Zone text shows frozen entry-bar levels when freezeRiskAtEntry is on; live levels otherwise.
+    float dispTarget = freezeRiskAtEntry and not na(frozenTarget) ? frozenTarget : (strategy.position_size > 0 ? longTarget : shortTarget)
+    float dispStop   = freezeRiskAtEntry and not na(frozenStop)   ? frozenStop   : (strategy.position_size > 0 ? longStop   : shortStop)
+    box.set_text(activeProfitBox, "PROFIT ZONE\nTP " + f_fmt(dispTarget))
+    box.set_text(activeLossBox, "LOSS ZONE\nSL " + f_fmt(dispStop))
     box.set_text(activeEntryBox, entrySide + " ENTRY\n" + f_fmt(strategy.position_avg_price))
     if not na(activeTimeLabel)
         label.set_x(activeTimeLabel, bar_index)
