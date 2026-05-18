@@ -76,6 +76,14 @@ closeOutsideRange = input.bool(true, "Close positions outside selected range", g
 entryProcess   = input.string("Market next bar", "Entry model label", options = ["Market next bar", "Close-confirmed research", "Limit retest research"], group = G_EXEC)
 
 // === RESEARCH / OOS TESTING ===
+// Bounded tuning discipline:
+//   researchPreset adds indicators one at a time (ordered). Tune ONLY the current preset's parameters;
+//   do not sweep across all presets simultaneously — that is re-fitting on OOS data.
+//   Each parameter group has explicit min/max bounds in its input() call; stay within them.
+//   Promote a parameter set to OOS/Paper only after it passes the IS gate.
+//   The background shading and OOS markers visually enforce which bars belong to each segment.
+// Experimental pattern engine (enablePatterns) is OFF by default — enable only in dedicated
+// pattern-research studies; do not include pattern gates in baseline IS/OOS comparisons.
 researchPreset = input.string("Custom toggles", "Indicator unlock preset", options = ["Custom toggles", "01 RSI only", "02 RSI + S/R", "03 Add FibBB", "04 Add Trend/HTF", "05 Add Ichimoku", "06 Add Candles", "07 Add Chart Patterns", "08 Full weighted"], group = G_RESEARCH)
 validationSegment = input.string("Full selected range", "Trade segment", options = ["Full selected range", "In-sample only", "Out-of-sample only", "Forward/Paper only"], group = G_RESEARCH)
 inSampleStart  = input.time(1767225600000, "In-sample start", group = G_RESEARCH)
@@ -85,6 +93,9 @@ oosEnd         = input.time(1798761540000, "Out-of-sample end", group = G_RESEAR
 paperStart     = input.time(1798761600000, "Forward/Paper start", group = G_RESEARCH)
 paperEnd       = input.time(1830297540000, "Forward/Paper end", group = G_RESEARCH)
 showResearchZones = input.bool(true, "Shade research segments", group = G_RESEARCH)
+// OOS segment transition markers: labels at the first bar of each segment so parity review can
+// identify IS/OOS/Paper boundaries in screenshots and reports without relying on background color alone.
+showOOSMarkers = input.bool(true, "Show IS/OOS/Paper transition markers", group = G_RESEARCH)
 
 // === MODULE ACTIVATION ===
 enableRSI       = input.bool(true, "Enable RSI", group = G_MODULES)
@@ -813,6 +824,15 @@ sessionBg = useSessionFilter and not inSession ? color.new(color.gray, 94) : na
 bgcolor(researchBg, title = "Research segment")
 bgcolor(regimeBg, title = "Regime background")
 bgcolor(sessionBg, title = "Outside trading session")
+
+// OOS/Paper transition markers: label the FIRST bar of each hold-out segment for parity review.
+// Placed at bar open so they remain visible even when candlestick labels overlap.
+isToOOS   = showOOSMarkers and inOOS and not inOOS[1]
+oOSToPaper = showOOSMarkers and inPaper and not inPaper[1]
+if isToOOS
+    label.new(bar_index, high, "OOS START", style = label.style_label_down, color = color.new(color.orange, 0), textcolor = color.white, size = size.small)
+if oOSToPaper
+    label.new(bar_index, high, "PAPER START", style = label.style_label_down, color = color.new(color.purple, 0), textcolor = color.white, size = size.small)
 
 // === PLOTS ===
 regimeColor = trendBull ? color.new(color.lime, 0) : trendBear ? color.new(color.red, 0) : color.new(color.gray, 0)
