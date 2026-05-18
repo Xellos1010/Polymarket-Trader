@@ -11,7 +11,10 @@ use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use parking_lot::{Mutex, RwLock};
 use parquet::arrow::ArrowWriter;
-use pt_ai_agent::ProposalQueue;
+use pt_ai_agent::{
+    summarize_positions, AgentProposal, MonitoringConfig, PositionInput, ProposalKind,
+    ProposalQueue,
+};
 use pt_coinbase::{CoinbaseSpotHedger, HedgeExecutor, HedgeIntent, PaperCoinbaseHedger};
 use pt_core::{
     AppConfig, Asset, EngineMode, ExecutionReport, KillSwitchState, MarketHistoryPoint,
@@ -287,6 +290,7 @@ pub struct TradingEngine {
     poly_exec: Arc<dyn PolymarketExecution>,
     hedger: Arc<dyn HedgeExecutor>,
     storage: Arc<Storage>,
+    proposal_queue: Arc<ProposalQueue>,
 }
 
 impl TradingEngine {
@@ -374,6 +378,7 @@ impl TradingEngine {
             poly_exec,
             hedger,
             storage,
+            proposal_queue: Arc::new(ProposalQueue::new()),
         })
     }
 
@@ -396,6 +401,9 @@ impl TradingEngine {
         tasks.push(self.spawn_orderbook_loop());
         tasks.push(self.spawn_quote_loop());
         tasks.push(self.spawn_watchdog_loop());
+        if self.cfg.agent.enabled {
+            tasks.push(self.spawn_ai_monitor_loop());
+        }
 
         info!("engine running; press Ctrl+C to stop");
         tokio::signal::ctrl_c()
@@ -879,6 +887,69 @@ impl TradingEngine {
                 }
 
                 tokio::time::sleep(Duration::from_millis(loop_ms)).await;
+            }
+        })
+    }
+
+    fn spawn_ai_monitor_loop(&self) -> JoinHandle<()> {
+        let state = self.state.latest_books.clone();
+        let risk_state = self.state.risk_state.clone();
+        let queue = self.proposal_queue.clone();
+        let max_pending = 50usize;
+        let interval_secs = self.cfg.agent.monitor_interval_secs.max(60);
+
+        tokio::spawn(async move {
+            info!("ai monitor loop started (interval={}s)", interval_secs);
+            loop {
+                tokio::time::sleep(Duration::from_secs(interval_secs)).await;
+
+                let snap = risk_state.read().clone();
+                let books = state.read();
+                let inputs: Vec<PositionInput> = books
+                    .values()
+                    .map(|b| PositionInput {
+                        market_id: b.market_id.clone(),
+                        position_usd: snap.open_notional / books.len().max(1) as f64,
+                        pnl_usd: snap.daily_pnl / books.len().max(1) as f64,
+                        age_secs: 0,
+                    })
+                    .collect();
+                drop(books);
+
+                let summary = summarize_positions(&inputs, &MonitoringConfig::default());
+
+                if summary.anomalous_count > 0 {
+                    let notes = summary.notes.join("; ");
+                    let proposal = AgentProposal::new(
+                        ProposalKind::Alert {
+                            message: format!(
+                                "AI monitor: {} anomalous position(s). {}",
+                                summary.anomalous_count, notes
+                            ),
+                        },
+                        format!(
+                            "{} position(s) outside normal bounds; operator review recommended.",
+                            summary.anomalous_count
+                        ),
+                        serde_json::json!({
+                            "anomalous_count": summary.anomalous_count,
+                            "total_exposure_usd": summary.total_exposure_usd,
+                            "total_pnl_usd": summary.total_pnl_usd,
+                            "notes": summary.notes,
+                        }),
+                        "ai-monitor",
+                    );
+                    if let Err(e) = queue.push(proposal, max_pending) {
+                        warn!("ai monitor: proposal queue full or error: {e}");
+                    }
+                }
+
+                info!(
+                    anomalous = summary.anomalous_count,
+                    exposure_usd = summary.total_exposure_usd,
+                    pnl_usd = summary.total_pnl_usd,
+                    "ai monitor cycle complete"
+                );
             }
         })
     }

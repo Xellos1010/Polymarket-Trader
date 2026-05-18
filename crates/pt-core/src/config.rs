@@ -483,6 +483,30 @@ impl Default for LiveArmingConfig {
     }
 }
 
+/// Lightweight config for the periodic AI monitoring loop.
+/// Detailed model routing is in pt-ai-agent::AgentConfig; this struct only governs the loop.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentMonitorConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// How often to run position monitoring. Minimum 60s; defaults to 5 minutes.
+    #[serde(default = "default_monitor_interval_secs")]
+    pub monitor_interval_secs: u64,
+}
+
+fn default_monitor_interval_secs() -> u64 {
+    300
+}
+
+impl Default for AgentMonitorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            monitor_interval_secs: 300,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub engine: EngineConfig,
@@ -501,6 +525,8 @@ pub struct AppConfig {
     pub ui: UiConfig,
     #[serde(default)]
     pub live_arming: LiveArmingConfig,
+    #[serde(default)]
+    pub agent: AgentMonitorConfig,
 }
 
 impl AppConfig {
