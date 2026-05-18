@@ -24,6 +24,16 @@ strategy(
 // Crypto TA Pro v6 - Day Trading S/R Execution Bible
 // Built for quick-turnaround Coinbase crypto chart research.
 //
+// RESEARCH ASSUMPTIONS — not live-execution defaults:
+//   commission = 0.06% per side (Coinbase Advanced Trade taker rate; maker is ~0.04%).
+//     Adjust for your actual fee tier. Does not model complex-order rebates.
+//   slippage = 1 tick (TradingView "points"). For crypto tick = smallest price increment.
+//     Real market-order slippage on non-trivial size is typically larger; 1-tick understates cost.
+//   initial_capital = $100 (research-scale; NOT representative of live notional).
+//   default_qty_value = 100% of equity per trade (full Kelly equivalent).
+//     Use fractional sizing (10-25%) for live; 100% is appropriate only for research ratios.
+//   These values affect absolute P&L and drawdown numbers but not signal timing or direction.
+//
 // Major systems:
 // - RSI, Fibonacci Bollinger Bands, Trend/HTF MA, Ichimoku.
 // - Pivot support/resistance zones with visual boxes.
@@ -107,6 +117,14 @@ enableCandles   = input.bool(true, "Enable candlestick pattern engine", group = 
 enablePatterns  = input.bool(false, "Enable chart/breakout pattern engine", group = G_MODULES)
 
 // === WEIGHTED SIGNAL ENGINE ===
+// Confluence semantics: score is 0–100 (percent-weighted agreement), not a vote count.
+//   entryThreshold = 60 → at least 60% weighted confluence required before entry.
+//   Weights are per-indicator multipliers applied to the indicator's 0–1 vote; final score
+//   is normalized by total active weight so the threshold is scale-invariant.
+//   Recommended weight range: 0.0–3.0. Values above 3.0 allow a single indicator to
+//   dominate the score and effectively bypass confluence; use only for explicit override studies.
+//   requirePrimarySetup adds a boolean gate independent of the score (at least one primary
+//   indicator must give a positive vote, regardless of weighted sum from secondary indicators).
 entryThreshold = input.float(60.0, "Entry score threshold", minval = 1.0, maxval = 100.0, step = 1.0, group = G_WEIGHTS)
 exitThreshold  = input.float(60.0, "Signal-exit score threshold", minval = 1.0, maxval = 100.0, step = 1.0, group = G_WEIGHTS)
 requirePrimarySetup = input.bool(true, "Require at least one primary setup", group = G_WEIGHTS)
@@ -463,6 +481,15 @@ ichiExitLongVote = activeIchimoku and ichiBear ? 1.0 : 0.0
 ichiExitShortVote = activeIchimoku and ichiBull ? 1.0 : 0.0
 
 // === CANDLESTICK PATTERN ENGINE ===
+// Pattern definitions (explicit for Rust parity):
+//   bull382: bullish close AND body bottom ≥ low + 38.2% of candle range (pressure candle — body
+//     sits in the upper portion; lower wick absorbs selling). bear382: inverse.
+//   bullEngulf: current body (close-open) > prior body (close[1]-open[1]) AND current bar closes
+//     above prior bar's high (full body engulfing). Does not require prior bar to be bearish.
+//   bullCloseBreak: close strictly above prior bar's high (candle body close-based breakout).
+//   bullWickReject: lower wick ≥ wickToBodyMin × body size AND close above body low
+//     (rejection wick off low; wickToBodyMin default 1.5 means wick is 150% of body).
+//   safeBody clamps to mintick to avoid division by zero on doji candles.
 bodyHigh = math.max(open, close)
 bodyLow = math.min(open, close)
 bodySize = math.abs(close - open)
