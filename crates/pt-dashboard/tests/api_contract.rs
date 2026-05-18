@@ -529,6 +529,7 @@ fn openapi_contains_all_runtime_paths() {
         "/api/v1/orders",
         "/api/v1/strategies",
         "/api/v1/strategy-candidates",
+        "/api/v1/portfolio",
         "/api/v1/mode",
         "/api/v1/live/arm",
         "/api/v1/live/disarm",

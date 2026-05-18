@@ -254,6 +254,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StrategyCandidatesResponse'
+  /api/v1/portfolio:
+    get:
+      summary: Advisory multi-strategy portfolio allocation, correlation, rebalance, and collision review
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioReview'
   /api/v1/mode:
     post:
       summary: Change workstation mode
@@ -935,3 +945,68 @@ components:
         openrouter_spend_today_usd: { type: number }
         openrouter_cap_usd: { type: number }
         routing_policy: { type: string }
+    PortfolioReview:
+      type: object
+      required: [allocations, correlations, rebalance_actions, collisions, advisory_only]
+      properties:
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyAllocation'
+        correlations:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyCorrelation'
+        rebalance_actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RebalanceAction'
+        collisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyCollision'
+        advisory_only: { type: boolean }
+    StrategyAllocation:
+      type: object
+      required: [strategy_id, artifact_id, target_allocation_usd, target_fraction, score, rejection_reasons]
+      properties:
+        strategy_id: { type: string }
+        artifact_id: { type: string }
+        target_allocation_usd: { type: number }
+        target_fraction: { type: number }
+        score: { type: number }
+        rejection_reasons:
+          type: array
+          items: { type: string }
+    StrategyCorrelation:
+      type: object
+      required: [left_strategy_id, right_strategy_id, samples, correlation, artifact_ids]
+      properties:
+        left_strategy_id: { type: string }
+        right_strategy_id: { type: string }
+        samples: { type: integer }
+        correlation: { type: number }
+        artifact_ids:
+          type: array
+          items: { type: string }
+    RebalanceAction:
+      type: object
+      required: [strategy_id, action, delta_usd, requires_human_approval, blocked_reasons]
+      properties:
+        strategy_id: { type: string }
+        action: { type: string }
+        delta_usd: { type: number }
+        requires_human_approval: { type: boolean }
+        blocked_reasons:
+          type: array
+          items: { type: string }
+    StrategyCollision:
+      type: object
+      required: [product_id, strategy_ids, reason, blocked]
+      properties:
+        product_id: { type: string }
+        strategy_ids:
+          type: array
+          items: { type: string }
+        reason: { type: string }
+        blocked: { type: boolean }

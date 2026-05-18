@@ -8,6 +8,7 @@ pub mod governance;
 pub mod local_client;
 pub mod monitoring;
 pub mod openrouter;
+pub mod portfolio;
 pub mod reports;
 pub mod types;
 pub mod validation;
@@ -36,6 +37,12 @@ pub use monitoring::{
     summarize_positions, MonitoringConfig, MonitoringSummary, PositionInput, PositionSummary,
 };
 pub use openrouter::{OpenRouterClient, OpenRouterHttpClient};
+pub use portfolio::{
+    allocate_capital, compute_strategy_correlations, detect_strategy_collisions, plan_rebalance,
+    CapitalAllocationPolicy, PortfolioReview, RebalanceAction, RebalanceActionKind,
+    RebalancePolicy, StrategyAllocation, StrategyAllocationInput, StrategyCollision,
+    StrategyCorrelation, StrategyExecutionIntent, StrategyIntentSide, StrategyReturnSeries,
+};
 pub use reports::{EndOfDayReport, MorningBrief};
 pub use types::{AgentProposal, ProposalKind, ProposalResult, ProposalStatus};
 pub use validation::{validate_signal, SignalValidation, DEFAULT_STALENESS_SECS};

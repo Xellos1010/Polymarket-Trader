@@ -6,12 +6,12 @@
 Phase 1: sandbox trading / paper ROI preparation
 
 ## Current audit finding
-The adversarial roadmap queue has advanced through epic `#72`. AI discovery issues `#102`-`#106` are implemented as bounded, rejectable framework contracts with fresh local validation on May 18, 2026; issue `#107` is the next active queue head under epic `#73`.
+The adversarial roadmap issue set generated from the research memo is fully implemented through epic `#73`. Portfolio issues `#107`-`#111` are implemented as advisory, artifact-linked multi-strategy governance surfaces with fresh local validation on May 18, 2026.
 
 ## Audit stamp
 - last audited on: May 18, 2026
 - audit source: GitHub issue state, direct workspace validation, and continued agent-driven development after interrupted issue work
-- validation evidence state: fresh May 18, 2026 validation for issues `#102`-`#106`: `cargo fmt --all -- --check`, `cargo test -p pt-ai-agent`, `cargo test -p pt-cli --bin pt-cli`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets --all-features -- -D warnings` all passed
+- validation evidence state: fresh May 18, 2026 validation for issues `#102`-`#111`: `cargo fmt --all -- --check`, `cargo test -p pt-ai-agent`, `cargo test -p pt-cli --bin pt-cli`, `cargo test -p pt-dashboard --test api_contract`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets --all-features -- -D warnings` all passed
 - truth standard: status files may record operator validation evidence, and may record agent reruns when explicitly stated in this section
 
 ## Automation mirror
@@ -19,7 +19,7 @@ The adversarial roadmap queue has advanced through epic `#72`. AI discovery issu
 - Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, queue state, validation evidence, or next work order changes.
 
 ## Current stage
-Stage: `phase5_portfolio_management_queue`
+Stage: `roadmap_backlog_complete`
 
 Stage contract:
 - keep work sandbox and paper only
@@ -31,26 +31,24 @@ Stage contract:
 - one active implementation lane at a time
 - one active PR per lane
 - issues `#59`, `#60`, `#61`, and `#10` are complete and recorded in local evidence
-- issue `#107` is the active portfolio lane and epic `#73` is the parent tracker for the next queue
+- no active roadmap issue remains open from the research-memo issue set
 - strategy definitions, chart presentation, optimizer candidates, and paper runtime evidence remain separate versioned objects
 - frontend chart state must not become the source of truth for strategy math
 - no live-mode expansion without explicit approval
 
 ## Current active next step
-Continue with issue `#107` under epic `#73`, then work downward through the filed roadmap backlog in [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md).
+No active roadmap issue remains from [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md). Next work should be validation hardening, operator review, or a new scoped roadmap item.
 
 Current queue head:
-1. `#107` capital allocation optimizer for multi-strategy governance
-2. `#108` strategy correlation analysis artifacts
-3. `#109` rebalance policy and execution flow
+1. none
 
 ## Queue summary
 - completed Track A/Phase 0 unblock: issue `#48`
 - completed Track B: issues `#54`, `#55`, `#56`, PR `#57`
 - completed strategy artifact handoff: issue `#53`
 - completed Rust-native IR lane: issue `#58`
-- active now: issue `#107`
-- queued after current stage: issues `#73`-`#111` per the filed roadmap backlog
+- active now: none
+- queued after current stage: none from the filed roadmap backlog
 - blocked on human decision right now: 0 items
 
 ## Consolidated feature queue
@@ -68,7 +66,7 @@ Current queue head:
 | 10 | Repeatable replay and paper evidence gate report | issue `#10` | completed | no | `data/evidence/phase1/2026-05-17/report.json` and `report.md` both show status `pass` |
 | 11 | Critical correctness, Pine parity, webhook, and AI foundation/management/improvement | epics `#66`-`#71` | completed | no | closed with local validation evidence |
 | 12 | AI discovery layer | epic `#72`, issues `#102`-`#106` | completed | no | closed with bounded framework contracts and workspace validation |
-| 13 | Portfolio management backlog | epic `#73`, issue `#107` | active_now | no | implement capital allocation optimizer for multi-strategy governance |
+| 13 | Portfolio management backlog | epic `#73`, issues `#107`-`#111` | completed | no | closed with advisory portfolio framework, `/api/v1/portfolio`, and workspace validation |
 
 ## Validation commands
 Repo readiness and implementation safety:

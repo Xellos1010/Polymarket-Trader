@@ -1,9 +1,9 @@
 # Session Context
 
-Generated at UNIX epoch seconds: `1779091200`
+Generated at UNIX epoch seconds: `1779094800`
 
 ## Note
-Control-tower checkpoint after continuing the roadmap implementation on May 18, 2026. Epic `#72` AI discovery is implemented and validated locally; issue `#107` is the next queue head under epic `#73` after GitHub closeout.
+Control-tower checkpoint after completing the research-memo roadmap issue set on May 18, 2026. Epics `#72` and `#73` are implemented and validated locally; no active roadmap issue remains after GitHub closeout.
 
 ## Current phase
 Phase 1: sandbox trading / paper ROI preparation
@@ -15,14 +15,16 @@ Phase 1: sandbox trading / paper ROI preparation
 - Issue `#53` is closed after artifact-lineage smoke and paper-runtime traceability evidence.
 - Issue `#58` is closed after the IR layer landed on `main`.
 - Issues `#59`, `#60`, `#61`, and `#10` are complete with fresh local evidence.
-- Roadmap implementation has progressed through webhook resilience, AI foundation, AI management, bounded AI improvement, and AI discovery: issues `#86`-`#106` are implemented locally and ready for/recorded in GitHub closeout.
+- Roadmap implementation has progressed through webhook resilience, AI foundation, AI management, bounded AI improvement, AI discovery, and portfolio governance: issues `#86`-`#111` are implemented locally and ready for/recorded in GitHub closeout.
 - Both repos have 0 open PRs.
 
-## Validation evidence state (May 18, 2026 - fresh AI discovery pass set)
+## Validation evidence state (May 18, 2026 - fresh AI discovery and portfolio pass set)
 - `cargo fmt --all -- --check`: PASS
-- `cargo test -p pt-ai-agent`: PASS, 43 tests
+- `cargo test -p pt-ai-agent`: PASS, 48 tests
 - `cargo test -p pt-cli --bin pt-cli`: PASS, 4 tests
+- `cargo test -p pt-dashboard --test api_contract`: PASS, 3 tests
 - `cargo clippy -p pt-ai-agent --all-targets --all-features -- -D warnings`: PASS
+- `cargo clippy -p pt-ai-agent -p pt-dashboard --all-targets --all-features -- -D warnings`: PASS
 - `cargo test --workspace`: PASS
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: PASS
 
@@ -44,7 +46,7 @@ Earlier evidence:
 - `main` (no open PRs)
 
 ## Current active next step
-Advance issue `#107`, then continue through the filed roadmap backlog in [ROADMAP_ISSUE_BACKLOG_2026-05-17.md](/Users/evanmccall/Polymarket-Trader/docs/development/ROADMAP_ISSUE_BACKLOG_2026-05-17.md).
+No active issue remains in [ROADMAP_ISSUE_BACKLOG_2026-05-17.md](/Users/evanmccall/Polymarket-Trader/docs/development/ROADMAP_ISSUE_BACKLOG_2026-05-17.md). Next work should be validation hardening, operator review, or a newly scoped issue.
 
 ## Queue summary
 - completed Phase 0: issue `#48`
@@ -61,6 +63,7 @@ Advance issue `#107`, then continue through the filed roadmap backlog in [ROADMA
 - completed AI management layer: issues `#93`-`#96`
 - completed bounded AI improvement layer: issues `#97`-`#101`
 - completed AI discovery layer: issues `#102`-`#106`
-- active now: issue `#107`
-- queued: epic/issues `#73`-`#111` per `ROADMAP_ISSUE_BACKLOG_2026-05-17.md`
+- completed portfolio management layer: issues `#107`-`#111`
+- active now: none
+- queued: none from `ROADMAP_ISSUE_BACKLOG_2026-05-17.md`
 - blocked on human decision: 0 items

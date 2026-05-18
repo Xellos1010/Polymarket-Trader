@@ -9,7 +9,7 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Epics #66-#72 are implemented through the AI discovery layer. Issues #102-#106 were validated on 2026-05-18 with cargo fmt --all -- --check, cargo test -p pt-ai-agent, cargo test -p pt-cli --bin pt-cli, cargo test --workspace, and cargo clippy --workspace --all-targets --all-features -- -D warnings.",
+  "current_audit_finding": "Epics #66-#73 are implemented. Issues #102-#111 were validated on 2026-05-18 with cargo fmt --all -- --check, cargo test -p pt-ai-agent, cargo test -p pt-cli --bin pt-cli, cargo test -p pt-dashboard --test api_contract, cargo test --workspace, and cargo clippy --workspace --all-targets --all-features -- -D warnings.",
   "audit": {
     "last_audited_on": "2026-05-18",
     "audit_source": [
@@ -19,9 +19,10 @@
       "direct cargo clippy --workspace --all-targets --all-features -- -D warnings execution",
       "direct cargo test -p pt-ai-agent execution",
       "direct cargo test -p pt-cli --bin pt-cli execution",
-      "agent-driven development on #83-#106"
+      "direct cargo test -p pt-dashboard --test api_contract execution",
+      "agent-driven development on #83-#111"
     ],
-    "validation_evidence_state": "fresh_local_fmt_ai_agent_pt_cli_test_workspace_clippy_workspace_pass_may_18_2026",
+    "validation_evidence_state": "fresh_local_fmt_ai_agent_pt_cli_dashboard_contract_test_workspace_clippy_workspace_pass_may_18_2026",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -34,16 +35,46 @@
     "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "phase5_portfolio_management",
-    "label": "Epic #73: Multi-strategy portfolio management",
+    "id": "roadmap_backlog_complete",
+    "label": "Research-memo roadmap backlog complete",
     "requires_human_decision": false,
     "blocker_type": null,
-    "execution_status": "active_queue_head_filed",
-    "active_now_queue_order": 43,
-    "active_issue": 107,
-    "environment_note": "Epics #66-#72 complete. AI discovery outputs remain bounded framework contracts with explicit rejection criteria; no live credentials or live mode were used. Next epic: #73 multi-strategy portfolio management."
+    "execution_status": "no_active_roadmap_issue",
+    "active_now_queue_order": null,
+    "active_issue": null,
+    "environment_note": "Epics #66-#73 complete. Portfolio outputs remain advisory, artifact-linked, and human-gated; no live credentials or live mode were used."
   },
   "recently_closed_issues": [
+    {
+      "issue": 111,
+      "label": "Portfolio: handle strategy collisions and parallel execution conflicts",
+      "closed_on": "2026-05-18",
+      "evidence": "StrategyExecutionIntent, StrategyIntentSide, StrategyCollision, and detect_strategy_collisions enumerate and block opposing same-product and same-priority parallel intents."
+    },
+    {
+      "issue": 110,
+      "label": "Portfolio: add multi-strategy dashboard visibility and report surfaces",
+      "closed_on": "2026-05-18",
+      "evidence": "/api/v1/portfolio returns advisory allocations, correlations, rebalance actions, and collisions; OpenAPI and api_contract test updated."
+    },
+    {
+      "issue": 109,
+      "label": "Portfolio: define rebalance policy and execution flow for multi-strategy operation",
+      "closed_on": "2026-05-18",
+      "evidence": "RebalancePolicy, RebalanceAction, and plan_rebalance keep rebalance actions paper-only, drift-thresholded, and human-gated."
+    },
+    {
+      "issue": 108,
+      "label": "Portfolio: add strategy correlation analysis artifacts",
+      "closed_on": "2026-05-18",
+      "evidence": "StrategyReturnSeries, StrategyCorrelation, and compute_strategy_correlations provide reproducible artifact-linked pairwise correlation outputs."
+    },
+    {
+      "issue": 107,
+      "label": "Portfolio: build capital allocation optimizer for multi-strategy governance",
+      "closed_on": "2026-05-18",
+      "evidence": "CapitalAllocationPolicy, StrategyAllocationInput, StrategyAllocation, and allocate_capital define deterministic bounded allocation recommendations that require human approval."
+    },
     {
       "issue": 106,
       "label": "AI discovery: gate code generation through compile, backtest, and artifact validation",

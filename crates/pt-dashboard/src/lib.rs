@@ -8,7 +8,10 @@ use axum::{
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use pt_ai_agent::{
-    AgentProposal, EndOfDayReport, MorningBrief, ProposalKind, ProposalQueue, ProposalStatus,
+    allocate_capital, compute_strategy_correlations, detect_strategy_collisions, plan_rebalance,
+    AgentProposal, CapitalAllocationPolicy, EndOfDayReport, MorningBrief, PortfolioReview,
+    ProposalKind, ProposalQueue, ProposalStatus, RebalancePolicy, StrategyAllocationInput,
+    StrategyExecutionIntent, StrategyIntentSide, StrategyReturnSeries,
 };
 use pt_core::{
     Asset, ExecutionReport, KillSwitchState, LiveArmState, MarketHistoryPoint, MarketSnapshot,
@@ -358,6 +361,7 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/orders", get(get_orders).post(post_order))
         .route("/api/v1/strategies", get(get_strategies))
         .route("/api/v1/strategy-candidates", get(get_strategy_candidates))
+        .route("/api/v1/portfolio", get(get_portfolio_review))
         .route("/api/v1/mode", post(post_mode))
         .route("/api/v1/live/arm", post(post_live_arm))
         .route("/api/v1/live/disarm", post(post_live_disarm))
@@ -651,6 +655,87 @@ async fn get_strategy_candidates(
         &state,
         query.product_id.as_deref(),
     ))
+}
+
+async fn get_portfolio_review(State(state): State<DashboardState>) -> Json<PortfolioReview> {
+    let candidates = load_strategy_candidates(&state, None).candidates;
+    let inputs = candidates
+        .iter()
+        .filter(|candidate| candidate.rejection_reasons.is_empty())
+        .map(|candidate| StrategyAllocationInput {
+            strategy_id: candidate.variant.clone(),
+            artifact_id: candidate
+                .promotion_gate
+                .source_run_id
+                .clone()
+                .or_else(|| candidate.source_report_path.clone())
+                .unwrap_or_else(|| format!("candidate-rank-{}", candidate.rank)),
+            expected_return: candidate.score.max(0.0),
+            max_drawdown: candidate.objective_breakdown.drawdown_penalty.abs(),
+            current_allocation_usd: 0.0,
+            max_allocation_usd: 50.0,
+        })
+        .collect::<Vec<_>>();
+    let allocations = allocate_capital(
+        &CapitalAllocationPolicy {
+            total_capital_usd: 100.0,
+            min_allocation_usd: 0.0,
+            max_strategy_fraction: 0.5,
+            drawdown_penalty_weight: 1.0,
+            requires_human_approval: true,
+        },
+        &inputs,
+    );
+    let returns = candidates
+        .iter()
+        .map(|candidate| StrategyReturnSeries {
+            strategy_id: candidate.variant.clone(),
+            artifact_id: candidate
+                .promotion_gate
+                .source_run_id
+                .clone()
+                .or_else(|| candidate.source_report_path.clone())
+                .unwrap_or_else(|| format!("candidate-rank-{}", candidate.rank)),
+            returns: vec![
+                candidate.objective_breakdown.net_return_after_costs,
+                -candidate.objective_breakdown.drawdown_penalty.abs(),
+                -candidate.objective_breakdown.turnover_penalty.abs(),
+            ],
+        })
+        .collect::<Vec<_>>();
+    let correlations = compute_strategy_correlations(&returns);
+    let rebalance_actions = plan_rebalance(
+        &RebalancePolicy {
+            min_drift_usd: 5.0,
+            min_drift_fraction: 0.05,
+            paper_only: true,
+            requires_human_approval: true,
+        },
+        &allocations,
+        &[],
+    );
+    let intents = candidates
+        .iter()
+        .filter_map(|candidate| {
+            candidate
+                .product_id
+                .as_ref()
+                .map(|product_id| StrategyExecutionIntent {
+                    strategy_id: candidate.variant.clone(),
+                    product_id: product_id.clone(),
+                    side: StrategyIntentSide::Long,
+                    notional_usd: candidate.score.max(0.0),
+                    priority: candidate.rank.min(u8::MAX as usize) as u8,
+                })
+        })
+        .collect::<Vec<_>>();
+    Json(PortfolioReview {
+        allocations,
+        correlations,
+        rebalance_actions,
+        collisions: detect_strategy_collisions(&intents),
+        advisory_only: true,
+    })
 }
 
 async fn post_mode(
