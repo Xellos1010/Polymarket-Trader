@@ -362,6 +362,30 @@ function installFetchMock(overrides?: Record<string, Response>) {
     if (url === "/api/v1/listings/BTC-USD") {
       return Promise.resolve(jsonResponse(listingDetail));
     }
+    if (url.startsWith("/api/v1/candles")) {
+      return Promise.resolve(jsonResponse({ product_id: "BTC-USD", granularity: 3600, candles: [] }));
+    }
+    if (url === "/api/v1/backtest/last") {
+      return Promise.resolve(new Response(null, { status: 404 }));
+    }
+    if (init?.method === "POST" && url === "/api/v1/backtest/run") {
+      return Promise.resolve(jsonResponse({
+        run_id: "test-run-id",
+        product_id: "BTC-USD",
+        granularity_sec: 3600,
+        total_return_pct: 0.05,
+        max_drawdown_pct: 0.02,
+        trades: 10,
+        win_rate: 0.6,
+        pnl: 50.0,
+        equity_curve: [{ ts_ms: 1000000, equity: 1000.0 }, { ts_ms: 2000000, equity: 1050.0 }],
+        fills: [],
+        candles: [],
+        decisions: [],
+        profile_id: "default",
+        started_ts_ms: 1000000,
+      }));
+    }
     return Promise.reject(new Error(`unexpected fetch: ${url}`));
   });
 

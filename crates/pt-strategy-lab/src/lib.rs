@@ -11,7 +11,7 @@ pub mod types;
 pub mod web;
 
 pub use backtest::run_backtest;
-pub use data::fetch_coinbase_candles;
+pub use data::{fetch_coinbase_candles, fetch_coinbase_candles_range};
 pub use ir::{
     CompareNode, InputNode, IrAction, IrDecision, MaKind, RuleNode, SizingHint, StrategyIrDef,
     IR_VERSION,

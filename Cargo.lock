@@ -4186,15 +4186,18 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
+ "futures",
  "parking_lot",
  "pt-ai-agent",
  "pt-coinbase",
  "pt-core",
+ "pt-strategy-lab",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "serde_yaml",
  "tokio",
+ "tokio-stream",
  "tower",
 ]
 

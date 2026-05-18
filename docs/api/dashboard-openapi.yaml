@@ -179,6 +179,119 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/WorkstationProduct'
+  /api/v1/stream/candles:
+    get:
+      summary: SSE stream of live candle updates from Coinbase
+      parameters:
+        - in: query
+          name: product_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: granularity
+          required: false
+          schema:
+            type: integer
+            enum: [60, 300, 900, 3600, 21600, 86400]
+            default: 60
+      responses:
+        '200':
+          description: Server-sent event stream of CandleView JSON objects
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                format: event-stream
+  /api/v1/backtest/run:
+    post:
+      summary: Run a Rust-native backtest using the default strategy profile
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                product_id: { type: string }
+                granularity: { type: integer, enum: [60, 300, 900, 3600, 21600, 86400] }
+                start: { type: integer, description: Window start Unix seconds }
+                end: { type: integer, description: Window end Unix seconds }
+                limit: { type: integer, default: 300 }
+      responses:
+        '200':
+          description: Backtest result artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyRunReport'
+        '400':
+          description: Invalid granularity
+        '422':
+          description: Insufficient candles
+        '502':
+          description: Coinbase upstream error
+  /api/v1/backtest/last:
+    get:
+      summary: Return the most recently cached backtest result
+      responses:
+        '200':
+          description: Last backtest run artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyRunReport'
+        '404':
+          description: No backtest has been run yet
+  /api/v1/candles:
+    get:
+      summary: Real OHLCV candles from Coinbase Exchange REST API
+      parameters:
+        - in: query
+          name: product_id
+          required: true
+          schema:
+            type: string
+          description: e.g. BTC-USD
+        - in: query
+          name: granularity
+          required: false
+          schema:
+            type: integer
+            enum: [60, 300, 900, 3600, 21600, 86400]
+            default: 3600
+          description: Bar size in seconds
+        - in: query
+          name: start
+          required: false
+          schema:
+            type: integer
+          description: Window start as Unix timestamp (seconds)
+        - in: query
+          name: end
+          required: false
+          schema:
+            type: integer
+          description: Window end as Unix timestamp (seconds)
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 300
+            maximum: 2000
+          description: Maximum number of candles to return
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandleResponse'
+        '400':
+          description: Unsupported granularity
+        '502':
+          description: Coinbase upstream error
   /api/v1/scanner:
     get:
       summary: Ranked scanner output across Coinbase products
@@ -396,6 +509,65 @@ paths:
                 $ref: '#/components/schemas/AiMetricsView'
 components:
   schemas:
+    EquityPoint:
+      type: object
+      required: [ts_ms, equity]
+      properties:
+        ts_ms: { type: integer }
+        equity: { type: number }
+    TradeFill:
+      type: object
+      required: [ts_ms, action, price, qty, notional, fee_cost, slippage_cost]
+      properties:
+        ts_ms: { type: integer }
+        action: { type: string }
+        price: { type: number }
+        qty: { type: number }
+        notional: { type: number }
+        fee_cost: { type: number }
+        slippage_cost: { type: number }
+    StrategyRunReport:
+      type: object
+      required: [run_id, profile_id, product_id, granularity_sec, started_ts_ms, total_return_pct, max_drawdown_pct, trades, win_rate, pnl, equity_curve]
+      properties:
+        run_id: { type: string }
+        profile_id: { type: string }
+        product_id: { type: string }
+        granularity_sec: { type: integer }
+        started_ts_ms: { type: integer }
+        total_return_pct: { type: number }
+        max_drawdown_pct: { type: number }
+        trades: { type: integer }
+        win_rate: { type: number }
+        pnl: { type: number }
+        equity_curve:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquityPoint'
+        fills:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeFill'
+    CandleView:
+      type: object
+      required: [time, open, high, low, close, volume]
+      properties:
+        time: { type: integer, description: Unix timestamp in seconds }
+        open: { type: number }
+        high: { type: number }
+        low: { type: number }
+        close: { type: number }
+        volume: { type: number }
+    CandleResponse:
+      type: object
+      required: [product_id, granularity, candles]
+      properties:
+        product_id: { type: string }
+        granularity: { type: integer }
+        candles:
+          type: array
+          items:
+            $ref: '#/components/schemas/CandleView'
     Health:
       type: object
       required: [status, kill_switch]

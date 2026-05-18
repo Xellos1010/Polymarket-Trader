@@ -288,6 +288,38 @@ type SyntheticBar = {
   marker?: string;
 };
 
+type CandleView = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+type EquityPoint = { ts_ms: number; equity: number };
+
+type StrategyRunReport = {
+  run_id: string;
+  product_id: string;
+  granularity_sec: number;
+  total_return_pct: number;
+  max_drawdown_pct: number;
+  trades: number;
+  win_rate: number;
+  pnl: number;
+  equity_curve: EquityPoint[];
+};
+
+const GRANULARITIES = [
+  { label: "1m", value: 60 },
+  { label: "5m", value: 300 },
+  { label: "15m", value: 900 },
+  { label: "1h", value: 3600 },
+  { label: "6h", value: 21600 },
+  { label: "1d", value: 86400 },
+];
+
 const INITIAL_DETAIL: ProductDetail | null = null;
 const WORKSPACES: WorkspaceTab[] = [
   { id: "command", label: "Command Center", kicker: "Operate" },
@@ -362,7 +394,72 @@ function buildSyntheticBars(detail: ProductDetail, selection: ScannerRow | null)
 }
 
 function VisualWorkstation({ detail, selection }: { detail: ProductDetail; selection: ScannerRow | null }) {
-  const bars = useMemo(() => buildSyntheticBars(detail, selection), [detail, selection]);
+  const [granularity, setGranularity] = useState(3600);
+  const [realCandles, setRealCandles] = useState<CandleView[] | null>(null);
+  const [candleSource, setCandleSource] = useState<"loading" | "real" | "synthetic">("loading");
+  const [liveMode, setLiveMode] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCandleSource("loading");
+    fetch(`/api/v1/candles?product_id=${detail.product.product_id}&granularity=${granularity}&limit=60`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: { candles: CandleView[] }) => {
+        if (!cancelled) {
+          setRealCandles(data.candles.length >= 5 ? data.candles : null);
+          setCandleSource(data.candles.length >= 5 ? "real" : "synthetic");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRealCandles(null);
+          setCandleSource("synthetic");
+        }
+      });
+    return () => { cancelled = true; };
+  }, [detail.product.product_id, granularity]);
+
+  useEffect(() => {
+    if (!liveMode) return;
+    let es: EventSource;
+    try {
+      es = new EventSource(`/api/v1/stream/candles?product_id=${detail.product.product_id}&granularity=${granularity}`);
+      es.onmessage = (e) => {
+        try {
+          const candle: CandleView = JSON.parse(e.data as string);
+          setRealCandles((prev) => {
+            const base = prev ?? [];
+            const next = base.filter((c) => c.time !== candle.time);
+            next.push(candle);
+            return next.slice(-60);
+          });
+          setCandleSource("real");
+        } catch {
+          /* ignore malformed event */
+        }
+      };
+    } catch {
+      /* EventSource not available in test environment */
+    }
+    return () => { es?.close(); };
+  }, [liveMode, detail.product.product_id, granularity]);
+
+  const bars = useMemo(() => {
+    if (realCandles && realCandles.length >= 5) {
+      return realCandles.map((c, i) => ({
+        label: String(i + 1),
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volume,
+        spread: detail.microstructure.spread_bps,
+        marker: undefined as string | undefined,
+      }));
+    }
+    return buildSyntheticBars(detail, selection);
+  }, [realCandles, detail, selection]);
+
   const highMax = Math.max(...bars.map((bar) => bar.high));
   const lowMin = Math.min(...bars.map((bar) => bar.low));
   const volumeMax = Math.max(...bars.map((bar) => bar.volume));
@@ -385,15 +482,33 @@ function VisualWorkstation({ detail, selection }: { detail: ProductDetail; selec
         <div className="chart-stage__meta">
           <div>
             <span>Source contract</span>
-            <strong>`/api/v1/products/{detail.product.product_id}`</strong>
+            <strong>/api/v1/candles</strong>
           </div>
           <div>
-            <span>History lane</span>
-            <strong>derived bars until product-history wiring lands</strong>
+            <span>Data source</span>
+            <strong>{candleSource === "loading" ? "loading…" : candleSource === "real" ? "Coinbase Exchange REST" : "synthetic (candles unavailable)"}</strong>
           </div>
           <div>
-            <span>Overlay source</span>
-            <strong>strategy, spread, import lineage</strong>
+            <span>Granularity</span>
+            <select
+              value={granularity}
+              onChange={(e) => setGranularity(Number(e.target.value))}
+              style={{ fontSize: "inherit", padding: "2px 4px" }}
+            >
+              {GRANULARITIES.map((g) => (
+                <option key={g.value} value={g.value}>{g.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <span>Live</span>
+            <button
+              onClick={() => setLiveMode((v) => !v)}
+              style={{ fontSize: "inherit", padding: "2px 6px", cursor: "pointer" }}
+              aria-pressed={liveMode}
+            >
+              {liveMode ? "On" : "Off"}
+            </button>
           </div>
         </div>
 
@@ -582,6 +697,10 @@ export default function App() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("command");
+  const [backtestReport, setBacktestReport] = useState<StrategyRunReport | null>(null);
+  const [backtestBusy, setBacktestBusy] = useState(false);
+  const [backtestProductId, setBacktestProductId] = useState("BTC-USD");
+  const [backtestGranularity, setBacktestGranularity] = useState(3600);
 
   useEffect(() => {
     let cancelled = false;
@@ -1012,6 +1131,97 @@ export default function App() {
             <p className="muted">
               Candidate ranking is optimizer evidence only. Replay and paper evidence remain separate gates.
             </p>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Backtest Report</h2>
+              <span>{backtestReport ? `run ${backtestReport.run_id.slice(0, 8)}` : "no run yet"}</span>
+            </div>
+            <div className="reason-stack">
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                <input
+                  value={backtestProductId}
+                  onChange={(e) => setBacktestProductId(e.target.value)}
+                  placeholder="Product ID"
+                  style={{ fontSize: "inherit", padding: "4px 8px", width: "120px" }}
+                />
+                <select
+                  value={backtestGranularity}
+                  onChange={(e) => setBacktestGranularity(Number(e.target.value))}
+                  style={{ fontSize: "inherit", padding: "4px 8px" }}
+                >
+                  {GRANULARITIES.map((g) => (
+                    <option key={g.value} value={g.value}>{g.label}</option>
+                  ))}
+                </select>
+                <button
+                  className="primary"
+                  disabled={backtestBusy}
+                  onClick={() => {
+                    setBacktestBusy(true);
+                    fetch("/api/v1/backtest/run", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ product_id: backtestProductId, granularity: backtestGranularity }),
+                    })
+                      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+                      .then((report: StrategyRunReport) => setBacktestReport(report))
+                      .catch(() => {/* keep last report */})
+                      .finally(() => setBacktestBusy(false));
+                  }}
+                >
+                  {backtestBusy ? "Running…" : "Run Backtest"}
+                </button>
+              </div>
+              {backtestReport && (
+                <>
+                  <div className="reason-card">
+                    <strong>{backtestReport.product_id} · {GRANULARITIES.find(g => g.value === backtestReport.granularity_sec)?.label ?? backtestReport.granularity_sec + "s"}</strong>
+                    <p>
+                      PnL <strong>{backtestReport.pnl.toFixed(2)}</strong> ·
+                      Return <strong>{(backtestReport.total_return_pct * 100).toFixed(2)}%</strong> ·
+                      Drawdown <strong>{(backtestReport.max_drawdown_pct * 100).toFixed(2)}%</strong>
+                    </p>
+                    <p>
+                      Trades <strong>{backtestReport.trades}</strong> ·
+                      Win rate <strong>{(backtestReport.win_rate * 100).toFixed(1)}%</strong>
+                    </p>
+                  </div>
+                  {backtestReport.equity_curve.length > 1 && (
+                    <svg
+                      viewBox={`0 0 300 80`}
+                      style={{ width: "100%", height: "80px" }}
+                      role="img"
+                      aria-label="Equity curve"
+                    >
+                      {(() => {
+                        const curve = backtestReport.equity_curve;
+                        const minEq = Math.min(...curve.map((p) => p.equity));
+                        const maxEq = Math.max(...curve.map((p) => p.equity));
+                        const range = Math.max(maxEq - minEq, 1);
+                        const pts = curve
+                          .map((p, i) => {
+                            const x = (i / (curve.length - 1)) * 290 + 5;
+                            const y = 75 - ((p.equity - minEq) / range) * 65;
+                            return `${x},${y}`;
+                          })
+                          .join(" ");
+                        return (
+                          <>
+                            <polyline points={pts} fill="none" stroke="#77e6ff" strokeWidth="1.5" />
+                            <line x1="5" y1="75" x2="295" y2="75" stroke="#333" strokeWidth="0.5" />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  )}
+                  <p className="muted">
+                    Backtest runs on the default strategy profile with real Coinbase candles. Not replay or paper evidence.
+                  </p>
+                </>
+              )}
+            </div>
           </div>
         </section>
       );

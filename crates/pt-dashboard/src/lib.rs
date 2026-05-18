@@ -1,12 +1,20 @@
 use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderValue, StatusCode},
-    response::{Html, IntoResponse, Response},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        Html, IntoResponse, Response,
+    },
     routing::{get, post},
     Json, Router,
 };
+use futures::stream::{self, Stream};
+use std::convert::Infallible;
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
+use pt_strategy_lab::{
+    fetch_coinbase_candles_range, run_backtest, StrategyProfile, StrategyRunReport,
+};
 use pt_ai_agent::{
     allocate_capital, compute_strategy_correlations, detect_strategy_collisions, plan_rebalance,
     AgentProposal, CapitalAllocationPolicy, EndOfDayReport, MorningBrief, PortfolioReview,
@@ -64,6 +72,7 @@ pub struct DashboardHandles {
     pub inventory_usd: Arc<RwLock<f64>>,
     pub coinbase: CoinbaseDashboardHandles,
     pub proposal_queue: ProposalQueue,
+    pub last_backtest: Arc<RwLock<Option<StrategyRunReport>>>,
 }
 
 impl Default for DashboardHandles {
@@ -79,6 +88,7 @@ impl Default for DashboardHandles {
             inventory_usd: Arc::new(RwLock::new(0.0)),
             coinbase: CoinbaseDashboardHandles::default(),
             proposal_queue: ProposalQueue::new(),
+            last_backtest: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -108,6 +118,7 @@ pub struct DashboardState {
     pub inventory_usd: Arc<RwLock<f64>>,
     pub coinbase: CoinbaseDashboardState,
     pub proposal_queue: ProposalQueue,
+    pub last_backtest: Arc<RwLock<Option<StrategyRunReport>>>,
 }
 
 impl DashboardState {
@@ -122,6 +133,7 @@ impl DashboardState {
             fused_bias: handles.fused_bias,
             inventory_usd: handles.inventory_usd,
             proposal_queue: handles.proposal_queue,
+            last_backtest: handles.last_backtest,
             coinbase: CoinbaseDashboardState {
                 mode: handles.coinbase.mode,
                 live_arm: handles.coinbase.live_arm,
@@ -317,6 +329,50 @@ struct LiveArmRequest {
     reason: Option<String>,
 }
 
+/// Supported Coinbase Exchange granularities in seconds.
+const SUPPORTED_GRANULARITIES: &[u32] = &[60, 300, 900, 3600, 21600, 86400];
+
+#[derive(Debug, Clone, Deserialize)]
+struct CandleQuery {
+    product_id: String,
+    granularity: Option<u32>,
+    start: Option<i64>,
+    end: Option<i64>,
+    limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CandleView {
+    time: i64,
+    open: f64,
+    high: f64,
+    low: f64,
+    close: f64,
+    volume: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CandleResponse {
+    product_id: String,
+    granularity: u32,
+    candles: Vec<CandleView>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct StreamCandleQuery {
+    product_id: String,
+    granularity: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BacktestRunRequest {
+    product_id: Option<String>,
+    granularity: Option<u32>,
+    start: Option<i64>,
+    end: Option<i64>,
+    limit: Option<usize>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct StrategyLabImportRequest {
     path: String,
@@ -357,6 +413,10 @@ pub fn router(state: DashboardState) -> Router {
         .route("/ops/flatten", post(post_flatten))
         .route("/api/v1/products", get(get_products))
         .route("/api/v1/scanner", get(get_scanner))
+        .route("/api/v1/candles", get(get_candles))
+        .route("/api/v1/stream/candles", get(get_stream_candles))
+        .route("/api/v1/backtest/run", post(post_backtest_run))
+        .route("/api/v1/backtest/last", get(get_backtest_last))
         .route("/api/v1/products/:product_id", get(get_product_detail))
         .route("/api/v1/orders", get(get_orders).post(post_order))
         .route("/api/v1/strategies", get(get_strategies))
@@ -626,6 +686,157 @@ async fn get_product_detail(
         detail,
         active_imports,
     }))
+}
+
+async fn get_candles(
+    Query(q): Query<CandleQuery>,
+) -> Result<Json<CandleResponse>, (StatusCode, Json<ActionResponse>)> {
+    let granularity = q.granularity.unwrap_or(3600);
+    if !SUPPORTED_GRANULARITIES.contains(&granularity) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ActionResponse {
+                ok: false,
+                message: format!(
+                    "unsupported granularity {}; supported: {:?}",
+                    granularity, SUPPORTED_GRANULARITIES
+                ),
+            }),
+        ));
+    }
+    let max_bars = q.limit.unwrap_or(300).min(2_000);
+    match fetch_coinbase_candles_range(&q.product_id, granularity, q.start, q.end, max_bars).await {
+        Ok(candles) => {
+            let views = candles
+                .into_iter()
+                .map(|c| CandleView {
+                    time: c.ts_ms / 1000,
+                    open: c.open,
+                    high: c.high,
+                    low: c.low,
+                    close: c.close,
+                    volume: c.volume,
+                })
+                .collect();
+            Ok(Json(CandleResponse {
+                product_id: q.product_id,
+                granularity,
+                candles: views,
+            }))
+        }
+        Err(e) => Err((
+            StatusCode::BAD_GATEWAY,
+            Json(ActionResponse {
+                ok: false,
+                message: format!("coinbase candle fetch failed: {e}"),
+            }),
+        )),
+    }
+}
+
+async fn get_stream_candles(
+    Query(q): Query<StreamCandleQuery>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let granularity = q.granularity.unwrap_or(60);
+    let granularity = if SUPPORTED_GRANULARITIES.contains(&granularity) {
+        granularity
+    } else {
+        60
+    };
+    let product_id = q.product_id;
+    let interval = std::time::Duration::from_secs(granularity as u64);
+
+    let event_stream = stream::unfold(
+        (product_id, granularity),
+        move |(pid, gran)| async move {
+            tokio::time::sleep(interval).await;
+            let event = match fetch_coinbase_candles_range(&pid, gran, None, None, 1).await {
+                Ok(candles) if !candles.is_empty() => {
+                    let c = &candles[candles.len() - 1];
+                    let view = CandleView {
+                        time: c.ts_ms / 1000,
+                        open: c.open,
+                        high: c.high,
+                        low: c.low,
+                        close: c.close,
+                        volume: c.volume,
+                    };
+                    match serde_json::to_string(&view) {
+                        Ok(data) => Event::default().data(data),
+                        Err(_) => Event::default().comment("serialize error"),
+                    }
+                }
+                _ => Event::default().comment("no data"),
+            };
+            Some((Ok::<_, Infallible>(event), (pid, gran)))
+        },
+    );
+
+    Sse::new(event_stream).keep_alive(KeepAlive::default())
+}
+
+async fn post_backtest_run(
+    State(state): State<DashboardState>,
+    Json(req): Json<BacktestRunRequest>,
+) -> Result<Json<StrategyRunReport>, (StatusCode, Json<ActionResponse>)> {
+    let mut profile = StrategyProfile::default();
+    if let Some(pid) = req.product_id {
+        profile.product_id = pid;
+    }
+    if let Some(g) = req.granularity {
+        if !SUPPORTED_GRANULARITIES.contains(&g) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ActionResponse {
+                    ok: false,
+                    message: format!(
+                        "unsupported granularity {}; supported: {:?}",
+                        g, SUPPORTED_GRANULARITIES
+                    ),
+                }),
+            ));
+        }
+        profile.granularity_sec = g;
+    }
+    let max_bars = req.limit.unwrap_or(profile.candle_limit).min(2_000);
+    let candles =
+        fetch_coinbase_candles_range(&profile.product_id, profile.granularity_sec, req.start, req.end, max_bars)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ActionResponse {
+                        ok: false,
+                        message: format!("candle fetch failed: {e}"),
+                    }),
+                )
+            })?;
+    if candles.len() < 50 {
+        return Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ActionResponse {
+                ok: false,
+                message: format!(
+                    "insufficient candles: got {}, need at least 50",
+                    candles.len()
+                ),
+            }),
+        ));
+    }
+    let report = run_backtest(&profile, &candles);
+    *state.last_backtest.write() = Some(report.clone());
+    Ok(Json(report))
+}
+
+async fn get_backtest_last(
+    State(state): State<DashboardState>,
+) -> Result<Json<StrategyRunReport>, StatusCode> {
+    state
+        .last_backtest
+        .read()
+        .clone()
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
 }
 
 async fn get_orders(State(state): State<DashboardState>) -> Json<Vec<WorkstationOrder>> {

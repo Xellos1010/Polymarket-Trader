@@ -514,6 +514,7 @@ impl TradingEngine {
             inventory_usd: self.state.inventory_usd.clone(),
             coinbase: Default::default(),
             proposal_queue: ProposalQueue::new(),
+            last_backtest: Arc::new(parking_lot::RwLock::new(None)),
         });
 
         tokio::spawn(async move {
