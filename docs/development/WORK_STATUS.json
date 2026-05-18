@@ -9,7 +9,7 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Epics #66-#73 are implemented. Issues #102-#111 were validated on 2026-05-18 with cargo fmt --all -- --check, cargo test -p pt-ai-agent, cargo test -p pt-cli --bin pt-cli, cargo test -p pt-dashboard --test api_contract, cargo test --workspace, and cargo clippy --workspace --all-targets --all-features -- -D warnings.",
+  "current_audit_finding": "Epics #66-#73 are implemented. Full re-validation on 2026-05-18: cargo test --workspace (all pass, 0 failed) and cargo clippy --workspace --all-targets --all-features -- -D warnings (clean). Pi deployment deferred — Pi unreachable on LAN (192.168.4.47) and offline on Tailscale (homoplasticus-pi, last seen 5d ago). Roadmap backlog complete; 28 commits ahead of origin/main awaiting push.",
   "audit": {
     "last_audited_on": "2026-05-18",
     "audit_source": [
@@ -22,7 +22,7 @@
       "direct cargo test -p pt-dashboard --test api_contract execution",
       "agent-driven development on #83-#111"
     ],
-    "validation_evidence_state": "fresh_local_fmt_ai_agent_pt_cli_dashboard_contract_test_workspace_clippy_workspace_pass_may_18_2026",
+    "validation_evidence_state": "fresh_local_workspace_test_all_pass_clippy_clean_may_18_2026_revalidated",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -361,9 +361,9 @@
     }
   },
   "active_next_step": {
-    "label": "Advance issue #77, then continue through the filed roadmap backlog",
-    "source": "issue #77 / epic #66 / docs/development/ROADMAP_ISSUE_BACKLOG_2026-05-17.md",
-    "queue_state": "active_now",
+    "label": "Roadmap backlog complete. Pending operator actions: (1) push 28 commits to origin/main, (2) deploy to Pi once homoplasticus-pi is network-reachable (LAN or Tailscale), (3) run pi-dev-deploy for issue #86 Pi soak.",
+    "source": "epics #66-#73 / docs/development/ROADMAP_ISSUE_BACKLOG_2026-05-17.md",
+    "queue_state": "operator_action_required",
     "constraints": [
       "sandbox and paper only",
       "do not enable live mode",
@@ -374,10 +374,11 @@
     ]
   },
   "queue_summary": {
-    "completed": 14,
-    "active_now": 1,
-    "queued_after_current_stage": 42,
-    "blocked_on_human_decision": 0
+    "completed": 57,
+    "active_now": 0,
+    "queued_after_current_stage": 0,
+    "blocked_on_human_decision": 1,
+    "blocked_note": "Pi deployment (issue #86 full soak) blocked on Pi network availability"
   },
   "queue": [
     {
@@ -453,16 +454,24 @@
     {
       "order": 11,
       "label": "Critical correctness and safety bug closure",
-      "source": "epic #66 / issue #77",
-      "status": "active_now",
+      "source": "epic #66 / issues #74-#77",
+      "status": "completed",
       "requires_human_decision": false
     },
     {
       "order": 12,
-      "label": "Full roadmap backlog",
-      "source": "issues #66-#111 / ROADMAP_ISSUE_BACKLOG_2026-05-17.md",
-      "status": "queued",
+      "label": "Full roadmap backlog epics #66-#73",
+      "source": "issues #77-#111 / ROADMAP_ISSUE_BACKLOG_2026-05-17.md",
+      "status": "completed",
       "requires_human_decision": false
+    },
+    {
+      "order": 13,
+      "label": "Pi soak / deploy (issue #86 full live-path drill)",
+      "source": "issue #86",
+      "status": "blocked_operator",
+      "requires_human_decision": true,
+      "block_reason": "Pi (homoplasticus-pi / 192.168.4.47) not reachable on LAN or Tailscale. Run pi-dev-deploy once Pi is online."
     }
   ],
   "validation_commands": [
