@@ -951,9 +951,16 @@ mod tests {
     use super::{parse_command_line, resolve_config_path, run_evaluator};
     use serde_json::Value;
     use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
 
     #[test]
     fn resolve_config_uses_env_when_default_is_passed() {
+        let _guard = env_lock();
         std::env::set_var("PT_CONFIG_PATH", "config/alt.toml");
         let path = resolve_config_path("config/config.toml");
         assert_eq!(path, "config/alt.toml");
@@ -962,6 +969,7 @@ mod tests {
 
     #[test]
     fn resolve_config_keeps_explicit_cli_path() {
+        let _guard = env_lock();
         std::env::set_var("PT_CONFIG_PATH", "config/alt.toml");
         let path = resolve_config_path("config/custom.toml");
         assert_eq!(path, "config/custom.toml");

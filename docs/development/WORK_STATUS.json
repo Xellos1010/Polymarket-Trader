@@ -1,6 +1,6 @@
 {
   "schema_version": 9,
-  "updated_on": "2026-05-17",
+  "updated_on": "2026-05-18",
   "direction": {
     "roadmap_repository_path": "ROADMAP.md",
     "role": "ROADMAP.md is the source of truth for product and technical direction; WORK_STATUS tracks execution state."
@@ -9,18 +9,19 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Epics #66-#71 are implemented through the bounded AI improvement layer. Issues #86-#101 were validated on 2026-05-17 with ./scripts/webhook_resilience_drill.sh, cargo fmt, cargo test -p pt-ai-agent, cargo test -p pt-dashboard --test api_contract, cargo test --workspace, and cargo clippy --workspace --all-targets --all-features -- -D warnings.",
+  "current_audit_finding": "Epics #66-#72 are implemented through the AI discovery layer. Issues #102-#106 were validated on 2026-05-18 with cargo fmt --all -- --check, cargo test -p pt-ai-agent, cargo test -p pt-cli --bin pt-cli, cargo test --workspace, and cargo clippy --workspace --all-targets --all-features -- -D warnings.",
   "audit": {
-    "last_audited_on": "2026-05-17",
+    "last_audited_on": "2026-05-18",
     "audit_source": [
       "GitHub issue state",
       "local validation run on main after interrupted roadmap continuation",
       "direct cargo test --workspace execution",
       "direct cargo clippy --workspace --all-targets --all-features -- -D warnings execution",
-      "direct ./scripts/webhook_resilience_drill.sh execution",
-      "agent-driven development on #83-#101"
+      "direct cargo test -p pt-ai-agent execution",
+      "direct cargo test -p pt-cli --bin pt-cli execution",
+      "agent-driven development on #83-#106"
     ],
-    "validation_evidence_state": "fresh_local_fmt_test_workspace_clippy_workspace_pass_may_17_2026",
+    "validation_evidence_state": "fresh_local_fmt_ai_agent_pt_cli_test_workspace_clippy_workspace_pass_may_18_2026",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -33,16 +34,46 @@
     "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "phase5_ai_discovery",
-    "label": "Epic #72: AI discovery layer",
+    "id": "phase5_portfolio_management",
+    "label": "Epic #73: Multi-strategy portfolio management",
     "requires_human_decision": false,
     "blocker_type": null,
     "execution_status": "active_queue_head_filed",
-    "active_now_queue_order": 37,
-    "active_issue": 102,
-    "environment_note": "Epics #66-#71 complete. #68 child #86 is covered by fallback/resilience docs and local webhook validation; no live credentials or live mode were used. Next epic: #72 AI discovery layer."
+    "active_now_queue_order": 43,
+    "active_issue": 107,
+    "environment_note": "Epics #66-#72 complete. AI discovery outputs remain bounded framework contracts with explicit rejection criteria; no live credentials or live mode were used. Next epic: #73 multi-strategy portfolio management."
   },
   "recently_closed_issues": [
+    {
+      "issue": 106,
+      "label": "AI discovery: gate code generation through compile, backtest, and artifact validation",
+      "closed_on": "2026-05-18",
+      "evidence": "GeneratedCodeCandidate and gate_generated_code require source artifact, compile pass, backtest artifact, replay gate, and human approval before review."
+    },
+    {
+      "issue": 105,
+      "label": "AI discovery: define regime-classification framework",
+      "closed_on": "2026-05-18",
+      "evidence": "RegimeClassifierSpec, metrics, and review contract require dataset artifacts, labels, holdout accuracy, stability, confusion matrix artifact, and rejection criteria."
+    },
+    {
+      "issue": 104,
+      "label": "AI discovery: define sentiment integration framework",
+      "closed_on": "2026-05-18",
+      "evidence": "SentimentSourceSpec, SentimentObservation, and review_sentiment_source define source kinds, artifact linkage, freshness, coverage, score normalization, and rejection reasons."
+    },
+    {
+      "issue": 103,
+      "label": "AI discovery: add supervised pattern-discovery framework",
+      "closed_on": "2026-05-18",
+      "evidence": "PatternDiscoverySpec and evaluate_pattern_discovery enforce dataset artifact linkage, feature set, sample count, precision, false-positive limit, and rejection criteria."
+    },
+    {
+      "issue": 102,
+      "label": "AI discovery: define compositional indicator synthesis framework",
+      "closed_on": "2026-05-18",
+      "evidence": "SynthesizedIndicatorSpec and review contract define inputs, bounded operation depth, artifact linkage, and explicit rejection criteria."
+    },
     {
       "issue": 101,
       "label": "AI improvement: enforce optimizer governance and evaluation-budget policy",

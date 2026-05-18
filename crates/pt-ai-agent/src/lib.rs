@@ -1,6 +1,7 @@
 pub mod attribution;
 pub mod calibration;
 pub mod config;
+pub mod discovery;
 pub mod error;
 pub mod failure;
 pub mod governance;
@@ -17,6 +18,14 @@ pub use attribution::{
 };
 pub use calibration::{compute_calibration, CalibrationArtifact, CalibrationSample, RocPoint};
 pub use config::{AgentConfig, LocalModelConfig, OpenRouterConfig, RoutingPolicy};
+pub use discovery::{
+    evaluate_pattern_discovery, gate_generated_code, review_regime_classifier,
+    review_sentiment_source, DiscoveryDecision, DiscoveryReview, GeneratedCodeCandidate,
+    GeneratedCodeGate, GeneratedCodeTarget, IndicatorOperation, PatternDiscoveryResult,
+    PatternDiscoverySpec, RegimeClassifierMetrics, RegimeClassifierReview, RegimeClassifierSpec,
+    SentimentObservation, SentimentReview, SentimentSourceKind, SentimentSourceSpec,
+    SynthesizedIndicatorSpec,
+};
 pub use error::AgentError;
 pub use failure::{
     classify_failure, cluster_failures, FailureCategory, FailureCluster, FailureObservation,
