@@ -1,3 +1,6 @@
+pub mod ws;
+pub use ws::{CoinbaseWsClient, WsTicker};
+
 use async_trait::async_trait;
 use chrono::Utc;
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
