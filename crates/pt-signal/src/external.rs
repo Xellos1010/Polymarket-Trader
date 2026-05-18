@@ -143,6 +143,89 @@ impl ExternalSignalAdapter for FearGreedAdapter {
     }
 }
 
+/// Binance USDT-M perpetual funding rate adaptor.
+/// Polls https://fapi.binance.com/fapi/v1/premiumIndex (free, no auth, public).
+///
+/// Interpretation: positive funding rate → longs pay shorts → bearish pressure → negative bias.
+/// Negative funding rate → shorts pay longs → bullish pressure → positive bias.
+///
+/// Bias is capped to [-1, 1] after scaling by 100× the annualized rate.
+/// Default `symbols` is ["BTCUSDT", "ETHUSDT"].
+pub struct BinanceFundingRateAdapter {
+    client: reqwest::blocking::Client,
+    symbols: Vec<String>,
+}
+
+impl BinanceFundingRateAdapter {
+    pub fn new(symbols: Vec<String>) -> Self {
+        Self {
+            client: reqwest::blocking::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .user_agent("pt-signal/0.1")
+                .build()
+                .unwrap_or_default(),
+            symbols,
+        }
+    }
+
+    pub fn default_symbols() -> Self {
+        Self::new(vec!["BTCUSDT".to_string(), "ETHUSDT".to_string()])
+    }
+}
+
+impl Default for BinanceFundingRateAdapter {
+    fn default() -> Self {
+        Self::default_symbols()
+    }
+}
+
+impl ExternalSignalAdapter for BinanceFundingRateAdapter {
+    fn source_id(&self) -> &str {
+        "binance_funding_rate"
+    }
+
+    fn poll(&self) -> Vec<NormalizedExternalSignal> {
+        let mut out = Vec::new();
+        let now_ms = chrono::Utc::now().timestamp_millis();
+
+        for symbol in &self.symbols {
+            let url = format!(
+                "https://fapi.binance.com/fapi/v1/premiumIndex?symbol={}",
+                symbol
+            );
+            let resp = match self.client.get(&url).send() {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            let body: Value = match resp.json() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            let rate_str = body
+                .get("lastFundingRate")
+                .and_then(Value::as_str)
+                .unwrap_or("0");
+            let rate: f64 = rate_str.parse().unwrap_or(0.0);
+
+            // Funding is per 8h; annualized ≈ rate * 3 * 365.
+            // We scale by 100× the 8h rate for signal sensitivity, clamped to [-1, 1].
+            let bias = (-rate * 100.0).clamp(-1.0, 1.0);
+            let confidence = (rate.abs() * 100.0).min(1.0);
+
+            out.push(NormalizedExternalSignal {
+                source: format!("binance_funding_{}", symbol.to_lowercase()),
+                ts_ms: now_ms,
+                bias,
+                confidence,
+                tags: vec!["funding_rate".to_string(), "perpetual".to_string()],
+                raw: body,
+            });
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,5 +302,37 @@ mod tests {
         let confidence = (value - 50.0).abs() / 50.0;
         assert!(bias.abs() < 1e-9);
         assert!(confidence.abs() < 1e-9);
+    }
+
+    #[test]
+    fn funding_rate_positive_gives_negative_bias() {
+        // Positive funding → longs pay → bearish → negative bias
+        let rate = 0.01_f64; // 1% per 8h (very high)
+        let bias = (-rate * 100.0).clamp(-1.0, 1.0);
+        assert!(bias < 0.0, "positive funding should give negative bias");
+        assert!((bias - (-1.0)).abs() < 1e-9, "1% rate should clamp to -1.0");
+    }
+
+    #[test]
+    fn funding_rate_negative_gives_positive_bias() {
+        let rate = -0.005_f64; // -0.5% per 8h
+        let bias = (-rate * 100.0).clamp(-1.0, 1.0);
+        assert!(bias > 0.0, "negative funding should give positive bias");
+        assert!((bias - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn funding_rate_zero_has_zero_confidence() {
+        let rate = 0.0_f64;
+        let confidence = (rate.abs() * 100.0).min(1.0);
+        assert!(confidence.abs() < 1e-9);
+    }
+
+    #[test]
+    fn funding_rate_bias_clamped_to_unit_range() {
+        // Very large rate should be clamped
+        let rate = 0.05_f64;
+        let bias = (-rate * 100.0).clamp(-1.0, 1.0);
+        assert!(bias >= -1.0 && bias <= 1.0);
     }
 }

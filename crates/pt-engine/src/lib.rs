@@ -523,6 +523,7 @@ impl TradingEngine {
             coinbase: Default::default(),
             proposal_queue: ProposalQueue::new(),
             last_backtest: Arc::new(parking_lot::RwLock::new(None)),
+            tsdb: None,
         });
 
         tokio::spawn(async move {

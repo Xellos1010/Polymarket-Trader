@@ -1,6 +1,7 @@
 pub mod external;
 pub use external::{
-    ExternalSignalAdapter, FearGreedAdapter, NormalizedExternalSignal, WebhookSignalAdapter,
+    BinanceFundingRateAdapter, ExternalSignalAdapter, FearGreedAdapter, NormalizedExternalSignal,
+    WebhookSignalAdapter,
 };
 
 use chrono::Utc;

@@ -507,6 +507,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiMetricsView'
+  /api/v1/db/candles:
+    get:
+      summary: Query historical candles from local TSDB (DuckDB)
+      parameters:
+        - in: query
+          name: product_id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: granularity
+          required: false
+          schema: { type: integer, default: 300 }
+        - in: query
+          name: start_ms
+          required: false
+          schema: { type: integer }
+        - in: query
+          name: end_ms
+          required: false
+          schema: { type: integer }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of TsCandle records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TsCandle' }
+        '503':
+          description: TSDB not configured
+  /api/v1/db/signals:
+    get:
+      summary: Query historical external signals from local TSDB (DuckDB)
+      parameters:
+        - in: query
+          name: source
+          required: true
+          schema: { type: string }
+        - in: query
+          name: start_ms
+          required: false
+          schema: { type: integer }
+        - in: query
+          name: end_ms
+          required: false
+          schema: { type: integer }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Array of TsSignal records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TsSignal' }
+        '503':
+          description: TSDB not configured
 components:
   schemas:
     EquityPoint:
@@ -1185,3 +1249,24 @@ components:
           items: { type: string }
         reason: { type: string }
         blocked: { type: boolean }
+    TsCandle:
+      type: object
+      required: [ts_ms, product_id, granularity_sec, open, high, low, close, volume]
+      properties:
+        ts_ms: { type: integer }
+        product_id: { type: string }
+        granularity_sec: { type: integer }
+        open: { type: number }
+        high: { type: number }
+        low: { type: number }
+        close: { type: number }
+        volume: { type: number }
+    TsSignal:
+      type: object
+      required: [ts_ms, source, bias, confidence, tags]
+      properties:
+        ts_ms: { type: integer }
+        source: { type: string }
+        bias: { type: number }
+        confidence: { type: number }
+        tags: { type: string }

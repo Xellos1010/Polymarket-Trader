@@ -12,10 +12,14 @@ use futures::stream::{self, Stream};
 use std::convert::Infallible;
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
+use pt_signal::{
+    BinanceFundingRateAdapter, ExternalSignalAdapter, FearGreedAdapter,
+};
 use pt_strategy_lab::{
     fetch_coinbase_candles_range, run_backtest, save_run_manifest, StrategyProfile,
     StrategyRunReport,
 };
+use pt_tsdb::{TsCandle, TsDb, TsSignal};
 use pt_ai_agent::{
     allocate_capital, compute_strategy_correlations, detect_strategy_collisions, plan_rebalance,
     AgentProposal, CapitalAllocationPolicy, EndOfDayReport, MorningBrief, PortfolioReview,
@@ -74,6 +78,7 @@ pub struct DashboardHandles {
     pub coinbase: CoinbaseDashboardHandles,
     pub proposal_queue: ProposalQueue,
     pub last_backtest: Arc<RwLock<Option<StrategyRunReport>>>,
+    pub tsdb: Option<Arc<TsDb>>,
 }
 
 impl Default for DashboardHandles {
@@ -90,6 +95,7 @@ impl Default for DashboardHandles {
             coinbase: CoinbaseDashboardHandles::default(),
             proposal_queue: ProposalQueue::new(),
             last_backtest: Arc::new(RwLock::new(None)),
+            tsdb: None,
         }
     }
 }
@@ -120,6 +126,7 @@ pub struct DashboardState {
     pub coinbase: CoinbaseDashboardState,
     pub proposal_queue: ProposalQueue,
     pub last_backtest: Arc<RwLock<Option<StrategyRunReport>>>,
+    pub tsdb: Option<Arc<TsDb>>,
 }
 
 impl DashboardState {
@@ -135,6 +142,7 @@ impl DashboardState {
             inventory_usd: handles.inventory_usd,
             proposal_queue: handles.proposal_queue,
             last_backtest: handles.last_backtest,
+            tsdb: handles.tsdb,
             coinbase: CoinbaseDashboardState {
                 mode: handles.coinbase.mode,
                 live_arm: handles.coinbase.live_arm,
@@ -418,6 +426,8 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/stream/candles", get(get_stream_candles))
         .route("/api/v1/backtest/run", post(post_backtest_run))
         .route("/api/v1/backtest/last", get(get_backtest_last))
+        .route("/api/v1/db/candles", get(get_db_candles))
+        .route("/api/v1/db/signals", get(get_db_signals))
         .route("/api/v1/products/:product_id", get(get_product_detail))
         .route("/api/v1/orders", get(get_orders).post(post_order))
         .route("/api/v1/strategies", get(get_strategies))
@@ -444,6 +454,57 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/agent/brief/morning", get(get_morning_brief))
         .route("/api/v1/agent/brief/eod", get(get_eod_report))
         .with_state(state)
+}
+
+/// Spawn a background task that polls external signal adaptors (FearGreed, BinanceFunding)
+/// every `interval_secs` and writes results into the TSDB when configured.
+/// Returns immediately if `tsdb` is None. Call this after `router()`.
+pub fn spawn_external_signal_poller(tsdb: Option<Arc<TsDb>>, interval_secs: u64) {
+    let Some(db) = tsdb else { return };
+    let interval = interval_secs.max(60);
+    tokio::spawn(async move {
+        let fear_greed = FearGreedAdapter::new();
+        let binance = BinanceFundingRateAdapter::default();
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+
+            // Run blocking polls in spawn_blocking to avoid starving the async runtime.
+            let fg_signals = {
+                let adapter = FearGreedAdapter::new();
+                tokio::task::spawn_blocking(move || adapter.poll())
+                    .await
+                    .unwrap_or_default()
+            };
+            let bn_signals = {
+                let adapter = BinanceFundingRateAdapter::default();
+                tokio::task::spawn_blocking(move || adapter.poll())
+                    .await
+                    .unwrap_or_default()
+            };
+
+            let ts_signals: Vec<TsSignal> = fg_signals
+                .iter()
+                .chain(bn_signals.iter())
+                .map(|s| TsSignal {
+                    ts_ms: s.ts_ms,
+                    source: s.source.clone(),
+                    bias: s.bias,
+                    confidence: s.confidence,
+                    tags: s.tags.join(","),
+                })
+                .collect();
+
+            if !ts_signals.is_empty() {
+                if let Err(e) = db.insert_signal_batch(&ts_signals) {
+                    tracing::warn!("tsdb signal insert failed: {e}");
+                } else {
+                    tracing::debug!(count = ts_signals.len(), "external signals archived to tsdb");
+                }
+            }
+
+            let _ = (fear_greed.source_id(), binance.source_id()); // keep in scope
+        }
+    });
 }
 
 async fn get_dashboard() -> Html<String> {
@@ -826,6 +887,27 @@ async fn post_backtest_run(
     }
     let report = run_backtest(&profile, &candles);
     save_run_manifest(&report);
+
+    // Archive fetched candles into TSDB if configured.
+    if let Some(ref db) = state.tsdb {
+        let ts_candles: Vec<TsCandle> = candles
+            .iter()
+            .map(|c| TsCandle {
+                ts_ms: c.ts_ms,
+                product_id: profile.product_id.clone(),
+                granularity_sec: profile.granularity_sec,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close,
+                volume: c.volume,
+            })
+            .collect();
+        if let Err(e) = db.insert_candle_batch(&ts_candles) {
+            tracing::warn!("tsdb candle insert failed: {e}");
+        }
+    }
+
     *state.last_backtest.write() = Some(report.clone());
     Ok(Json(report))
 }
@@ -839,6 +921,56 @@ async fn get_backtest_last(
         .clone()
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
+}
+
+#[derive(serde::Deserialize)]
+struct DbCandleQuery {
+    product_id: String,
+    granularity: Option<u32>,
+    start_ms: Option<i64>,
+    end_ms: Option<i64>,
+    limit: Option<usize>,
+}
+
+async fn get_db_candles(
+    State(state): State<DashboardState>,
+    Query(q): Query<DbCandleQuery>,
+) -> Result<Json<Vec<TsCandle>>, StatusCode> {
+    let db = state.tsdb.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let start = q.start_ms.unwrap_or(0);
+    let end = q.end_ms.unwrap_or(i64::MAX);
+    let gran = q.granularity.unwrap_or(300);
+    let mut rows = db
+        .query_candles(&q.product_id, gran, start, end)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(limit) = q.limit {
+        rows.truncate(limit);
+    }
+    Ok(Json(rows))
+}
+
+#[derive(serde::Deserialize)]
+struct DbSignalQuery {
+    source: String,
+    start_ms: Option<i64>,
+    end_ms: Option<i64>,
+    limit: Option<usize>,
+}
+
+async fn get_db_signals(
+    State(state): State<DashboardState>,
+    Query(q): Query<DbSignalQuery>,
+) -> Result<Json<Vec<TsSignal>>, StatusCode> {
+    let db = state.tsdb.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let start = q.start_ms.unwrap_or(0);
+    let end = q.end_ms.unwrap_or(i64::MAX);
+    let mut rows = db
+        .query_signals(&q.source, start, end)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(limit) = q.limit {
+        rows.truncate(limit);
+    }
+    Ok(Json(rows))
 }
 
 async fn get_orders(State(state): State<DashboardState>) -> Json<Vec<WorkstationOrder>> {

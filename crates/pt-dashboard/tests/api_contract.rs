@@ -272,6 +272,7 @@ fn fixture_state() -> DashboardState {
         coinbase,
         proposal_queue: pt_ai_agent::ProposalQueue::new(),
         last_backtest: Arc::new(RwLock::new(None)),
+        tsdb: None,
     })
 }
 
@@ -432,12 +433,14 @@ async fn state_endpoints_match_openapi_contract() {
         ("POST", "/ops/flatten", "/ops/flatten", None),
         ("GET", "/api/v1/products", "/api/v1/products", None),
         ("GET", "/api/v1/scanner", "/api/v1/scanner", None),
-        // /api/v1/candles, /api/v1/stream/candles, /api/v1/backtest/run, and
-        // /api/v1/backtest/last are omitted from live-call checks:
+        // /api/v1/candles, /api/v1/stream/candles, /api/v1/backtest/run,
+        // /api/v1/backtest/last, /api/v1/db/candles, and /api/v1/db/signals
+        // are omitted from live-call checks:
         //   - candle endpoints make real Coinbase HTTP calls
         //   - stream/candles is an SSE stream that never terminates in a oneshot request
         //   - backtest/last returns 404 when no run has been cached yet
-        // All four paths are still covered by the OpenAPI required_paths check below.
+        //   - db/* endpoints return 503 when tsdb=None (default in test fixture)
+        // All paths are still covered by the OpenAPI required_paths check below.
         (
             "GET",
             "/api/v1/products/{product_id}",
@@ -536,6 +539,8 @@ fn openapi_contains_all_runtime_paths() {
         "/api/v1/stream/candles",
         "/api/v1/backtest/run",
         "/api/v1/backtest/last",
+        "/api/v1/db/candles",
+        "/api/v1/db/signals",
         "/api/v1/products/{product_id}",
         "/api/v1/orders",
         "/api/v1/strategies",

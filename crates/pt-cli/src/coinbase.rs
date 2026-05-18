@@ -208,6 +208,7 @@ impl CoinbaseWorkstationRuntime {
             coinbase: coinbase_handles,
             proposal_queue: pt_ai_agent::ProposalQueue::new(),
             last_backtest: Arc::new(parking_lot::RwLock::new(None)),
+            tsdb: None,
         });
         let client = CoinbaseAdvancedTradeClient::new(
             cfg.venues.coinbase.api_base.clone(),

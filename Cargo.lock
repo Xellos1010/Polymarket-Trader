@@ -4481,7 +4481,9 @@ dependencies = [
  "pt-ai-agent",
  "pt-coinbase",
  "pt-core",
+ "pt-signal",
  "pt-strategy-lab",
+ "pt-tsdb",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -4489,6 +4491,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tower",
+ "tracing",
 ]
 
 [[package]]

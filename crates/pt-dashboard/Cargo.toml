@@ -12,11 +12,14 @@ parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 reqwest.workspace = true
 pt-core = { path = "../pt-core" }
 pt-coinbase = { path = "../pt-coinbase" }
 pt-ai-agent = { path = "../pt-ai-agent" }
+pt-signal = { path = "../pt-signal" }
 pt-strategy-lab = { path = "../pt-strategy-lab" }
+pt-tsdb = { path = "../pt-tsdb" }
 futures.workspace = true
 tokio-stream.workspace = true
 
