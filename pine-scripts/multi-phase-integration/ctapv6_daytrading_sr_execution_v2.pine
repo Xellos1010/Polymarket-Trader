@@ -68,6 +68,10 @@ closeAtSessionEnd = input.bool(true, "Auto-close when outside session", group = 
 enableTimedExit = input.bool(true, "Auto-exit after time in market", group = G_EXEC)
 maxBarsInTrade = input.int(24, "Max bars in trade", minval = 1, maxval = 500, group = G_EXEC)
 maxMinutesInTrade = input.int(240, "Max minutes in trade", minval = 1, maxval = 10080, group = G_EXEC)
+// Timeout mode: "Bars OR Minutes" fires on whichever limit is hit first; "Bars only" ignores wall-clock
+// time (useful for variable-length bars); "Minutes only" ignores bar count (useful for fixed-interval
+// sessions where bar length is guaranteed). Default "Bars OR Minutes" preserves prior behaviour.
+timedExitMode = input.string("Bars OR Minutes", "Timed exit fires on", options = ["Bars OR Minutes", "Bars only", "Minutes only"], group = G_EXEC)
 closeOutsideRange = input.bool(true, "Close positions outside selected range", group = G_EXEC)
 entryProcess   = input.string("Market next bar", "Entry model label", options = ["Market next bar", "Close-confirmed research", "Limit retest research"], group = G_EXEC)
 
@@ -133,6 +137,10 @@ srExtendBars = input.int(150, "Extend S/R zones right bars", minval = 5, maxval 
 srMaxZones = input.int(20, "Max visible S/R zones", minval = 2, maxval = 100, group = G_SR)
 requireSRContext = input.bool(false, "Require S/R context for entries", group = G_SR)
 srFailExit = input.bool(true, "Exit when active S/R zone fails", group = G_SR)
+// S/R break semantics: "Close below zone" — bar must close below support / above resistance (body-confirmed,
+// conservative). "Wick below zone" — any intra-bar penetration of the zone triggers a break (wick-sensitive,
+// fires earlier but more prone to false signals on wicks). Default close-based for parity fidelity.
+srBreakMode = input.string("Close below zone", "S/R break detection mode", options = ["Close below zone", "Wick below zone"], group = G_SR)
 entryRangeMode = input.string("Hybrid ATR + S/R", "Entry price range model", options = ["ATR around signal close", "Nearest support/resistance zone", "Hybrid ATR + S/R"], group = G_SR)
 entryRangeAtrMult = input.float(0.20, "Entry range ATR multiplier", minval = 0.01, maxval = 5.0, step = 0.01, group = G_SR)
 
@@ -294,6 +302,10 @@ inInSample = f_in_window(inSampleStart, inSampleEnd)
 inOOS = f_in_window(oosStart, oosEnd)
 inPaper = f_in_window(paperStart, paperEnd)
 segmentOK = validationSegment == "Full selected range" ? inBacktestDateRange : validationSegment == "In-sample only" ? inInSample : validationSegment == "Out-of-sample only" ? inOOS : inPaper
+// Session semantics: sessionTimezone must match the exchange/clock you intend to gate on.
+// For 24x7 crypto use "Etc/UTC" (default) with session "0000-0000:1234567" (always active), or define
+// a specific UTC window (e.g. "0800-2000:1234567" for a US/EU overlap). TradingView evaluates the
+// session in the given timezone; mismatched timezones will silently shift the session window.
 inSession = not useSessionFilter or not na(time(timeframe.period, tradeSession, sessionTimezone))
 signalGate = not confirmedOnly or barstate.isconfirmed
 flat = strategy.position_size == 0
@@ -386,8 +398,12 @@ nearSupport = activeSR and not na(lastSupportTop) and low <= lastSupportTop and 
 nearResistance = activeSR and not na(lastResistanceBottom) and high >= lastResistanceBottom and low <= lastResistanceTop
 supportHold = nearSupport and close >= lastSupportBottom
 resistanceHold = nearResistance and close <= lastResistanceTop
-supportFail = activeSR and not na(lastSupportBottom) and close < lastSupportBottom
-resistanceFail = activeSR and not na(lastResistanceTop) and close > lastResistanceTop
+// S/R break detection: close-based requires a candle body close outside the zone; wick-based fires on
+// any intra-bar penetration. Close-based is more conservative and reduces false-break exits on wicks.
+srSupportBreak    = srBreakMode == "Wick below zone" ? low  < lastSupportBottom  : close < lastSupportBottom
+srResistanceBreak = srBreakMode == "Wick below zone" ? high > lastResistanceTop  : close > lastResistanceTop
+supportFail    = activeSR and not na(lastSupportBottom) and srSupportBreak
+resistanceFail = activeSR and not na(lastResistanceTop) and srResistanceBreak
 srLongVote = supportHold ? 1.0 : nearSupport ? 0.50 : 0.0
 srShortVote = resistanceHold ? 1.0 : nearResistance ? 0.50 : 0.0
 srExitLongVote = supportFail ? 1.0 : nearResistance ? 0.40 : 0.0
@@ -691,7 +707,12 @@ if strategy.position_size < 0 and shortRisk > 0
 
 barsInTrade = strategy.position_size != 0 and not na(entryBarIndex) ? bar_index - entryBarIndex : 0
 minutesInTrade = strategy.position_size != 0 and not na(entryTimeMs) ? (time - entryTimeMs) / 60000.0 : 0.0
-timeExit = enableTimedExit and strategy.position_size != 0 and (barsInTrade >= maxBarsInTrade or minutesInTrade >= maxMinutesInTrade)
+// Timed exit: timedExitMode controls which limit(s) trigger the auto-exit.
+// "Bars OR Minutes" (default): fires when either bar count OR elapsed minutes is exceeded — first reached wins.
+// "Bars only": ignores elapsed time; useful when bar length is variable (e.g. tick charts).
+// "Minutes only": ignores bar count; useful when bar interval is fixed and clock time is the binding constraint.
+timedExitCond = timedExitMode == "Bars only" ? barsInTrade >= maxBarsInTrade : timedExitMode == "Minutes only" ? minutesInTrade >= maxMinutesInTrade : (barsInTrade >= maxBarsInTrade or minutesInTrade >= maxMinutesInTrade)
+timeExit = enableTimedExit and strategy.position_size != 0 and timedExitCond
 sessionExit = closeAtSessionEnd and strategy.position_size != 0 and useSessionFilter and not inSession
 dateExit = exitOnDateEnd and strategy.position_size != 0 and not segmentOK
 srExitLong = srFailExit and strategy.position_size > 0 and supportFail
