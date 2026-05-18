@@ -102,7 +102,9 @@ pub fn summarize_positions(inputs: &[PositionInput], cfg: &MonitoringConfig) -> 
     }
 
     if anomalous_count > 0 {
-        notes.push(format!("{anomalous_count} position(s) require operator attention."));
+        notes.push(format!(
+            "{anomalous_count} position(s) require operator attention."
+        ));
     }
     if inputs.is_empty() {
         notes.push("No active positions.".to_string());
@@ -143,7 +145,11 @@ mod tests {
         p.pnl_usd = -50.0;
         let s = summarize_positions(&[p], &MonitoringConfig::default());
         assert_eq!(s.anomalous_count, 1);
-        assert!(s.positions[0].anomaly_reason.as_deref().unwrap().contains("loss threshold"));
+        assert!(s.positions[0]
+            .anomaly_reason
+            .as_deref()
+            .unwrap()
+            .contains("loss threshold"));
     }
 
     #[test]

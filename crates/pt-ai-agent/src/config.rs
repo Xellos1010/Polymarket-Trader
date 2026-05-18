@@ -14,9 +14,15 @@ pub struct AgentConfig {
     pub openrouter: Option<OpenRouterConfig>,
 }
 
-fn default_enabled() -> bool { false }
-fn default_max_pending() -> usize { 50 }
-fn default_proposal_ttl_secs() -> u64 { 3600 }
+fn default_enabled() -> bool {
+    false
+}
+fn default_max_pending() -> usize {
+    50
+}
+fn default_proposal_ttl_secs() -> u64 {
+    3600
+}
 
 impl Default for AgentConfig {
     fn default() -> Self {
@@ -43,7 +49,9 @@ pub struct LocalModelConfig {
     pub timeout_secs: u64,
 }
 
-fn default_timeout_secs() -> u64 { 30 }
+fn default_timeout_secs() -> u64 {
+    30
+}
 
 /// Configuration for the OpenRouter API. The API key must be injected at runtime
 /// via environment variable (OPENROUTER_API_KEY) or operator secret store — never
@@ -58,7 +66,9 @@ pub struct OpenRouterConfig {
     pub routing_policy: RoutingPolicy,
 }
 
-fn default_daily_spend_cap() -> f64 { 1.0 }
+fn default_daily_spend_cap() -> f64 {
+    1.0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

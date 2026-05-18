@@ -132,14 +132,7 @@ mod tests {
 
     #[test]
     fn eod_report_render_includes_pnl() {
-        let report = EndOfDayReport::generate(
-            5,
-            12.34,
-            3,
-            2,
-            "Good signal alignment",
-            vec![],
-        );
+        let report = EndOfDayReport::generate(5, 12.34, 3, 2, "Good signal alignment", vec![]);
         let text = report.render_text();
         assert!(text.contains("Trades: 5"));
         assert!(text.contains("12.3400 USD"));

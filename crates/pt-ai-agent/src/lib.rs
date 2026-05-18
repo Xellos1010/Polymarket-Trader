@@ -1,14 +1,27 @@
+pub mod attribution;
+pub mod calibration;
 pub mod config;
 pub mod error;
+pub mod failure;
+pub mod governance;
 pub mod local_client;
 pub mod monitoring;
 pub mod openrouter;
 pub mod reports;
 pub mod types;
 pub mod validation;
+pub mod walk_forward;
 
+pub use attribution::{
+    generate_adjustments, AdjustmentBounds, ParameterAdjustmentProposal, ParameterAttribution,
+};
+pub use calibration::{compute_calibration, CalibrationArtifact, CalibrationSample, RocPoint};
 pub use config::{AgentConfig, LocalModelConfig, OpenRouterConfig, RoutingPolicy};
 pub use error::AgentError;
+pub use failure::{
+    classify_failure, cluster_failures, FailureCategory, FailureCluster, FailureObservation,
+};
+pub use governance::{BudgetDecision, EvaluationBudgetPolicy, EvaluationBudgetUsage};
 pub use local_client::{HttpLocalModelClient, LocalModelClient};
 pub use monitoring::{
     summarize_positions, MonitoringConfig, MonitoringSummary, PositionInput, PositionSummary,
@@ -17,6 +30,7 @@ pub use openrouter::{OpenRouterClient, OpenRouterHttpClient};
 pub use reports::{EndOfDayReport, MorningBrief};
 pub use types::{AgentProposal, ProposalKind, ProposalResult, ProposalStatus};
 pub use validation::{validate_signal, SignalValidation, DEFAULT_STALENESS_SECS};
+pub use walk_forward::{build_walk_forward_plan, WalkForwardPlan, WalkForwardWindow};
 
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -51,11 +65,7 @@ impl ProposalQueue {
         self.inner.read().clone()
     }
 
-    pub fn resolve(
-        &self,
-        id: &str,
-        accepted: bool,
-    ) -> Result<AgentProposal, AgentError> {
+    pub fn resolve(&self, id: &str, accepted: bool) -> Result<AgentProposal, AgentError> {
         let mut queue = self.inner.write();
         let proposal = queue
             .iter_mut()
@@ -69,8 +79,7 @@ impl ProposalQueue {
     }
 
     pub fn expire_stale(&self, ttl_secs: u64) {
-        let cutoff = chrono::Utc::now()
-            - chrono::Duration::seconds(ttl_secs as i64);
+        let cutoff = chrono::Utc::now() - chrono::Duration::seconds(ttl_secs as i64);
         let mut queue = self.inner.write();
         for p in queue.iter_mut() {
             if p.status == ProposalStatus::Pending && p.created_at < cutoff {

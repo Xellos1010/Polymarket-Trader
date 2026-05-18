@@ -7,14 +7,14 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
+use pt_ai_agent::{
+    AgentProposal, EndOfDayReport, MorningBrief, ProposalKind, ProposalQueue, ProposalStatus,
+};
 use pt_core::{
     Asset, ExecutionReport, KillSwitchState, LiveArmState, MarketHistoryPoint, MarketSnapshot,
     MetricsRegistry, OrderRoute, ProductDetailView, ProductId, ProductStrategyConfigView,
     RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
     WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
-};
-use pt_ai_agent::{
-    AgentProposal, EndOfDayReport, MorningBrief, ProposalKind, ProposalQueue, ProposalStatus,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -1466,7 +1466,9 @@ async fn get_agent_console(State(state): State<DashboardState>) -> Json<AgentCon
     })
 }
 
-async fn get_agent_proposals(State(state): State<DashboardState>) -> Json<Vec<AgentApprovalItemView>> {
+async fn get_agent_proposals(
+    State(state): State<DashboardState>,
+) -> Json<Vec<AgentApprovalItemView>> {
     let proposals = state.proposal_queue.list();
     Json(proposals.iter().map(proposal_to_item).collect())
 }
@@ -1505,7 +1507,10 @@ async fn post_agent_proposal(
             message: payload.message.unwrap_or_default(),
         },
         other => {
-            return (StatusCode::BAD_REQUEST, format!("unknown proposal kind: {other}"))
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("unknown proposal kind: {other}"),
+            )
                 .into_response()
         }
     };
@@ -1513,7 +1518,9 @@ async fn post_agent_proposal(
         kind,
         payload.reasoning,
         payload.context.unwrap_or(Value::Null),
-        payload.model_source.unwrap_or_else(|| "operator".to_string()),
+        payload
+            .model_source
+            .unwrap_or_else(|| "operator".to_string()),
     );
     match state.proposal_queue.push(proposal, 50) {
         Ok(()) => StatusCode::CREATED.into_response(),
@@ -1611,7 +1618,11 @@ async fn get_ai_metrics(State(state): State<DashboardState>) -> Json<AiMetricsVi
         openrouter_requests_total: state.metrics.get_counter("ai_openrouter_requests"),
         openrouter_spend_today_usd: state.metrics.get_gauge("ai_openrouter_spend_usd"),
         openrouter_cap_usd: state.metrics.get_gauge("ai_openrouter_cap_usd"),
-        routing_policy: if state.metrics.get_gauge("ai_routing_local_first").is_finite() {
+        routing_policy: if state
+            .metrics
+            .get_gauge("ai_routing_local_first")
+            .is_finite()
+        {
             "local_first".to_string()
         } else {
             "unknown".to_string()

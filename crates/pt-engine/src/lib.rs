@@ -7,18 +7,17 @@ use axum::{
     routing::post,
     Router,
 };
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
 use chrono::{DateTime, Utc};
+use hmac::{Hmac, Mac};
 use parking_lot::{Mutex, RwLock};
 use parquet::arrow::ArrowWriter;
+use pt_ai_agent::ProposalQueue;
 use pt_coinbase::{CoinbaseSpotHedger, HedgeExecutor, HedgeIntent, PaperCoinbaseHedger};
 use pt_core::{
     AppConfig, Asset, EngineMode, ExecutionReport, KillSwitchState, MarketHistoryPoint,
     MarketSelection, MarketSnapshot, MetricsRegistry, PtError, PtResult, RiskState, Side,
     TradingViewBias,
 };
-use pt_ai_agent::ProposalQueue;
 use pt_dashboard::{router as dashboard_router, DashboardHandles, DashboardState};
 use pt_market_discovery::MarketDiscoveryClient;
 use pt_polymarket::{
@@ -31,6 +30,7 @@ use pt_risk::RiskEngine;
 use pt_signal::{parse_tradingview_bias, SignalFusionEngine};
 use pt_wallet_intel::WalletIntelClient;
 use rusqlite::{params, Connection};
+use sha2::Sha256;
 use std::{
     collections::HashMap,
     fs,
@@ -550,8 +550,7 @@ impl TradingEngine {
             .iter()
             .filter_map(|s| s.parse().ok())
             .collect();
-        let nonce_window =
-            Duration::from_secs(self.cfg.signals.tradingview.nonce_window_secs);
+        let nonce_window = Duration::from_secs(self.cfg.signals.tradingview.nonce_window_secs);
         let tv_state = TvWebhookState {
             tv_bias: self.state.tv_bias.clone(),
             secret: self.cfg.signals.tradingview.endpoint_secret.clone(),
@@ -991,9 +990,7 @@ async fn tradingview_webhook(
 
     // Auth: prefer HMAC-SHA256 signature over plain secret when both header and secret present.
     if let Some(secret) = &state.secret {
-        let sig_header = headers
-            .get("x-tv-signature")
-            .and_then(|h| h.to_str().ok());
+        let sig_header = headers.get("x-tv-signature").and_then(|h| h.to_str().ok());
 
         if let Some(sig_hex) = sig_header {
             // #85: HMAC-SHA256 verification.
@@ -1001,7 +998,10 @@ async fn tradingview_webhook(
                 Ok(b) => b,
                 Err(_) => {
                     state.metrics.inc_counter("tv_webhook_unauthorized", 1.0);
-                    return (axum::http::StatusCode::UNAUTHORIZED, "invalid signature encoding");
+                    return (
+                        axum::http::StatusCode::UNAUTHORIZED,
+                        "invalid signature encoding",
+                    );
                 }
             };
             let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
@@ -1060,15 +1060,16 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
     use tower::ServiceExt;
 
-    fn make_webhook_state(secret: Option<&str>, ip_allowlist: Vec<&str>, nonce_window_secs: u64) -> TvWebhookState {
+    fn make_webhook_state(
+        secret: Option<&str>,
+        ip_allowlist: Vec<&str>,
+        nonce_window_secs: u64,
+    ) -> TvWebhookState {
         TvWebhookState {
             tv_bias: Arc::new(RwLock::new(None)),
             secret: secret.map(|s| s.to_owned()),
             metrics: Arc::new(MetricsRegistry::default()),
-            ip_allowlist: ip_allowlist
-                .iter()
-                .filter_map(|s| s.parse().ok())
-                .collect(),
+            ip_allowlist: ip_allowlist.iter().filter_map(|s| s.parse().ok()).collect(),
             seen_nonces: Arc::new(Mutex::new(HashMap::new())),
             nonce_window: Duration::from_secs(nonce_window_secs),
         }
@@ -1092,9 +1093,7 @@ mod tests {
         for (k, v) in headers {
             req = req.header(k, v);
         }
-        let req = req
-            .body(axum::body::Body::from(body.to_owned()))
-            .unwrap();
+        let req = req.body(axum::body::Body::from(body.to_owned())).unwrap();
         let resp = app.oneshot(req).await.unwrap();
         let status = resp.status().as_u16();
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
@@ -1122,12 +1121,7 @@ mod tests {
     async fn webhook_plain_secret_accepted() {
         let state = make_webhook_state(Some("mysecret"), vec![], 0);
         let app = webhook_app(state, PEER.parse().unwrap());
-        let (status, _) = post_webhook(
-            app,
-            vec![("x-tv-secret", "mysecret")],
-            VALID_BODY,
-        )
-        .await;
+        let (status, _) = post_webhook(app, vec![("x-tv-secret", "mysecret")], VALID_BODY).await;
         assert_eq!(status, 200);
     }
 
@@ -1135,12 +1129,7 @@ mod tests {
     async fn webhook_plain_secret_rejected() {
         let state = make_webhook_state(Some("mysecret"), vec![], 0);
         let app = webhook_app(state, PEER.parse().unwrap());
-        let (status, _) = post_webhook(
-            app,
-            vec![("x-tv-secret", "wrong")],
-            VALID_BODY,
-        )
-        .await;
+        let (status, _) = post_webhook(app, vec![("x-tv-secret", "wrong")], VALID_BODY).await;
         assert_eq!(status, 401);
     }
 
@@ -1150,12 +1139,7 @@ mod tests {
         let sig = hmac_hex("mysecret", body);
         let state = make_webhook_state(Some("mysecret"), vec![], 0);
         let app = webhook_app(state, PEER.parse().unwrap());
-        let (status, _) = post_webhook(
-            app,
-            vec![("x-tv-signature", &sig)],
-            body,
-        )
-        .await;
+        let (status, _) = post_webhook(app, vec![("x-tv-signature", &sig)], body).await;
         assert_eq!(status, 200);
     }
 
@@ -1165,12 +1149,7 @@ mod tests {
         let sig = hmac_hex("wrongkey", body);
         let state = make_webhook_state(Some("mysecret"), vec![], 0);
         let app = webhook_app(state, PEER.parse().unwrap());
-        let (status, _) = post_webhook(
-            app,
-            vec![("x-tv-signature", &sig)],
-            body,
-        )
-        .await;
+        let (status, _) = post_webhook(app, vec![("x-tv-signature", &sig)], body).await;
         assert_eq!(status, 401);
     }
 
@@ -1178,12 +1157,8 @@ mod tests {
     async fn webhook_hmac_invalid_hex_encoding_rejected() {
         let state = make_webhook_state(Some("mysecret"), vec![], 0);
         let app = webhook_app(state, PEER.parse().unwrap());
-        let (status, _) = post_webhook(
-            app,
-            vec![("x-tv-signature", "not-valid-hex!")],
-            VALID_BODY,
-        )
-        .await;
+        let (status, _) =
+            post_webhook(app, vec![("x-tv-signature", "not-valid-hex!")], VALID_BODY).await;
         assert_eq!(status, 401);
     }
 
@@ -1193,22 +1168,25 @@ mod tests {
         let nonce = "unique-nonce-abc";
         // First request accepted.
         let app = webhook_app(state.clone(), PEER.parse().unwrap());
-        let (status, _) = post_webhook(
-            app,
-            vec![("x-tv-nonce", nonce)],
-            VALID_BODY,
-        )
-        .await;
+        let (status, _) = post_webhook(app, vec![("x-tv-nonce", nonce)], VALID_BODY).await;
         assert_eq!(status, 200);
         // Second request with same nonce rejected.
         let app2 = webhook_app(state, PEER.parse().unwrap());
-        let (status2, _) = post_webhook(
-            app2,
-            vec![("x-tv-nonce", nonce)],
-            VALID_BODY,
-        )
-        .await;
+        let (status2, _) = post_webhook(app2, vec![("x-tv-nonce", nonce)], VALID_BODY).await;
         assert_eq!(status2, 401);
+    }
+
+    #[tokio::test]
+    async fn webhook_burst_with_unique_nonces_stays_reliable() {
+        let state = make_webhook_state(None, vec!["127.0.0.1"], 300);
+        for i in 0..50 {
+            let nonce = format!("burst-nonce-{i}");
+            let app = webhook_app(state.clone(), "127.0.0.1:9999".parse().unwrap());
+            let (status, _) = post_webhook(app, vec![("x-tv-nonce", &nonce)], VALID_BODY).await;
+            assert_eq!(status, 200, "burst request {i} failed");
+        }
+        assert_eq!(state.metrics.get_counter("tv_webhook_ok"), 50.0);
+        assert_eq!(state.metrics.get_counter("tv_webhook_replay_rejected"), 0.0);
     }
 
     #[tokio::test]

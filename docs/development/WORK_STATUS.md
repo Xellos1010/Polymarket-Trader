@@ -6,12 +6,12 @@
 Phase 1: sandbox trading / paper ROI preparation
 
 ## Current audit finding
-The adversarial roadmap queue is now actively burning down under epic `#66`. Issues `#65`, `#74`, `#75`, and `#76` were completed with fresh local validation on May 17, 2026; open issue `#77` is the active head of the remaining critical-bug lane, with the full epic-and-child map recorded in [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md).
+The adversarial roadmap queue has advanced through the remaining webhook resilience issue `#86` and epics `#69`, `#70`, and `#71`. AI foundation, AI management, and bounded AI improvement issues `#87`-`#101` are implemented with fresh local validation on May 17, 2026; issue `#102` is the next active queue head under epic `#72`.
 
 ## Audit stamp
 - last audited on: May 17, 2026
-- audit source: GitHub issue state, local validation run on main commit `6fd933b`, direct `cargo test --workspace` execution, and subagent-driven development with spec + code quality review per task
-- validation evidence state: fresh May 17, 2026 validation for issues `#59`, `#60`, `#61`, and `#10`, including Python optimizer tests, `cargo test -p pt-dashboard --test api_contract`, frontend tests, benchmark artifact generation, and a passing Phase 1 evidence bundle at `data/evidence/phase1/2026-05-17/`
+- audit source: GitHub issue state, direct workspace validation, and continued agent-driven development after interrupted issue work
+- validation evidence state: fresh May 17, 2026 validation for issues `#86` and `#93`-`#101`: `./scripts/webhook_resilience_drill.sh`, `cargo fmt --all -- --check`, `cargo test -p pt-ai-agent`, `cargo test -p pt-dashboard --test api_contract`, `cargo test --workspace`, and `cargo clippy --workspace --all-targets --all-features -- -D warnings` all passed
 - truth standard: status files may record operator validation evidence, and may record agent reruns when explicitly stated in this section
 
 ## Automation mirror
@@ -19,7 +19,7 @@ The adversarial roadmap queue is now actively burning down under epic `#66`. Iss
 - Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, queue state, validation evidence, or next work order changes.
 
 ## Current stage
-Stage: `phase1_post_audit_bug_closure`
+Stage: `phase5_ai_discovery_queue`
 
 Stage contract:
 - keep work sandbox and paper only
@@ -31,26 +31,26 @@ Stage contract:
 - one active implementation lane at a time
 - one active PR per lane
 - issues `#59`, `#60`, `#61`, and `#10` are complete and recorded in local evidence
-- issue `#77` is the active correctness lane and epic `#66` is the parent tracker for the next queue
+- issue `#102` is the active AI discovery lane and epic `#72` is the parent tracker for the next queue
 - strategy definitions, chart presentation, optimizer candidates, and paper runtime evidence remain separate versioned objects
 - frontend chart state must not become the source of truth for strategy math
 - no live-mode expansion without explicit approval
 
 ## Current active next step
-Continue with issue `#77` under epic `#66`, then work downward through the filed roadmap backlog in [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md).
+Continue with issue `#102` under epic `#72`, then work downward through the filed roadmap backlog in [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md).
 
 Current queue head:
-1. `#77` deprecated Coinbase passphrase header removal
-2. epic `#66` closeout once the final Phase 1 auth bug is fixed
-3. `#67` Pine parity cleanup and signal-definition hardening
+1. `#102` compositional indicator synthesis framework
+2. `#103` supervised pattern-discovery framework
+3. `#104` sentiment integration framework
 
 ## Queue summary
 - completed Track A/Phase 0 unblock: issue `#48`
 - completed Track B: issues `#54`, `#55`, `#56`, PR `#57`
 - completed strategy artifact handoff: issue `#53`
 - completed Rust-native IR lane: issue `#58`
-- active now: issue `#77`
-- queued after current stage: issues `#66`-`#111` per the filed roadmap backlog
+- active now: issue `#102`
+- queued after current stage: issues `#72`-`#111` per the filed roadmap backlog
 - blocked on human decision right now: 0 items
 
 ## Consolidated feature queue
@@ -66,8 +66,9 @@ Current queue head:
 | 8 | Strategy AI review surfaces | issue `#60` | completed | no | `/api/v1/strategy-candidates` plus dashboard candidate review UI/tests landed |
 | 9 | Visual and strategy benchmark harnesses | issue `#61` | completed | no | baseline benchmark artifacts captured under `artifacts/benchmarks/2026-05-17/` |
 | 10 | Repeatable replay and paper evidence gate report | issue `#10` | completed | no | `data/evidence/phase1/2026-05-17/report.json` and `report.md` both show status `pass` |
-| 11 | Critical correctness and safety bug closure | epic `#66`, issue `#77` | active_now | no | finish the final memo-critical auth fix, then close the epic with the collected evidence from `#65/#74/#75/#76/#77` |
-| 12 | Full roadmap backlog | issues `#66`-`#111`, backlog doc | queued | no | follow [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md) after `#65` |
+| 11 | Critical correctness, Pine parity, webhook, and AI foundation/management/improvement | epics `#66`-`#71` | completed | no | closed with local validation evidence |
+| 12 | AI discovery layer | epic `#72`, issue `#102` | active_now | no | implement bounded compositional indicator synthesis framework |
+| 13 | Portfolio management backlog | epic `#73`, issues `#107`-`#111` | queued | no | start after AI discovery issues close |
 
 ## Validation commands
 Repo readiness and implementation safety:

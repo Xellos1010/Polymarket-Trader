@@ -48,8 +48,12 @@ pub fn validate_signal(
 
     let advisory = match (is_stale, is_regime_aligned) {
         (true, true) => format!("Signal is stale ({staleness_secs}s). Regime aligned."),
-        (true, false) => format!("Signal is stale ({staleness_secs}s) and regime-misaligned. Do not act."),
-        (false, false) => "Signal is fresh but regime-misaligned. Consider regime context.".to_string(),
+        (true, false) => {
+            format!("Signal is stale ({staleness_secs}s) and regime-misaligned. Do not act.")
+        }
+        (false, false) => {
+            "Signal is fresh but regime-misaligned. Consider regime context.".to_string()
+        }
         (false, true) => "Signal is fresh and regime-aligned. Usable.".to_string(),
     };
 

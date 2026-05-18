@@ -933,6 +933,10 @@ mod tests {
             jwt_host_path: _,
             api_key: _,
             api_secret: _,
-        } = CoinbaseAdvancedTradeClient::new("https://api.coinbase.com/api/v3/brokerage", None, None);
+        } = CoinbaseAdvancedTradeClient::new(
+            "https://api.coinbase.com/api/v3/brokerage",
+            None,
+            None,
+        );
     }
 }

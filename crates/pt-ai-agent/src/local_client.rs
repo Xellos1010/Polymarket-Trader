@@ -54,7 +54,10 @@ impl HttpLocalModelClient {
 #[async_trait]
 impl LocalModelClient for HttpLocalModelClient {
     async fn complete(&self, prompt: &str) -> Result<String, AgentError> {
-        let url = format!("{}/api/generate", self.config.endpoint.trim_end_matches('/'));
+        let url = format!(
+            "{}/api/generate",
+            self.config.endpoint.trim_end_matches('/')
+        );
         let body = OllamaRequest {
             model: &self.config.model,
             prompt,

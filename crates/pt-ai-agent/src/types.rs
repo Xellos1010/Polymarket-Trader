@@ -6,10 +6,21 @@ use serde_json::Value;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProposalKind {
-    StrategyAdjustment { parameter: String, value: Value },
-    MarketSelection { market_id: String, action: String },
-    RiskParameterChange { parameter: String, value: Value },
-    Alert { message: String },
+    StrategyAdjustment {
+        parameter: String,
+        value: Value,
+    },
+    MarketSelection {
+        market_id: String,
+        action: String,
+    },
+    RiskParameterChange {
+        parameter: String,
+        value: Value,
+    },
+    Alert {
+        message: String,
+    },
     /// Human-gated mode transition proposal (#96). Execution authority is never granted automatically.
     /// The operator must explicitly approve via the approval queue before any mode change takes effect.
     ModeTransition {

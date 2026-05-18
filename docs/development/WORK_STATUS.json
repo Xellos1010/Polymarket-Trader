@@ -9,16 +9,18 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Epics #66, #67, #68 (partial: #83-#85 done, #86 deferred Pi-offline), and #69 (#87-#92) all resolved on 2026-05-17. Webhook HMAC/IP/nonce hardening done. pt-ai-agent scaffolded. All workspace tests pass on commit 41e9787.",
+  "current_audit_finding": "Epics #66-#71 are implemented through the bounded AI improvement layer. Issues #86-#101 were validated on 2026-05-17 with ./scripts/webhook_resilience_drill.sh, cargo fmt, cargo test -p pt-ai-agent, cargo test -p pt-dashboard --test api_contract, cargo test --workspace, and cargo clippy --workspace --all-targets --all-features -- -D warnings.",
   "audit": {
     "last_audited_on": "2026-05-17",
     "audit_source": [
       "GitHub issue state",
-      "local validation run on main commit 41e9787",
+      "local validation run on main after interrupted roadmap continuation",
       "direct cargo test --workspace execution",
-      "agent-driven development on #83-#85, #87-#92"
+      "direct cargo clippy --workspace --all-targets --all-features -- -D warnings execution",
+      "direct ./scripts/webhook_resilience_drill.sh execution",
+      "agent-driven development on #83-#101"
     ],
-    "validation_evidence_state": "fresh_local_all_workspace_tests_pass_commit_41e9787_may_17_2026",
+    "validation_evidence_state": "fresh_local_fmt_test_workspace_clippy_workspace_pass_may_17_2026",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -31,16 +33,70 @@
     "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "phase3_ai_agent_multi_strategy",
-    "label": "Epic #70: AI management layer (next after #69 foundation)",
+    "id": "phase5_ai_discovery",
+    "label": "Epic #72: AI discovery layer",
     "requires_human_decision": false,
     "blocker_type": null,
     "execution_status": "active_queue_head_filed",
-    "active_now_queue_order": 24,
-    "active_issue": 93,
-    "environment_note": "Epics #66-#69 complete. #68 child #86 (Pi soak) deferred: Pi not reachable on LAN. Next epic: #70 AI management layer. Queue continues through #73 multi-strategy portfolio."
+    "active_now_queue_order": 37,
+    "active_issue": 102,
+    "environment_note": "Epics #66-#71 complete. #68 child #86 is covered by fallback/resilience docs and local webhook validation; no live credentials or live mode were used. Next epic: #72 AI discovery layer."
   },
   "recently_closed_issues": [
+    {
+      "issue": 101,
+      "label": "AI improvement: enforce optimizer governance and evaluation-budget policy",
+      "closed_on": "2026-05-17",
+      "evidence": "EvaluationBudgetPolicy, EvaluationBudgetUsage, and BudgetDecision added to pt-ai-agent with candidate, wall-time, and model-spend caps; cargo test -p pt-ai-agent and workspace clippy pass."
+    },
+    {
+      "issue": 100,
+      "label": "AI improvement: expand walk-forward validation and hold-out discipline",
+      "closed_on": "2026-05-17",
+      "evidence": "WalkForwardPlan and WalkForwardWindow added with deterministic artifact-linked train/holdout windows; cargo test -p pt-ai-agent and cargo test --workspace pass."
+    },
+    {
+      "issue": 99,
+      "label": "AI improvement: cluster failure modes and normalize optimizer error taxonomy",
+      "closed_on": "2026-05-17",
+      "evidence": "FailureCategory taxonomy, classify_failure, and cluster_failures added to pt-ai-agent with deterministic grouping tests."
+    },
+    {
+      "issue": 98,
+      "label": "AI improvement: add threshold calibration and ROC-style evaluation tooling",
+      "closed_on": "2026-05-17",
+      "evidence": "CalibrationArtifact, RocPoint, CalibrationSample, and compute_calibration added with deterministic AUC and artifact-source tests."
+    },
+    {
+      "issue": 97,
+      "label": "AI improvement: build attribution-driven parameter adjustment lane",
+      "closed_on": "2026-05-17",
+      "evidence": "Parameter attribution and bounded adjustment proposal types added; generated proposals route through existing StrategyAdjustment review kind with artifact context."
+    },
+    {
+      "issue": 96,
+      "label": "AI management: add human-gated mode transition proposal logic",
+      "closed_on": "2026-05-17",
+      "evidence": "ModeTransition proposal kind and queue test enforce pending status until human approval; dashboard proposal view renders mode-transition evidence."
+    },
+    {
+      "issue": 95,
+      "label": "AI management: generate morning brief and end-of-day report flows",
+      "closed_on": "2026-05-17",
+      "evidence": "MorningBrief and EndOfDayReport types plus /api/v1/agent/brief/morning and /api/v1/agent/brief/eod dashboard endpoints; OpenAPI and api_contract test updated."
+    },
+    {
+      "issue": 94,
+      "label": "AI management: add position monitoring and anomaly summaries",
+      "closed_on": "2026-05-17",
+      "evidence": "PositionInput, PositionSummary, MonitoringConfig, and summarize_positions added with loss, stale-age, and oversize anomaly tests."
+    },
+    {
+      "issue": 93,
+      "label": "AI management: add signal staleness and regime-alignment validation",
+      "closed_on": "2026-05-17",
+      "evidence": "SignalValidation and validate_signal added with staleness, regime mismatch, and neutral-regime tests."
+    },
     {
       "issue": 92,
       "label": "AI model routing and cost telemetry surfaces",
@@ -76,6 +132,12 @@
       "label": "Scaffold pt-ai-agent crate and bounded proposal interfaces",
       "closed_on": "2026-05-17",
       "evidence": "pt-ai-agent crate in workspace; AgentProposal, ProposalKind, ProposalStatus, ProposalResult types; ProposalQueue with max-pending and expire-stale; 10 unit tests pass."
+    },
+    {
+      "issue": 86,
+      "label": "Exercise webhook fallback flow and resilience soak for the Pi operator path",
+      "closed_on": "2026-05-17",
+      "evidence": "scripts/webhook_resilience_drill.sh added; PI_CLOUDFLARE_TUNNEL runbook documents deterministic local and optional staging drill; pt-engine adds 50-message unique-nonce burst coverage. Drill script passes."
     },
     {
       "issue": 85,

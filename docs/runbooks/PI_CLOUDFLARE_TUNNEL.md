@@ -152,6 +152,24 @@ pnpm exec nx run polymarket-trader:pi-dev-tunnel
 
 Run this drill whenever the Pi is not reachable on LAN before going into a live paper session:
 
+### Deterministic local drill
+
+Run the local resilience drill first. It exercises the in-process TradingView webhook handler, HMAC rejection, nonce replay rejection, IP allowlist rejection, and a 50-message unique-nonce burst without requiring a reachable Pi or live credentials:
+
+```bash
+./scripts/webhook_resilience_drill.sh
+```
+
+Optional staging probe, only when a sandbox/paper Pi or tunnel endpoint is intentionally available:
+
+```bash
+WEBHOOK_DRILL_URL=https://<tunnel-url> \
+WEBHOOK_DRILL_SECRET=<local-or-pi-endpoint-secret> \
+  ./scripts/webhook_resilience_drill.sh
+```
+
+Expected local result: all `pt-engine` `webhook_` tests pass, including `webhook_burst_with_unique_nonces_stays_reliable`.
+
 1. **Confirm Pi is unreachable on LAN:**
    ```bash
    pnpm exec nx run polymarket-trader:pi-dev-scan

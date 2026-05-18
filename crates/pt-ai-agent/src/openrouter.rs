@@ -106,7 +106,10 @@ impl OpenRouterClient for OpenRouterHttpClient {
             .client
             .post(OPENROUTER_API_URL)
             .bearer_auth(&self.api_key)
-            .header("HTTP-Referer", "https://github.com/evanmccall/polymarket-trader")
+            .header(
+                "HTTP-Referer",
+                "https://github.com/evanmccall/polymarket-trader",
+            )
             .json(&body)
             .send()
             .await
