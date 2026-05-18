@@ -10,6 +10,16 @@ pub enum ProposalKind {
     MarketSelection { market_id: String, action: String },
     RiskParameterChange { parameter: String, value: Value },
     Alert { message: String },
+    /// Human-gated mode transition proposal (#96). Execution authority is never granted automatically.
+    /// The operator must explicitly approve via the approval queue before any mode change takes effect.
+    ModeTransition {
+        from_mode: String,
+        to_mode: String,
+        /// Evidence items that support this proposal (e.g., "3 consecutive profitable replay runs").
+        evidence: Vec<String>,
+        /// Whether all gate conditions were met at proposal generation time.
+        gate_conditions_met: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

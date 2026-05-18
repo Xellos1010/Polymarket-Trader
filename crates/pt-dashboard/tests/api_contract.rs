@@ -538,6 +538,8 @@ fn openapi_contains_all_runtime_paths() {
         "/api/v1/agent/proposals",
         "/api/v1/agent/proposals/{id}/resolve",
         "/api/v1/ai-metrics",
+        "/api/v1/agent/brief/morning",
+        "/api/v1/agent/brief/eod",
     ];
 
     for p in required_paths {

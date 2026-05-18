@@ -354,6 +354,26 @@ paths:
                 $ref: '#/components/schemas/AgentApprovalItem'
         '404':
           description: Proposal not found
+  /api/v1/agent/brief/morning:
+    get:
+      summary: Generate morning brief from current runtime state
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MorningBrief'
+  /api/v1/agent/brief/eod:
+    get:
+      summary: Generate end-of-day report from current runtime state
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndOfDayReport'
   /api/v1/ai-metrics:
     get:
       summary: AI model routing and cost telemetry
@@ -877,6 +897,35 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AgentApprovalItem'
+    MorningBrief:
+      type: object
+      required: [generated_at, session_date, positions_active, pending_proposals, regime_summary, top_signals, alerts]
+      properties:
+        generated_at: { type: string, format: date-time }
+        session_date: { type: string }
+        positions_active: { type: integer }
+        pending_proposals: { type: integer }
+        regime_summary: { type: string }
+        top_signals:
+          type: array
+          items: { type: string }
+        alerts:
+          type: array
+          items: { type: string }
+    EndOfDayReport:
+      type: object
+      required: [generated_at, session_date, trades_executed, net_pnl_usd, proposals_reviewed, proposals_accepted, signal_quality_summary, notes]
+      properties:
+        generated_at: { type: string, format: date-time }
+        session_date: { type: string }
+        trades_executed: { type: integer }
+        net_pnl_usd: { type: number }
+        proposals_reviewed: { type: integer }
+        proposals_accepted: { type: integer }
+        signal_quality_summary: { type: string }
+        notes:
+          type: array
+          items: { type: string }
     AiMetricsView:
       type: object
       required: [local_requests_total, openrouter_requests_total, openrouter_spend_today_usd, openrouter_cap_usd, routing_policy]

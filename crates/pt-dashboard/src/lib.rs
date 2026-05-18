@@ -13,7 +13,9 @@ use pt_core::{
     RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
     WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
-use pt_ai_agent::{AgentProposal, ProposalKind, ProposalQueue, ProposalStatus};
+use pt_ai_agent::{
+    AgentProposal, EndOfDayReport, MorningBrief, ProposalKind, ProposalQueue, ProposalStatus,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
@@ -374,6 +376,8 @@ pub fn router(state: DashboardState) -> Router {
             post(post_resolve_proposal),
         )
         .route("/api/v1/ai-metrics", get(get_ai_metrics))
+        .route("/api/v1/agent/brief/morning", get(get_morning_brief))
+        .route("/api/v1/agent/brief/eod", get(get_eod_report))
         .with_state(state)
 }
 
@@ -1407,6 +1411,21 @@ fn proposal_to_item(p: &AgentProposal) -> AgentApprovalItemView {
             "low".to_string(),
             None,
         ),
+        ProposalKind::ModeTransition {
+            from_mode,
+            to_mode,
+            evidence,
+            gate_conditions_met,
+        } => (
+            format!("Mode transition: {from_mode} → {to_mode}"),
+            format!(
+                "Gates met: {}. Evidence: {}",
+                gate_conditions_met,
+                evidence.join("; ")
+            ),
+            "high".to_string(),
+            None,
+        ),
     };
     AgentApprovalItemView {
         id: p.id.clone(),
@@ -1518,6 +1537,61 @@ async fn post_resolve_proposal(
         Ok(resolved) => Json(proposal_to_item(&resolved)).into_response(),
         Err(e) => (StatusCode::NOT_FOUND, e.to_string()).into_response(),
     }
+}
+
+// ── Reports (issue #95) ──────────────────────────────────────────────────────
+
+async fn get_morning_brief(State(state): State<DashboardState>) -> Json<MorningBrief> {
+    let positions_active = state.coinbase.orders.read().len();
+    let pending_proposals = state
+        .proposal_queue
+        .list()
+        .into_iter()
+        .filter(|p| p.status == ProposalStatus::Pending)
+        .count();
+    let fused = state.fused_bias.read();
+    let regime_summary = if fused.is_empty() {
+        "No regime data".to_string()
+    } else {
+        let avg: f64 = fused.values().sum::<f64>() / fused.len() as f64;
+        if avg > 0.1 {
+            format!("Bullish ({avg:.2})")
+        } else if avg < -0.1 {
+            format!("Bearish ({avg:.2})")
+        } else {
+            format!("Neutral ({avg:.2})")
+        }
+    };
+    Json(MorningBrief::generate(
+        positions_active,
+        pending_proposals,
+        regime_summary,
+        vec![],
+        vec![],
+    ))
+}
+
+async fn get_eod_report(State(state): State<DashboardState>) -> Json<EndOfDayReport> {
+    let executions = state.recent_executions.read();
+    let trades = executions.len();
+    drop(executions);
+    let proposals = state.proposal_queue.list();
+    let reviewed = proposals
+        .iter()
+        .filter(|p| p.status != ProposalStatus::Pending)
+        .count();
+    let accepted = proposals
+        .iter()
+        .filter(|p| p.status == ProposalStatus::Approved)
+        .count();
+    Json(EndOfDayReport::generate(
+        trades,
+        0.0, // PnL not tracked per execution yet; see pt-core ExecutionReport
+        reviewed,
+        accepted,
+        "See /api/v1/state/bias for signal detail",
+        vec![],
+    ))
 }
 
 // ── AI Metrics (issue #92) ────────────────────────────────────────────────────

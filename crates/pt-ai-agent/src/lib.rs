@@ -1,14 +1,22 @@
 pub mod config;
 pub mod error;
 pub mod local_client;
+pub mod monitoring;
 pub mod openrouter;
+pub mod reports;
 pub mod types;
+pub mod validation;
 
 pub use config::{AgentConfig, LocalModelConfig, OpenRouterConfig, RoutingPolicy};
 pub use error::AgentError;
 pub use local_client::{HttpLocalModelClient, LocalModelClient};
+pub use monitoring::{
+    summarize_positions, MonitoringConfig, MonitoringSummary, PositionInput, PositionSummary,
+};
 pub use openrouter::{OpenRouterClient, OpenRouterHttpClient};
+pub use reports::{EndOfDayReport, MorningBrief};
 pub use types::{AgentProposal, ProposalKind, ProposalResult, ProposalStatus};
+pub use validation::{validate_signal, SignalValidation, DEFAULT_STALENESS_SECS};
 
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -163,6 +171,33 @@ mod tests {
         assert_eq!(cfg.proposal_ttl_secs, 3600);
         assert!(cfg.local_model.is_none());
         assert!(cfg.openrouter.is_none());
+    }
+
+    #[test]
+    fn mode_transition_proposal_routes_through_queue() {
+        let queue = ProposalQueue::new();
+        let proposal = AgentProposal::new(
+            ProposalKind::ModeTransition {
+                from_mode: "paper".into(),
+                to_mode: "sandbox".into(),
+                evidence: vec![
+                    "3 consecutive paper sessions with positive PnL".into(),
+                    "All replay acceptance tests pass".into(),
+                ],
+                gate_conditions_met: true,
+            },
+            "Paper results sufficient to advance to sandbox evaluation",
+            json!({"session_count": 3}),
+            "local:mistral",
+        );
+        let id = proposal.id.clone();
+        queue.push(proposal, 50).unwrap();
+        // Must remain Pending until human resolves.
+        let pending = queue.list();
+        assert_eq!(pending[0].status, ProposalStatus::Pending);
+        // Human approves.
+        let resolved = queue.resolve(&id, true).unwrap();
+        assert_eq!(resolved.status, ProposalStatus::Approved);
     }
 
     #[test]
