@@ -54,7 +54,7 @@ impl CoinbaseWsClient {
             "product_ids": product_ids,
             "channel": "ticker"
         });
-        ws.send(Message::Text(subscribe_msg.to_string().into()))
+        ws.send(Message::Text(subscribe_msg.to_string()))
             .await?;
 
         while let Some(msg) = ws.next().await {

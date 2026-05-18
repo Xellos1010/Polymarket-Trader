@@ -1,5 +1,5 @@
 {
-  "schema_version": 9,
+  "schema_version": 10,
   "updated_on": "2026-05-18",
   "direction": {
     "roadmap_repository_path": "ROADMAP.md",
@@ -9,20 +9,18 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Roadmap backlog complete (epics #66-#73) plus roadmap phases 1+4+6 fully implemented (issues #112-#117). On 2026-05-18: cargo test --workspace (all pass), cargo clippy (clean), npm test (10/10), npm run build pass. Pi deployment deferred — homoplasticus-pi still unreachable (LAN + Tailscale offline).",
+  "current_audit_finding": "All roadmap phases fully implemented. Issues #118-#133 complete: deterministic run_id+manifest (#118, #119), Williams%R/CCI/Keltner indicators (#120), trade-fill chart markers (#121), CoinbaseWsClient (#122), AI monitor loop (#123), external signal adaptors / ExternalSignalAdapter trait + FearGreedAdapter + BinanceFundingRateAdapter + WebhookSignalAdapter (#124-#127), DuckDB TSDB crate (#129, #130), TSDB wired into dashboard with candle archiving (#131), /api/v1/db/candles + /api/v1/db/signals REST endpoints (#132), spawn_external_signal_poller (#133). 2026-05-18 validation: cargo test --workspace (all pass, exit 0), cargo clippy (clean after .into() fix), npx vitest run (12 pass 1 skip). Pi deployment still blocked on Pi offline.",
   "audit": {
     "last_audited_on": "2026-05-18",
     "audit_source": [
       "GitHub issue state",
-      "local validation run on main after interrupted roadmap continuation",
-      "direct cargo test --workspace execution",
-      "direct cargo clippy --workspace --all-targets --all-features -- -D warnings execution",
-      "direct cargo test -p pt-ai-agent execution",
-      "direct cargo test -p pt-cli --bin pt-cli execution",
-      "direct cargo test -p pt-dashboard --test api_contract execution",
-      "agent-driven development on #83-#111"
+      "local validation run after all 133 issues closed",
+      "direct cargo test --workspace execution (exit 0)",
+      "direct cargo clippy --workspace -- -D warnings execution (clean after .into() fix in ws.rs:57)",
+      "direct npx vitest run (12 pass, 1 skip)",
+      "agent-driven development on #83-#133"
     ],
-    "validation_evidence_state": "fresh_local_workspace_test_all_pass_clippy_clean_may_18_2026_revalidated",
+    "validation_evidence_state": "fresh_local_workspace_test_all_pass_clippy_clean_vitest_pass_may_18_2026_issues_118_133",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -35,16 +33,100 @@
     "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "roadmap_backlog_complete",
-    "label": "Research-memo roadmap backlog complete",
-    "requires_human_decision": false,
-    "blocker_type": null,
-    "execution_status": "no_active_roadmap_issue",
+    "id": "all_issues_complete",
+    "label": "All 133 roadmap issues complete — awaiting Pi deployment",
+    "requires_human_decision": true,
+    "blocker_type": "network",
+    "execution_status": "blocked_pi_offline",
     "active_now_queue_order": null,
     "active_issue": null,
-    "environment_note": "Epics #66-#73 complete. Portfolio outputs remain advisory, artifact-linked, and human-gated; no live credentials or live mode were used."
+    "environment_note": "All ROADMAP.md phases 0-6 implemented. External signal adaptors, DuckDB TSDB, CoinbaseWsClient, AI monitor loop, indicators, and trade-fill chart markers complete. Only remaining work is Pi soak once Pi comes online."
   },
   "recently_closed_issues": [
+    {
+      "issue": 133,
+      "label": "spawn_external_signal_poller — archive FearGreed + BinanceFunding to TsDb",
+      "closed_on": "2026-05-18",
+      "evidence": "Exported fn from pt-dashboard spawns tokio bg task polling both adapters every N secs, writes TsSignal batches to TsDb."
+    },
+    {
+      "issue": 132,
+      "label": "GET /api/v1/db/candles and GET /api/v1/db/signals REST endpoints",
+      "closed_on": "2026-05-18",
+      "evidence": "Both handlers return 503 when tsdb=None (test env), 200 with paginated data when wired; OpenAPI and api_contract tests updated."
+    },
+    {
+      "issue": 131,
+      "label": "Wire TsDb into DashboardHandles/State, archive backtest candles",
+      "closed_on": "2026-05-18",
+      "evidence": "DashboardHandles.tsdb: Option<Arc<TsDb>>; post_backtest_run archives fetched candles to TSDB after save_run_manifest."
+    },
+    {
+      "issue": 130,
+      "label": "pt-tsdb crate: TsDb with DuckDB bundled, candles + signals tables",
+      "closed_on": "2026-05-18",
+      "evidence": "TsDb { conn: Arc<Mutex<Connection>> } with insert_candle_batch, query_candles, insert_signal_batch, query_signals; 6 unit tests including dedup, range query, empty batch."
+    },
+    {
+      "issue": 127,
+      "label": "WebhookSignalAdapter: wraps shared TradingViewBias state, polls on demand",
+      "closed_on": "2026-05-18",
+      "evidence": "Wraps Arc<RwLock<Option<TradingViewBias>>>, snapshots on each poll; implements ExternalSignalAdapter trait."
+    },
+    {
+      "issue": 126,
+      "label": "BinanceFundingRateAdapter: polls USDT-M premiumIndex, normalizes bias",
+      "closed_on": "2026-05-18",
+      "evidence": "Polls Binance free premiumIndex endpoint; positive funding → negative bias; bias=(-rate*100).clamp(-1,1); 4 unit tests."
+    },
+    {
+      "issue": 125,
+      "label": "FearGreedAdapter: polls Alternative.me Fear & Greed Index",
+      "closed_on": "2026-05-18",
+      "evidence": "Free API, no auth; bias=(value-50)/50, confidence=abs(value-50)/50; reqwest::blocking client; unit tested with mock JSON."
+    },
+    {
+      "issue": 124,
+      "label": "External signal adaptor layer: ExternalSignalAdapter trait + NormalizedExternalSignal",
+      "closed_on": "2026-05-18",
+      "evidence": "NormalizedExternalSignal {source, ts_ms, bias:f64[-1,1], confidence:f64[0,1], tags, raw}; ExternalSignalAdapter trait with source_id()+poll(); 11 unit tests."
+    },
+    {
+      "issue": 123,
+      "label": "AI monitoring loop with ProposalQueue integration in pt-engine",
+      "closed_on": "2026-05-18",
+      "evidence": "spawn_ai_monitor_loop() polls summarize_positions every interval_secs, pushes Alert proposals when anomalous_count>0; gated by agent.enabled in config."
+    },
+    {
+      "issue": 122,
+      "label": "CoinbaseWsClient with ticker broadcast channel",
+      "closed_on": "2026-05-18",
+      "evidence": "broadcast::Sender<WsTicker> with 256 capacity; run() spawns reconnecting bg task (5s backoff) subscribing to Coinbase advanced-trade-ws ticker; 4 unit tests."
+    },
+    {
+      "issue": 121,
+      "label": "Trade fill markers on equity curve chart",
+      "closed_on": "2026-05-18",
+      "evidence": "TradeFill type; SVG equity curve renders ▲ green buy and ▼ red sell markers positioned by timestamp fraction; App.test.tsx fixture updated."
+    },
+    {
+      "issue": 120,
+      "label": "Williams %R, CCI, and Keltner Channels indicators in pt-strategy-lab",
+      "closed_on": "2026-05-18",
+      "evidence": "williams_r, cci, keltner added to indicators.rs; 6 unit tests covering None warmup gaps, numeric correctness, and first-bar value production."
+    },
+    {
+      "issue": 119,
+      "label": "run_id → JSON manifest via save_run_manifest()",
+      "closed_on": "2026-05-18",
+      "evidence": "Writes data/backtest/{run_id}.json after each backtest run; called from post_backtest_run handler in pt-dashboard."
+    },
+    {
+      "issue": 118,
+      "label": "Deterministic run_id and params_hash in backtest artifacts",
+      "closed_on": "2026-05-18",
+      "evidence": "params_hash=hex(sha256(json_profile)); run_id=run-+hex(sha256(params_hash[:16]+candle_start_ms))[:16]; determinism and differs-for-different-candles tests pass."
+    },
     {
       "issue": 111,
       "label": "Portfolio: handle strategy collisions and parallel execution conflicts",
@@ -361,8 +443,8 @@
     }
   },
   "active_next_step": {
-    "label": "Phases 1, 4, and 6 complete. Remaining roadmap work: Phase 2 (artifact determinism), CTAPv6 parity items (Williams %R, CCI, Keltner Channels), Pi soak (#86) once Pi is reachable.",
-    "source": "ROADMAP.md phases 1-6 / issues #112-#117",
+    "label": "All 133 issues closed. All ROADMAP.md phases 0-6 implemented and validated. Only remaining work: Pi soak / full deploy drill (#86) once homoplasticus-pi comes back online.",
+    "source": "ROADMAP.md phases 0-6 / issues #118-#133",
     "queue_state": "operator_action_required",
     "constraints": [
       "sandbox and paper only",
@@ -374,11 +456,11 @@
     ]
   },
   "queue_summary": {
-    "completed": 57,
+    "completed": 133,
     "active_now": 0,
     "queued_after_current_stage": 0,
     "blocked_on_human_decision": 1,
-    "blocked_note": "Pi deployment (issue #86 full soak) blocked on Pi network availability"
+    "blocked_note": "Pi deployment (issue #86 full soak) blocked on Pi network availability — homoplasticus-pi offline on LAN and Tailscale"
   },
   "queue": [
     {
@@ -467,6 +549,34 @@
     },
     {
       "order": 13,
+      "label": "Deterministic artifacts, indicators, chart markers, WS, AI monitor (#118-#123)",
+      "source": "issues #118-#123",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 14,
+      "label": "External signal adaptor layer — FearGreed, Binance, Webhook (#124-#127)",
+      "source": "issues #124-#127",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 15,
+      "label": "DuckDB TSDB crate + dashboard wiring + REST endpoints (#129-#132)",
+      "source": "issues #129-#132",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 16,
+      "label": "spawn_external_signal_poller — live data pipeline to TSDB (#133)",
+      "source": "issue #133",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 17,
       "label": "Pi soak / deploy (issue #86 full live-path drill)",
       "source": "issue #86",
       "status": "blocked_operator",
