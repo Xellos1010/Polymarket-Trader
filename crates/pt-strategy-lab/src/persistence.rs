@@ -2,6 +2,19 @@ use crate::types::{PaperEndpointReport, StrategyProfile, StrategyRunReport};
 use pt_core::{PtError, PtResult};
 use rusqlite::{params, Connection};
 
+/// Write a JSON manifest for the run to `data/backtest/{run_id}.json`.
+/// Non-fatal: silently skips on any I/O error.
+pub fn save_run_manifest(report: &StrategyRunReport) {
+    let dir = std::path::Path::new("data/backtest");
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    let path = dir.join(format!("{}.json", report.run_id));
+    if let Ok(json) = serde_json::to_string_pretty(report) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
 fn open(db_path: &str) -> PtResult<Connection> {
     if let Some(parent) = std::path::Path::new(db_path).parent() {
         if !parent.as_os_str().is_empty() {

@@ -528,9 +528,12 @@ components:
         slippage_cost: { type: number }
     StrategyRunReport:
       type: object
-      required: [run_id, profile_id, product_id, granularity_sec, started_ts_ms, total_return_pct, max_drawdown_pct, trades, win_rate, pnl, equity_curve]
+      required: [run_id, params_hash, candle_start_ms, candle_end_ms, profile_id, product_id, granularity_sec, started_ts_ms, total_return_pct, max_drawdown_pct, trades, win_rate, pnl, equity_curve]
       properties:
         run_id: { type: string }
+        params_hash: { type: string, description: SHA-256 hex of the JSON-serialized StrategyProfile }
+        candle_start_ms: { type: integer, description: Unix epoch ms of first candle }
+        candle_end_ms: { type: integer, description: Unix epoch ms of last candle }
         profile_id: { type: string }
         product_id: { type: string }
         granularity_sec: { type: integer }

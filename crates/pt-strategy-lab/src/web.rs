@@ -1,6 +1,6 @@
 use crate::backtest::run_backtest;
 use crate::data::fetch_coinbase_candles;
-use crate::persistence::{list_runs, load_profile, save_profile, save_run};
+use crate::persistence::{list_runs, load_profile, save_profile, save_run, save_run_manifest};
 use crate::tuning::optimize_random_walk_forward;
 use crate::types::{FusionDecision, StrategyProfile, StrategyRunReport, TuningReport};
 use axum::{
@@ -150,6 +150,7 @@ async fn run_backtest_handler(
             if let Err(e) = save_run(&state.db_path, &report) {
                 return Json(serde_json::json!({"ok": false, "error": e.to_string()}));
             }
+            save_run_manifest(&report);
             *state.last_run.write() = Some(report.clone());
             Json(serde_json::json!({"ok": true, "report": report}))
         }

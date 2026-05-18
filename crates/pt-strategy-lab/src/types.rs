@@ -213,7 +213,12 @@ pub struct EquityPoint {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyRunReport {
+    /// Deterministic: hex(sha256(params_hash + candle_start_ms as string)).
     pub run_id: String,
+    /// SHA-256 of JSON-serialized StrategyProfile (hex).
+    pub params_hash: String,
+    pub candle_start_ms: i64,
+    pub candle_end_ms: i64,
     pub profile_id: String,
     pub product_id: String,
     pub granularity_sec: u32,

@@ -13,7 +13,8 @@ use std::convert::Infallible;
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use pt_strategy_lab::{
-    fetch_coinbase_candles_range, run_backtest, StrategyProfile, StrategyRunReport,
+    fetch_coinbase_candles_range, run_backtest, save_run_manifest, StrategyProfile,
+    StrategyRunReport,
 };
 use pt_ai_agent::{
     allocate_capital, compute_strategy_correlations, detect_strategy_collisions, plan_rebalance,
@@ -824,6 +825,7 @@ async fn post_backtest_run(
         ));
     }
     let report = run_backtest(&profile, &candles);
+    save_run_manifest(&report);
     *state.last_backtest.write() = Some(report.clone());
     Ok(Json(report))
 }

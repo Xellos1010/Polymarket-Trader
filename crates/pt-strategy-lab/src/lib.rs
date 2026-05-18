@@ -20,6 +20,7 @@ pub use ir_adapter::{from_profile, from_promotion_json};
 pub use ir_exec::eval_ir;
 pub use persistence::{
     list_runs, load_profile, save_paper_endpoint_report, save_profile, save_run,
+    save_run_manifest,
 };
 pub use signals::build_decisions;
 pub use tuning::optimize_random_walk_forward;

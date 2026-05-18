@@ -4362,6 +4362,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
+ "hex",
  "parking_lot",
  "pt-core",
  "rand 0.8.5",
@@ -4369,6 +4370,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tracing",
 ]
