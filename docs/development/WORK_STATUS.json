@@ -9,16 +9,16 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Epics #66 and #67 fully closed on 2026-05-17. #66 children (#65, #74, #75, #76, #77) all resolved. #67 children (#78–#82, Pine parity) all resolved. Queue head is now #83 (epic #68: Webhook and Pi operator path hardening). All workspace tests pass on commit 505f6fd.",
+  "current_audit_finding": "Epics #66, #67, #68 (partial: #83-#85 done, #86 deferred Pi-offline), and #69 (#87-#92) all resolved on 2026-05-17. Webhook HMAC/IP/nonce hardening done. pt-ai-agent scaffolded. All workspace tests pass on commit 41e9787.",
   "audit": {
     "last_audited_on": "2026-05-17",
     "audit_source": [
       "GitHub issue state",
-      "local validation run on main commit 505f6fd",
+      "local validation run on main commit 41e9787",
       "direct cargo test --workspace execution",
-      "subagent-driven development on #77, Pine parity cleanup #78-#82"
+      "agent-driven development on #83-#85, #87-#92"
     ],
-    "validation_evidence_state": "fresh_local_all_workspace_tests_pass_commit_505f6fd_may_17_2026",
+    "validation_evidence_state": "fresh_local_all_workspace_tests_pass_commit_41e9787_may_17_2026",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -31,16 +31,70 @@
     "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "phase2_webhook_pi_hardening",
-    "label": "Epic #68: Webhook and Pi-hosted operator path hardening",
+    "id": "phase3_ai_agent_multi_strategy",
+    "label": "Epic #70: AI management layer (next after #69 foundation)",
     "requires_human_decision": false,
     "blocker_type": null,
     "execution_status": "active_queue_head_filed",
-    "active_now_queue_order": 13,
-    "active_issue": 83,
-    "environment_note": "Epics #66 and #67 closed. Active queue is epic #68 (children #83-#86). Next: #83 Pi operator path Cloudflare Tunnel topology and documented fallback."
+    "active_now_queue_order": 24,
+    "active_issue": 93,
+    "environment_note": "Epics #66-#69 complete. #68 child #86 (Pi soak) deferred: Pi not reachable on LAN. Next epic: #70 AI management layer. Queue continues through #73 multi-strategy portfolio."
   },
   "recently_closed_issues": [
+    {
+      "issue": 92,
+      "label": "AI model routing and cost telemetry surfaces",
+      "closed_on": "2026-05-17",
+      "evidence": "AiMetricsView added to pt-dashboard /api/v1/ai-metrics; local/openrouter request counters and spend gauges exposed via MetricsRegistry; OpenAPI schema updated."
+    },
+    {
+      "issue": 91,
+      "label": "Agent Console dashboard surface for proposal review",
+      "closed_on": "2026-05-17",
+      "evidence": "/api/v1/agent/console endpoint returns AgentConsoleView with autonomy_tier, pending approvals, imports_loaded. Frontend already had the Agent Console tab — backend now wired."
+    },
+    {
+      "issue": 90,
+      "label": "Harden approval queue persistence and API contract for AI proposals",
+      "closed_on": "2026-05-17",
+      "evidence": "/api/v1/agent/proposals GET/POST and /api/v1/agent/proposals/{id}/resolve POST; ProposalQueue in DashboardState; api_contract test extended with 4 new paths."
+    },
+    {
+      "issue": 89,
+      "label": "OpenRouter client boundary with spend caps and routing policy",
+      "closed_on": "2026-05-17",
+      "evidence": "OpenRouterClient trait + OpenRouterHttpClient with daily_spend_cap_usd local enforcement; RoutingPolicy enum (LocalFirst/OpenRouterOnly/LocalOnly); API key from env only."
+    },
+    {
+      "issue": 88,
+      "label": "Local model client boundary and runtime configuration policy",
+      "closed_on": "2026-05-17",
+      "evidence": "LocalModelClient trait + HttpLocalModelClient (Ollama-compatible); is_available() atomic flag; graceful LocalModelUnavailable error on server absence."
+    },
+    {
+      "issue": 87,
+      "label": "Scaffold pt-ai-agent crate and bounded proposal interfaces",
+      "closed_on": "2026-05-17",
+      "evidence": "pt-ai-agent crate in workspace; AgentProposal, ProposalKind, ProposalStatus, ProposalResult types; ProposalQueue with max-pending and expire-stale; 10 unit tests pass."
+    },
+    {
+      "issue": 85,
+      "label": "Add HMAC replay protection with nonce persistence",
+      "closed_on": "2026-05-17",
+      "evidence": "x-tv-signature HMAC-SHA256 header verified using hmac+sha2 crates; x-tv-nonce replay window (default 5 min) via in-memory HashMap; 3 new tests: valid HMAC, wrong-key rejected, nonce replay rejected."
+    },
+    {
+      "issue": 84,
+      "label": "Harden TradingView webhook request trust boundaries and allowlist policy",
+      "closed_on": "2026-05-17",
+      "evidence": "ip_allowlist and nonce_window_secs added to TradingViewSignalConfig; ConnectInfo<SocketAddr> IP check in webhook handler; 2 new IP allowlist tests (accepted/rejected); config example updated."
+    },
+    {
+      "issue": 83,
+      "label": "Pi operator path: Cloudflare Tunnel and documented fallback topology",
+      "closed_on": "2026-05-17",
+      "evidence": "docs/runbooks/PI_CLOUDFLARE_TUNNEL.md written: network topology, named/anonymous tunnel setup, Tailscale fallback, SSH port-forward, fallback drill procedure, guardrails."
+    },
     {
       "issue": 82,
       "label": "Pine parity: normalize candlestick definitions, confluence weighting, and fee/sizing assumptions",
