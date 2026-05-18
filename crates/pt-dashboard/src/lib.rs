@@ -13,6 +13,7 @@ use pt_core::{
     RiskState, ScannerRow, Side, StrategyLabImportSummary, TradeAction, TradingEligibility,
     WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
+use pt_ai_agent::{AgentProposal, ProposalKind, ProposalQueue, ProposalStatus};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
@@ -57,6 +58,7 @@ pub struct DashboardHandles {
     pub fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
     pub inventory_usd: Arc<RwLock<f64>>,
     pub coinbase: CoinbaseDashboardHandles,
+    pub proposal_queue: ProposalQueue,
 }
 
 impl Default for DashboardHandles {
@@ -71,6 +73,7 @@ impl Default for DashboardHandles {
             fused_bias: Arc::new(RwLock::new(HashMap::new())),
             inventory_usd: Arc::new(RwLock::new(0.0)),
             coinbase: CoinbaseDashboardHandles::default(),
+            proposal_queue: ProposalQueue::new(),
         }
     }
 }
@@ -99,6 +102,7 @@ pub struct DashboardState {
     pub fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
     pub inventory_usd: Arc<RwLock<f64>>,
     pub coinbase: CoinbaseDashboardState,
+    pub proposal_queue: ProposalQueue,
 }
 
 impl DashboardState {
@@ -112,6 +116,7 @@ impl DashboardState {
             recent_executions: handles.recent_executions,
             fused_bias: handles.fused_bias,
             inventory_usd: handles.inventory_usd,
+            proposal_queue: handles.proposal_queue,
             coinbase: CoinbaseDashboardState {
                 mode: handles.coinbase.mode,
                 live_arm: handles.coinbase.live_arm,
@@ -359,6 +364,16 @@ pub fn router(state: DashboardState) -> Router {
             "/api/v1/strategy-lab/import",
             post(post_strategy_lab_import),
         )
+        .route("/api/v1/agent/console", get(get_agent_console))
+        .route(
+            "/api/v1/agent/proposals",
+            get(get_agent_proposals).post(post_agent_proposal),
+        )
+        .route(
+            "/api/v1/agent/proposals/:id/resolve",
+            post(post_resolve_proposal),
+        )
+        .route("/api/v1/ai-metrics", get(get_ai_metrics))
         .with_state(state)
 }
 
@@ -1341,6 +1356,193 @@ fn candidate_matches_review(candidate: &Value, review: &Value) -> bool {
         == review.get("variant").and_then(Value::as_str);
     let params_match = candidate.get("params") == review.get("params");
     variant_match && params_match
+}
+
+// ── Agent Console & Proposal API ─────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+struct AgentApprovalItemView {
+    id: String,
+    title: String,
+    description: String,
+    severity: String,
+    status: String,
+    product_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct AgentConsoleView {
+    autonomy_tier: String,
+    live_arm: LiveArmState,
+    next_action: String,
+    blocked_markets: usize,
+    imports_loaded: usize,
+    recommended_products: Vec<String>,
+    approvals: Vec<AgentApprovalItemView>,
+}
+
+fn proposal_to_item(p: &AgentProposal) -> AgentApprovalItemView {
+    let (title, description, severity, product_id) = match &p.kind {
+        ProposalKind::StrategyAdjustment { parameter, value } => (
+            format!("Strategy adjustment: {parameter}"),
+            format!("Proposed value: {value}"),
+            "medium".to_string(),
+            None,
+        ),
+        ProposalKind::MarketSelection { market_id, action } => (
+            format!("Market selection: {market_id}"),
+            format!("Action: {action}"),
+            "low".to_string(),
+            Some(market_id.clone()),
+        ),
+        ProposalKind::RiskParameterChange { parameter, value } => (
+            format!("Risk parameter: {parameter}"),
+            format!("Proposed value: {value}"),
+            "high".to_string(),
+            None,
+        ),
+        ProposalKind::Alert { message } => (
+            "Agent alert".to_string(),
+            message.clone(),
+            "low".to_string(),
+            None,
+        ),
+    };
+    AgentApprovalItemView {
+        id: p.id.clone(),
+        title,
+        description,
+        severity,
+        status: format!("{:?}", p.status).to_ascii_lowercase(),
+        product_id,
+    }
+}
+
+async fn get_agent_console(State(state): State<DashboardState>) -> Json<AgentConsoleView> {
+    let live_arm = state.coinbase.live_arm.read().clone();
+    let imports_loaded = state.coinbase.imports.read().len();
+    let proposals = state.proposal_queue.list();
+    let pending: Vec<AgentApprovalItemView> = proposals
+        .iter()
+        .filter(|p| p.status == ProposalStatus::Pending)
+        .map(proposal_to_item)
+        .collect();
+    let autonomy_tier = if live_arm.armed {
+        "bounded_execute"
+    } else {
+        "recommend_only"
+    };
+    Json(AgentConsoleView {
+        autonomy_tier: autonomy_tier.to_string(),
+        live_arm,
+        next_action: if pending.is_empty() {
+            "Waiting for operator context".to_string()
+        } else {
+            format!("{} proposal(s) pending review", pending.len())
+        },
+        blocked_markets: 0,
+        imports_loaded,
+        recommended_products: vec![],
+        approvals: pending,
+    })
+}
+
+async fn get_agent_proposals(State(state): State<DashboardState>) -> Json<Vec<AgentApprovalItemView>> {
+    let proposals = state.proposal_queue.list();
+    Json(proposals.iter().map(proposal_to_item).collect())
+}
+
+#[derive(Debug, Deserialize)]
+struct NewProposalPayload {
+    kind: String,
+    parameter: Option<String>,
+    value: Option<Value>,
+    market_id: Option<String>,
+    action: Option<String>,
+    message: Option<String>,
+    reasoning: String,
+    context: Option<Value>,
+    model_source: Option<String>,
+}
+
+async fn post_agent_proposal(
+    State(state): State<DashboardState>,
+    Json(payload): Json<NewProposalPayload>,
+) -> impl IntoResponse {
+    let kind = match payload.kind.as_str() {
+        "strategy_adjustment" => ProposalKind::StrategyAdjustment {
+            parameter: payload.parameter.unwrap_or_default(),
+            value: payload.value.unwrap_or(Value::Null),
+        },
+        "market_selection" => ProposalKind::MarketSelection {
+            market_id: payload.market_id.unwrap_or_default(),
+            action: payload.action.unwrap_or_default(),
+        },
+        "risk_parameter_change" => ProposalKind::RiskParameterChange {
+            parameter: payload.parameter.unwrap_or_default(),
+            value: payload.value.unwrap_or(Value::Null),
+        },
+        "alert" => ProposalKind::Alert {
+            message: payload.message.unwrap_or_default(),
+        },
+        other => {
+            return (StatusCode::BAD_REQUEST, format!("unknown proposal kind: {other}"))
+                .into_response()
+        }
+    };
+    let proposal = AgentProposal::new(
+        kind,
+        payload.reasoning,
+        payload.context.unwrap_or(Value::Null),
+        payload.model_source.unwrap_or_else(|| "operator".to_string()),
+    );
+    match state.proposal_queue.push(proposal, 50) {
+        Ok(()) => StatusCode::CREATED.into_response(),
+        Err(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()).into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ResolveProposalPayload {
+    accepted: bool,
+    operator_note: Option<String>,
+}
+
+async fn post_resolve_proposal(
+    State(state): State<DashboardState>,
+    Path(id): Path<String>,
+    Json(payload): Json<ResolveProposalPayload>,
+) -> impl IntoResponse {
+    let _ = payload.operator_note; // stored in future SQLite persistence slice
+    match state.proposal_queue.resolve(&id, payload.accepted) {
+        Ok(resolved) => Json(proposal_to_item(&resolved)).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, e.to_string()).into_response(),
+    }
+}
+
+// ── AI Metrics (issue #92) ────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+struct AiMetricsView {
+    local_requests_total: f64,
+    openrouter_requests_total: f64,
+    openrouter_spend_today_usd: f64,
+    openrouter_cap_usd: f64,
+    routing_policy: String,
+}
+
+async fn get_ai_metrics(State(state): State<DashboardState>) -> Json<AiMetricsView> {
+    Json(AiMetricsView {
+        local_requests_total: state.metrics.get_counter("ai_local_requests"),
+        openrouter_requests_total: state.metrics.get_counter("ai_openrouter_requests"),
+        openrouter_spend_today_usd: state.metrics.get_gauge("ai_openrouter_spend_usd"),
+        openrouter_cap_usd: state.metrics.get_gauge("ai_openrouter_cap_usd"),
+        routing_policy: if state.metrics.get_gauge("ai_routing_local_first").is_finite() {
+            "local_first".to_string()
+        } else {
+            "unknown".to_string()
+        },
+    })
 }
 
 fn parse_side(raw: &str) -> Option<Side> {

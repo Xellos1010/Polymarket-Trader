@@ -87,22 +87,29 @@ if [[ -n "$METRICS_PATH" ]]; then
   cp "$METRICS_PATH" "$RUN_DIR/metrics.json"
 fi
 
-python3 - <<PY
+RUN_DIR_ENV="$RUN_DIR" \
+RUN_LABEL_ENV="$RUN_LABEL" \
+REPLAY_PATH_ENV="$REPLAY_PATH" \
+PROMOTION_PATH_ENV="$PROMOTION_PATH" \
+SQLITE_PATH_ENV="$SQLITE_PATH" \
+SCHEMA_VERSION_ENV="$SCHEMA_VERSION" \
+python3 - <<'PY'
 import datetime as dt
 import json
+import os
 from pathlib import Path
 
-run_dir = Path(${RUN_DIR@Q})
+run_dir = Path(os.environ["RUN_DIR_ENV"])
 manifest = {
-    "schema_version": ${SCHEMA_VERSION},
+    "schema_version": int(os.environ["SCHEMA_VERSION_ENV"]),
     "phase": "Phase 1",
-    "run_label": ${RUN_LABEL@Q},
+    "run_label": os.environ["RUN_LABEL_ENV"],
     "generated_at": dt.datetime.now(tz=dt.timezone.utc).isoformat(),
     "artifacts": {
-        "replay_source": ${REPLAY_PATH@Q},
+        "replay_source": os.environ["REPLAY_PATH_ENV"],
         "replay_acceptance": str(run_dir / "replay_acceptance.json"),
-        "promotion_source": ${PROMOTION_PATH@Q} or None,
-        "sqlite_source": ${SQLITE_PATH@Q} or None,
+        "promotion_source": os.environ["PROMOTION_PATH_ENV"] or None,
+        "sqlite_source": os.environ["SQLITE_PATH_ENV"] or None,
         "paper_soak": str(run_dir / "paper_soak.json") if (run_dir / "paper_soak.json").exists() else None,
         "metrics": str(run_dir / "metrics.json") if (run_dir / "metrics.json").exists() else None,
     },

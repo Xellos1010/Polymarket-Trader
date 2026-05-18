@@ -13,7 +13,7 @@ Do not run CI/CD or deployment pipeline automation until local verification pass
 ## Save Current Session
 
 ```bash
-cargo run -p pt-cli -- save-context --out docs/SESSION_CONTEXT.md --note "what changed + next step"
+cargo run -p pt-cli -- save-context --out docs/development/SESSION_CONTEXT.md --note "what changed + next step"
 ```
 
 This writes:

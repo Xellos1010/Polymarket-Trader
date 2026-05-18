@@ -1,0 +1,13 @@
+{
+  "start_epoch": 1778991617,
+  "duration_secs": 15,
+  "interval_secs": 5,
+  "samples": 3,
+  "failed_probes": 0,
+  "halt_count": 0,
+  "max_abs_unhedged_delta": 0.0,
+  "last_kill_switch": "Running",
+  "pass": true,
+  "reason": "ok",
+  "log_file": "data/soak/phase1-2026-05-17/paper-soak-20260517-002017.log"
+}

@@ -206,6 +206,7 @@ impl CoinbaseWorkstationRuntime {
             fused_bias: Arc::new(RwLock::new(HashMap::new())),
             inventory_usd: Arc::new(RwLock::new(0.0)),
             coinbase: coinbase_handles,
+            proposal_queue: pt_ai_agent::ProposalQueue::new(),
         });
         let client = CoinbaseAdvancedTradeClient::new(
             cfg.venues.coinbase.api_base.clone(),

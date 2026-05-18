@@ -16,6 +16,7 @@ reqwest.workspace = true
 rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+shell-words = "1.1.0"
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -23,6 +24,7 @@ toml.workspace = true
 pt-strategy-lab = { path = "../pt-strategy-lab" }
 pt-coinbase = { path = "../pt-coinbase" }
 pt-core = { path = "../pt-core" }
+pt-ai-agent = { path = "../pt-ai-agent" }
 pt-dashboard = { path = "../pt-dashboard" }
 pt-engine = { path = "../pt-engine" }
 pt-market-discovery = { path = "../pt-market-discovery" }

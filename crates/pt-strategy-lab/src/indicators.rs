@@ -51,6 +51,25 @@ pub fn ema(values: &[f64], len: usize) -> Vec<Option<f64>> {
     out
 }
 
+fn ema_seeded(values: &[f64], len: usize) -> Vec<Option<f64>> {
+    if len == 0 || values.is_empty() {
+        return vec![None; values.len()];
+    }
+    let mut out = vec![None; values.len()];
+    if values.len() < len {
+        return out;
+    }
+    let k = 2.0 / (len as f64 + 1.0);
+    let seed = values[..len].iter().sum::<f64>() / len as f64;
+    let mut ema_val = seed;
+    out[len - 1] = Some(seed);
+    for i in len..values.len() {
+        ema_val = (values[i] * k) + (ema_val * (1.0 - k));
+        out[i] = Some(ema_val);
+    }
+    out
+}
+
 pub fn rma(values: &[f64], len: usize) -> Vec<Option<f64>> {
     if len == 0 || values.is_empty() {
         return vec![None; values.len()];
@@ -259,18 +278,23 @@ pub fn rsi(values: &[f64], len: usize) -> Vec<Option<f64>> {
 }
 
 pub fn macd(values: &[f64], fast: usize, slow: usize, signal: usize) -> OptionSeriesTriple {
-    let fast_ema = ema(values, fast.max(1));
-    let slow_ema = ema(values, slow.max(1));
+    let fast_ema = ema_seeded(values, fast.max(1));
+    let slow_ema = ema_seeded(values, slow.max(1));
     let mut line = vec![None; values.len()];
-    let mut line_vals = vec![0.0; values.len()];
     for i in 0..values.len() {
         if let (Some(f), Some(s)) = (fast_ema[i], slow_ema[i]) {
-            let v = f - s;
-            line[i] = Some(v);
-            line_vals[i] = v;
+            line[i] = Some(f - s);
         }
     }
-    let signal_line = ema(&line_vals, signal.max(1));
+    let valid_line: Vec<f64> = line.iter().flatten().copied().collect();
+    let valid_signal = ema_seeded(&valid_line, signal.max(1));
+    let mut signal_line = vec![None; values.len()];
+    let mut signal_iter = valid_signal.into_iter();
+    for (i, value) in line.iter().enumerate() {
+        if value.is_some() {
+            signal_line[i] = signal_iter.next().unwrap_or(None);
+        }
+    }
     let hist: Vec<Option<f64>> = line
         .iter()
         .zip(signal_line.iter())
@@ -494,4 +518,39 @@ pub fn max_drawdown(equity: &[f64]) -> f64 {
         }
     }
     max_dd
+}
+
+#[cfg(test)]
+mod tests {
+    use super::macd;
+
+    #[test]
+    fn macd_preserves_warmup_gaps_in_signal_and_histogram() {
+        let values: Vec<f64> = (1..=10).map(|v| v as f64).collect();
+        let (line, signal, hist) = macd(&values, 3, 5, 3);
+
+        assert!(line[..4].iter().all(Option::is_none));
+        assert!(signal[..6].iter().all(Option::is_none));
+        assert!(hist[..6].iter().all(Option::is_none));
+        assert!(line[4].is_some());
+        assert!(signal[6].is_some());
+        assert!(hist[6].is_some());
+    }
+
+    #[test]
+    fn macd_signal_seed_uses_valid_line_history_instead_of_zero_fill() {
+        let values: Vec<f64> = (1..=10).map(|v| v as f64).collect();
+        let (line, signal, hist) = macd(&values, 3, 5, 3);
+
+        let expected_seed = [line[4], line[5], line[6]]
+            .into_iter()
+            .map(|value| value.expect("valid macd line"))
+            .sum::<f64>()
+            / 3.0;
+        let actual_signal = signal[6].expect("seeded signal");
+        let actual_hist = hist[6].expect("aligned histogram");
+
+        assert!((actual_signal - expected_seed).abs() < 1e-12);
+        assert!((actual_hist - (line[6].expect("macd line") - actual_signal)).abs() < 1e-12);
+    }
 }

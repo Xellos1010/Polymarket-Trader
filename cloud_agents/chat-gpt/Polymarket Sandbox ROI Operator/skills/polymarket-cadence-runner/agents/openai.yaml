@@ -1,0 +1,4 @@
+interface:
+  display_name: "Polymarket Cadence Runner"
+  short_description: "Governs hourly and daily safe improvement cycles."
+  default_prompt: "Use $polymarket-cadence-runner to run safe hourly or daily improvement, verification, and deployment-readiness loops."

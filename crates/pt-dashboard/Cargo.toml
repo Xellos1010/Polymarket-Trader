@@ -15,6 +15,7 @@ tokio.workspace = true
 reqwest.workspace = true
 pt-core = { path = "../pt-core" }
 pt-coinbase = { path = "../pt-coinbase" }
+pt-ai-agent = { path = "../pt-ai-agent" }
 
 [dev-dependencies]
 serde_json.workspace = true

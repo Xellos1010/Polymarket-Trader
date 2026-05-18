@@ -1,0 +1,23 @@
+{
+  "checks": [],
+  "failures": [],
+  "promotion": {
+    "market": "SOL-USD",
+    "source_report": "data/strategy_lab/backtest-20260517-041937.json",
+    "variant": "sma_baseline"
+  },
+  "replay": {
+    "frames": 300,
+    "markets": [
+      "coinbase-sim-sol_usd"
+    ],
+    "max_abs_bias": 0.0,
+    "max_spread": 0.017835999999988417,
+    "min_liquidity": 10000.0,
+    "min_spread": 0.01713000000000875,
+    "tokens": [
+      "sim-sol_usd"
+    ]
+  },
+  "status": "pass"
+}

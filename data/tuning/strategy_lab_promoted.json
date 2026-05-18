@@ -1,0 +1,32 @@
+{
+  "market": "BTC-USD",
+  "metrics": {
+    "bars": 300,
+    "max_drawdown": 0.021164336614482294,
+    "sharpe_like": -3.29737569917068,
+    "total_return": -0.02116433661448225,
+    "trades": 20
+  },
+  "promoted_at_epoch": 1778977039,
+  "replay": {
+    "frames": 300,
+    "market_id": "coinbase-sim-btc_usd",
+    "path": "data/replay/strategy_lab_promoted.ndjson",
+    "token_id": "sim-btc_usd"
+  },
+  "source_report": "data/strategy_lab/backtest-20260517-001635.json",
+  "variant": "sma_baseline",
+  "verification": {
+    "commands": [
+      "cargo run -p pt-cli -- run --config config/config.toml",
+      "cargo run -p pt-cli -- status --url http://127.0.0.1:8080/health"
+    ],
+    "config_patch": {
+      "engine": {
+        "mode": "replay",
+        "replay_path": "data/replay/strategy_lab_promoted.ndjson"
+      }
+    },
+    "required_mode": "replay"
+  }
+}

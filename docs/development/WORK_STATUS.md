@@ -6,75 +6,51 @@
 Phase 1: sandbox trading / paper ROI preparation
 
 ## Current audit finding
-Phase 0 compile recovery is no longer the active blocker. Issue `#48` was closed after compile integrity was recovered, and PR `#57` merged the Track B Coinbase visual workstation foundation.
-
-Grounded state as of May 2, 2026:
-- issue `#48` is closed as completed.
-- PR `#57` is merged with merge commit `0a4af223cf7a342f17d7dbdd9982d406d629657a`.
-- Track B work orders are closed:
-  - `#54` Coinbase workstation visual contract
-  - `#55` chart-first Coinbase product detail surface
-  - `#56` strategy review rail with import lineage and paper-only guardrails
-- Operator-reported validation for the merged workstation branch:
-  - `cargo check --workspace` passed
-  - `cargo test --workspace` passed
-  - `cd crates/pt-dashboard/frontend && npm run build` passed
-  - `cd crates/pt-dashboard/frontend && npm test` passed after commit `95d913d`
-- Agent-reran validation on branch `codex/roadmap-workorder-closeout-packet` before PR `#62` merge (May 2, 2026):
-  - `cargo fmt --all -- --check` passed
-  - `cargo check --workspace` passed
-  - `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed after small hygiene fixes landed on the same branch
-  - `cargo test --workspace` passed
-  - `cd crates/pt-dashboard/frontend && npm test` and `npm run build` passed
-- The next active implementation lane is issue `#53`: strengthen strategy-lab handoff into Coinbase paper runtime.
-- Tracks D-F have been split into reviewable follow-up issues:
-  - `#58` Rust-native strategy IR and adapter layer
-  - `#59` bounded AI optimizer objective and candidate sweep lane
-  - `#60` strategy AI review surfaces
-  - `#61` visual and strategy benchmark harnesses
+The adversarial roadmap queue is now actively burning down under epic `#66`. Issues `#65`, `#74`, `#75`, and `#76` were completed with fresh local validation on May 17, 2026; open issue `#77` is the active head of the remaining critical-bug lane, with the full epic-and-child map recorded in [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md).
 
 ## Audit stamp
-- last audited on: May 2, 2026
-- audit source: GitHub issue state, merged PR `#57`, operator-reported validation evidence, agent-reran PR `#62` branch validation (including Clippy), and the Coinbase strategy AI roadmap packet supplied in the current planning context
-- validation evidence state: operator-reported workstation validation plus agent-reran full ladder on the PR `#62` branch before merge
+- last audited on: May 17, 2026
+- audit source: GitHub issue state, local validation run on main commit `6fd933b`, direct `cargo test --workspace` execution, and subagent-driven development with spec + code quality review per task
+- validation evidence state: fresh May 17, 2026 validation for issues `#59`, `#60`, `#61`, and `#10`, including Python optimizer tests, `cargo test -p pt-dashboard --test api_contract`, frontend tests, benchmark artifact generation, and a passing Phase 1 evidence bundle at `data/evidence/phase1/2026-05-17/`
 - truth standard: status files may record operator validation evidence, and may record agent reruns when explicitly stated in this section
 
 ## Automation mirror
-- `docs/WORK_STATUS.json` is the machine-readable mirror of this file.
+- [`docs/development/WORK_STATUS.json`](WORK_STATUS.json) is the machine-readable mirror of this file.
 - Keep the Markdown and JSON trackers aligned whenever the active stage, blocker, queue state, validation evidence, or next work order changes.
 
 ## Current stage
-Stage: `phase1_strategy_artifact_handoff`
+Stage: `phase1_post_audit_bug_closure`
 
 Stage contract:
 - keep work sandbox and paper only
-- strengthen strategy artifacts before widening AI optimization
+- keep strategy artifacts, review surfaces, benchmark evidence, and backlog mapping versioned and local-first
 - treat the chart workstation as a presentation surface, not replay or paper evidence
 - keep AI recommendations behind artifact promotion, replay validation, paper evidence, and risk controls
 
 ## Workflow invariants
 - one active implementation lane at a time
 - one active PR per lane
-- issue `#53` is the active downstream lane after Track B
+- issues `#59`, `#60`, `#61`, and `#10` are complete and recorded in local evidence
+- issue `#77` is the active correctness lane and epic `#66` is the parent tracker for the next queue
 - strategy definitions, chart presentation, optimizer candidates, and paper runtime evidence remain separate versioned objects
 - frontend chart state must not become the source of truth for strategy math
 - no live-mode expansion without explicit approval
 
 ## Current active next step
-Continue with issue `#53`: strengthen strategy-lab handoff into Coinbase paper runtime.
+Continue with issue `#77` under epic `#66`, then work downward through the filed roadmap backlog in [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md).
 
-Required work-order scope:
-1. define or harden a strategy artifact schema carrying artifact id, source run id, product mapping, variant id, parameters, expected edge inputs, score/confidence, optional sizing hints, timeframe, provenance, promotion status, and replay acceptance status
-2. wire imported/promoted artifacts into Coinbase paper runtime traceability
-3. expose active artifact context through dashboard/API surfaces
-4. attach replay and paper evidence to exact artifact ids
-5. keep scope sandbox and paper only
+Current queue head:
+1. `#77` deprecated Coinbase passphrase header removal
+2. epic `#66` closeout once the final Phase 1 auth bug is fixed
+3. `#67` Pine parity cleanup and signal-definition hardening
 
 ## Queue summary
 - completed Track A/Phase 0 unblock: issue `#48`
 - completed Track B: issues `#54`, `#55`, `#56`, PR `#57`
-- active now: issue `#53`
-- queued after current stage: issues `#58`, `#59`, `#60`, `#61`
+- completed strategy artifact handoff: issue `#53`
+- completed Rust-native IR lane: issue `#58`
+- active now: issue `#77`
+- queued after current stage: issues `#66`-`#111` per the filed roadmap backlog
 - blocked on human decision right now: 0 items
 
 ## Consolidated feature queue
@@ -84,11 +60,14 @@ Required work-order scope:
 | 2 | Coinbase visual workstation contract | issue `#54`, PR `#57` | completed | no | closed by merged PR `#57` |
 | 3 | Chart-first Coinbase product detail surface | issue `#55`, PR `#57` | completed | no | closed with evidence comment |
 | 4 | Strategy review rail with import lineage | issue `#56`, PR `#57` | completed | no | closed with evidence comment |
-| 5 | Strategy-lab handoff into Coinbase paper runtime | issue `#53` | active_now | no | start next PR from main |
-| 6 | Rust-native strategy IR and adapter layer | issue `#58` | queued | no | begin after or alongside artifact contract once #53 schema boundaries are stable |
-| 7 | Bounded AI optimizer objective and candidate sweep lane | issue `#59` | queued | no | begin after artifact schema supports optimizer outputs |
-| 8 | Strategy AI review surfaces | issue `#60` | queued | no | begin after #59 produces candidate artifacts |
-| 9 | Visual and strategy benchmark harnesses | issue `#61` | queued | no | begin once chart and optimizer candidate lanes are measurable |
+| 5 | Strategy-lab handoff into Coinbase paper runtime | issue `#53` | completed | no | closed after artifact-lineage smoke and paper-runtime traceability evidence |
+| 6 | Rust-native strategy IR and adapter layer | issue `#58` | completed | no | closed after IR implementation, adapters, evaluator, and 17 new tests landed on `main` |
+| 7 | Bounded AI optimizer objective and candidate sweep lane | issue `#59` | completed | no | objective schema, bounded sweep metadata, and optimizer-cycle decision reasons landed |
+| 8 | Strategy AI review surfaces | issue `#60` | completed | no | `/api/v1/strategy-candidates` plus dashboard candidate review UI/tests landed |
+| 9 | Visual and strategy benchmark harnesses | issue `#61` | completed | no | baseline benchmark artifacts captured under `artifacts/benchmarks/2026-05-17/` |
+| 10 | Repeatable replay and paper evidence gate report | issue `#10` | completed | no | `data/evidence/phase1/2026-05-17/report.json` and `report.md` both show status `pass` |
+| 11 | Critical correctness and safety bug closure | epic `#66`, issue `#77` | active_now | no | finish the final memo-critical auth fix, then close the epic with the collected evidence from `#65/#74/#75/#76/#77` |
+| 12 | Full roadmap backlog | issues `#66`-`#111`, backlog doc | queued | no | follow [`ROADMAP_ISSUE_BACKLOG_2026-05-17.md`](ROADMAP_ISSUE_BACKLOG_2026-05-17.md) after `#65` |
 
 ## Validation commands
 Repo readiness and implementation safety:
@@ -117,7 +96,7 @@ cargo run -p pt-cli -- run --config config/config.toml
 ```
 
 ## Human decision gates
-No human decision is needed to start issue `#53` in sandbox/paper scope.
+No human decision is needed to begin issue `#65` or the filed backlog beneath epic `#66`.
 
 Human approval is still required before:
 - merge
@@ -137,4 +116,4 @@ Human approval is still required before:
 - Do not build a Pine clone before the typed strategy artifact and IR lanes are stable.
 
 ## Status ownership
-This file is the operator-readable work-stage tracker. Update it with `docs/WORK_STATUS.json` whenever active stage, queue state, validation evidence, issue closure, or PR state changes.
+This file is the operator-readable work-stage tracker. Update it with [`docs/development/WORK_STATUS.json`](WORK_STATUS.json) whenever active stage, queue state, validation evidence, issue closure, or PR state changes.

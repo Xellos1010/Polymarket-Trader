@@ -1,0 +1,663 @@
+//@version=6
+strategy(
+     title = "Crypto TA Pro v6 - Megalithic Research Bible",
+     shorttitle = "CTAPv6-Mega",
+     overlay = true,
+     precision = 8,
+     max_bars_back = 500,
+     max_labels_count = 500,
+     max_lines_count = 500,
+     max_boxes_count = 100,
+     pyramiding = 1,
+     initial_capital = 100,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value = 100,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.05,
+     slippage = 1,
+     margin_long = 100,
+     margin_short = 100
+)
+
+// -----------------------------------------------------------------------------
+//  Crypto TA Pro v6 - Megalithic Research Bible
+//  Branded strategy research framework for Coinbase crypto charts.
+//
+//  Built for staged video milestones:
+//  V0 shell -> V1 RSI visual -> V2 RSI strategy -> V3 close/exit ->
+//  V4 risk -> V5 spot/derivatives -> V6 regime -> V7 full confluence ->
+//  V8 candlestick/pattern visualization -> V9 out-of-sample research.
+//
+//  Notes:
+//  - Designed for standard candles. Avoid synthetic chart types for realistic tests.
+//  - Uses confirmed-bar gating by default to reduce realtime repaint risk.
+//  - Higher-timeframe MA requests use a non-repainting wrapper by default.
+//  - This is a research/backtesting tool, not financial advice.
+// -----------------------------------------------------------------------------
+
+// === INPUT GROUPS ===
+const string G_EXEC      = "01. Execution + Market Mode"
+const string G_RESEARCH  = "02. Research / OOS Testing"
+const string G_MODULES   = "03. Module Activation"
+const string G_WEIGHTS   = "04. Weighted Signal Engine"
+const string G_REGIME    = "05. Trend MA / Regime"
+const string G_RSI       = "06. RSI"
+const string G_BB        = "07. Fibonacci Bollinger Bands"
+const string G_ICHI      = "08. Ichimoku"
+const string G_CANDLE    = "09. Candlestick Patterns"
+const string G_PATTERN   = "10. Chart / Breakout Patterns"
+const string G_FILTERS   = "11. Volume + Volatility Filters"
+const string G_RISK      = "12. Risk Management"
+const string G_VIS       = "13. Visuals"
+const string G_ALERT     = "14. Alerts"
+
+// === EXECUTION INPUTS ===
+tradeMode      = input.string("Spot", "Market mode", options = ["Spot", "Derivatives"], group = G_EXEC, tooltip = "Spot forces long-only logic. Derivatives unlocks short-side research logic.")
+tradeDirection = input.string("Long only", "Trade direction", options = ["Long only", "Long + Short"], group = G_EXEC)
+startTime      = input.time(1767225600000, "Backtest start", group = G_EXEC)   // 2026-01-01 00:00 UTC
+endTime        = input.time(1798761540000, "Backtest end", group = G_EXEC)     // 2026-12-31 23:59 UTC
+confirmedOnly  = input.bool(true, "Only act after confirmed bar close", group = G_EXEC)
+entryProcess   = input.string("Market next bar", "Entry model label", options = ["Market next bar", "Close-confirmed research", "Limit retest research"], group = G_EXEC, tooltip = "Pine strategy market orders are still simulated by the broker emulator. This label is included for research discipline and dashboard context.")
+closeOutsideRange = input.bool(true, "Close positions outside selected range", group = G_EXEC)
+
+// === RESEARCH / OOS TESTING ===
+researchPreset = input.string("Custom toggles", "Indicator unlock preset", options = ["Custom toggles", "01 RSI only", "02 RSI + FibBB", "03 Add Trend/HTF", "04 Add Ichimoku", "05 Add Candles", "06 Add Chart Patterns", "07 Full weighted"], group = G_RESEARCH)
+validationSegment = input.string("Full selected range", "Trade segment", options = ["Full selected range", "In-sample only", "Out-of-sample only", "Forward/Paper only"], group = G_RESEARCH)
+inSampleStart  = input.time(1767225600000, "In-sample start", group = G_RESEARCH)
+inSampleEnd    = input.time(1782863940000, "In-sample end", group = G_RESEARCH)      // 2026-06-30 23:59 UTC
+oosStart       = input.time(1782864000000, "Out-of-sample start", group = G_RESEARCH) // 2026-07-01 00:00 UTC
+oosEnd         = input.time(1798761540000, "Out-of-sample end", group = G_RESEARCH)   // 2026-12-31 23:59 UTC
+paperStart     = input.time(1798761600000, "Forward/Paper start", group = G_RESEARCH) // 2027-01-01 00:00 UTC
+paperEnd       = input.time(1830297540000, "Forward/Paper end", group = G_RESEARCH)   // 2027-12-31 23:59 UTC
+showResearchZones = input.bool(true, "Shade research segments", group = G_RESEARCH)
+
+// === MODULE ACTIVATION ===
+enableRSI       = input.bool(true, "Enable RSI", group = G_MODULES)
+enableFibBB     = input.bool(true, "Enable Fibonacci Bollinger Bands", group = G_MODULES)
+enableTrendMA   = input.bool(true, "Enable trend MA / regime filter", group = G_MODULES)
+enableIchimoku  = input.bool(false, "Enable Ichimoku", group = G_MODULES)
+enableCandles   = input.bool(true, "Enable candlestick pattern engine", group = G_MODULES)
+enablePatterns  = input.bool(false, "Enable chart/breakout pattern engine", group = G_MODULES)
+
+// === WEIGHTED SIGNAL ENGINE ===
+entryThreshold = input.float(60.0, "Entry score threshold", minval = 1.0, maxval = 100.0, step = 1.0, group = G_WEIGHTS)
+exitThreshold  = input.float(60.0, "Signal-exit score threshold", minval = 1.0, maxval = 100.0, step = 1.0, group = G_WEIGHTS)
+requirePrimarySetup = input.bool(true, "Require at least one primary setup", group = G_WEIGHTS, tooltip = "Primary setup = RSI, FibBB, candlestick, or chart pattern setup. Filters alone cannot enter.")
+useRSIForEntry      = input.bool(true, "RSI influences entry", group = G_WEIGHTS)
+useRSIForExit       = input.bool(true, "RSI influences exit", group = G_WEIGHTS)
+rsiEntryWeight      = input.float(1.00, "RSI entry weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+rsiExitWeight       = input.float(1.00, "RSI exit weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+useFibBBForEntry    = input.bool(true, "FibBB influences entry", group = G_WEIGHTS)
+useFibBBForExit     = input.bool(true, "FibBB influences exit", group = G_WEIGHTS)
+fibBBEntryWeight    = input.float(1.00, "FibBB entry weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+fibBBExitWeight     = input.float(1.00, "FibBB exit weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+useTrendForEntry    = input.bool(true, "Trend/regime influences entry", group = G_WEIGHTS)
+useTrendForExit     = input.bool(false, "Trend/regime influences exit", group = G_WEIGHTS)
+trendEntryWeight    = input.float(1.00, "Trend entry weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+trendExitWeight     = input.float(0.50, "Trend exit weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+useIchiForEntry     = input.bool(true, "Ichimoku influences entry", group = G_WEIGHTS)
+useIchiForExit      = input.bool(true, "Ichimoku influences exit", group = G_WEIGHTS)
+ichiEntryWeight     = input.float(1.00, "Ichimoku entry weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+ichiExitWeight      = input.float(1.00, "Ichimoku exit weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+useCandlesForEntry  = input.bool(true, "Candles influence entry", group = G_WEIGHTS)
+useCandlesForExit   = input.bool(true, "Candles influence exit", group = G_WEIGHTS)
+candleEntryWeight   = input.float(1.00, "Candle entry weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+candleExitWeight    = input.float(1.00, "Candle exit weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+usePatternsForEntry = input.bool(true, "Chart patterns influence entry", group = G_WEIGHTS)
+usePatternsForExit  = input.bool(true, "Chart patterns influence exit", group = G_WEIGHTS)
+patternEntryWeight  = input.float(1.00, "Pattern entry weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+patternExitWeight   = input.float(1.00, "Pattern exit weight", minval = 0.0, step = 0.25, group = G_WEIGHTS)
+
+// === REGIME INPUTS ===
+maType   = input.string("EMA", "Trend MA type", options = ["EMA", "SMA", "WMA", "HMA", "DEMA", "TEMA", "VWMA", "RMA", "ZLEMA"], group = G_REGIME)
+trendLen = input.int(200, "Trend MA length", minval = 20, maxval = 1000, group = G_REGIME)
+trendFilter = input.string("Chart + HTF", "Regime filter", options = ["Off", "Chart MA", "Chart + HTF"], group = G_REGIME)
+htfTf = input.timeframe("240", "Higher timeframe", group = G_REGIME)
+nonRepaintHTF = input.bool(true, "Use confirmed HTF values", group = G_REGIME)
+
+// === RSI INPUTS ===
+rsiSrc = input.source(close, "RSI source", group = G_RSI)
+rsiLen = input.int(10, "RSI length", minval = 2, maxval = 100, group = G_RSI)
+rsiOS = input.float(19.0, "Oversold", minval = 1, maxval = 50, step = 0.5, group = G_RSI)
+rsiOB = input.float(80.0, "Overbought", minval = 50, maxval = 99, step = 0.5, group = G_RSI)
+rsiSetupLookback = input.int(5, "RSI setup lookback bars", minval = 1, maxval = 50, group = G_RSI)
+
+// === FIBONACCI BB INPUTS ===
+bbLen = input.int(200, "BB length", minval = 10, maxval = 1000, group = G_BB)
+bbSrc = input.source(hlc3, "BB source", group = G_BB)
+bbMult = input.float(3.0, "Deviation multiplier", minval = 0.1, maxval = 50, step = 0.1, group = G_BB)
+bbBasisType = input.string("VWMA", "BB basis type", options = ["EMA", "SMA", "WMA", "HMA", "DEMA", "TEMA", "VWMA", "RMA", "ZLEMA"], group = G_BB)
+bbSetupLookback = input.int(5, "FibBB setup lookback bars", minval = 1, maxval = 50, group = G_BB)
+
+// === ICHIMOKU INPUTS ===
+conversionPeriods = input.int(9, "Conversion line length", minval = 1, group = G_ICHI)
+basePeriods = input.int(26, "Base line length", minval = 1, group = G_ICHI)
+spanBPeriods = input.int(52, "Leading Span B length", minval = 1, group = G_ICHI)
+displacement = input.int(26, "Displacement", minval = 1, group = G_ICHI)
+
+// === CANDLESTICK PATTERN INPUTS ===
+showCandlePatterns = input.bool(true, "Show candlestick pattern labels", group = G_CANDLE)
+candleSetupLookback = input.int(5, "Candle setup lookback bars", minval = 1, maxval = 50, group = G_CANDLE)
+use382Candle = input.bool(true, "Detect 38.2 pressure candles", group = G_CANDLE)
+useEngulfing = input.bool(true, "Detect engulfing candles", group = G_CANDLE)
+useCloseBreak = input.bool(true, "Detect close above/below candles", group = G_CANDLE)
+useWickReject = input.bool(true, "Detect wick rejection candles", group = G_CANDLE)
+wickToBodyMin = input.float(1.5, "Wick rejection min wick:body", minval = 0.1, step = 0.1, group = G_CANDLE)
+
+// === CHART / BREAKOUT PATTERN INPUTS ===
+showChartPatterns = input.bool(true, "Show chart/breakout pattern labels", group = G_PATTERN)
+pivotLeft = input.int(3, "Pivot left bars", minval = 1, maxval = 20, group = G_PATTERN)
+pivotRight = input.int(3, "Pivot right bars", minval = 1, maxval = 20, group = G_PATTERN)
+doubleTolerancePct = input.float(1.0, "Double top/bottom tolerance %", minval = 0.05, maxval = 10.0, step = 0.05, group = G_PATTERN)
+patternLookback = input.int(40, "Pattern lookback bars", minval = 10, maxval = 200, group = G_PATTERN)
+flagLen = input.int(12, "Flag consolidation length", minval = 5, maxval = 50, group = G_PATTERN)
+flagMaxRangePct = input.float(8.0, "Flag max consolidation range %", minval = 0.1, maxval = 50.0, step = 0.1, group = G_PATTERN)
+
+// === VOLUME + VOLATILITY FILTERS ===
+useVolumeFilter = input.bool(true, "Require volume expansion", group = G_FILTERS)
+volumeLen = input.int(20, "Volume SMA length", minval = 1, group = G_FILTERS)
+volumeMult = input.float(0.80, "Min volume x SMA", minval = 0.0, step = 0.05, group = G_FILTERS)
+useAtrFilter = input.bool(true, "Filter abnormal volatility", group = G_FILTERS)
+minAtrPct = input.float(0.20, "Min ATR %", minval = 0.0, step = 0.05, group = G_FILTERS)
+maxAtrPct = input.float(12.0, "Max ATR %", minval = 0.1, step = 0.25, group = G_FILTERS)
+
+// === RISK INPUTS ===
+riskModel = input.string("Tighter of % / ATR", "Stop model", options = ["Percent", "ATR", "Tighter of % / ATR", "Wider of % / ATR"], group = G_RISK)
+freezeRiskAtEntry = input.bool(true, "Freeze ATR risk at entry", group = G_RISK)
+stopPct = input.float(3.0, "Stop loss %", minval = 0.1, step = 0.1, group = G_RISK)
+atrLen = input.int(14, "ATR length", minval = 1, group = G_RISK)
+atrStopMult = input.float(2.0, "ATR stop multiplier", minval = 0.1, step = 0.1, group = G_RISK)
+useTakeProfit = input.bool(true, "Use take profit", group = G_RISK)
+rewardRisk = input.float(2.0, "Reward:risk target", minval = 0.1, step = 0.1, group = G_RISK)
+useBreakeven = input.bool(true, "Move stop to breakeven", group = G_RISK)
+breakevenAtR = input.float(1.0, "Breakeven trigger in R", minval = 0.1, step = 0.1, group = G_RISK)
+breakevenOffsetPct = input.float(0.05, "Breakeven offset %", minval = 0.0, step = 0.01, group = G_RISK)
+useMATrailingStop = input.bool(false, "Use trend MA as trailing stop", group = G_RISK)
+exitOnOppositeScore = input.bool(true, "Exit on opposite weighted score", group = G_RISK)
+exitOnDateEnd = input.bool(true, "Close at selected date end", group = G_RISK)
+
+// === VISUAL INPUTS ===
+showMA = input.bool(true, "Show trend MA when active", group = G_VIS)
+showHTFMA = input.bool(false, "Show HTF trend MA when active", group = G_VIS)
+showFibBB = input.bool(true, "Show Fibonacci BB when active", group = G_VIS)
+showFibFill = input.bool(true, "Fill Fibonacci BB envelope when active", group = G_VIS)
+showIchimoku = input.bool(true, "Show Ichimoku when active", group = G_VIS)
+showSignals = input.bool(true, "Show entry/exit labels", group = G_VIS)
+showRiskLines = input.bool(true, "Show active stop/target", group = G_VIS)
+showRegimeBg = input.bool(true, "Show regime background when trend MA is active", group = G_VIS)
+colorBars = input.bool(false, "Color bars by dominant score", group = G_VIS)
+showDashboard = input.bool(true, "Show dashboard", group = G_VIS)
+showScorePlots = input.bool(false, "Show scores in Data Window", group = G_VIS)
+
+// === ALERT INPUTS ===
+botId = input.string("230050", "Bot ID", group = G_ALERT)
+includeScoresInAlerts = input.bool(true, "Include scores in alert JSON", group = G_ALERT)
+
+// === FUNCTIONS ===
+f_dema(series float src, simple int length) =>
+    float ema1 = ta.ema(src, length)
+    float ema2 = ta.ema(ema1, length)
+    2.0 * ema1 - ema2
+
+f_tema(series float src, simple int length) =>
+    float ema1 = ta.ema(src, length)
+    float ema2 = ta.ema(ema1, length)
+    float ema3 = ta.ema(ema2, length)
+    3.0 * (ema1 - ema2) + ema3
+
+f_zlema(series float src, simple int length) =>
+    int lag = math.max(1, int(math.floor((length - 1) / 2)))
+    ta.ema(src + (src - nz(src[lag], src)), length)
+
+f_ma(series float src, simple int length, simple string kind) =>
+    switch kind
+        "EMA"   => ta.ema(src, length)
+        "SMA"   => ta.sma(src, length)
+        "WMA"   => ta.wma(src, length)
+        "HMA"   => ta.hma(src, length)
+        "DEMA"  => f_dema(src, length)
+        "TEMA"  => f_tema(src, length)
+        "VWMA"  => ta.vwma(src, length)
+        "RMA"   => ta.rma(src, length)
+        "ZLEMA" => f_zlema(src, length)
+        => ta.ema(src, length)
+
+f_donchian(simple int length) =>
+    math.avg(ta.lowest(low, length), ta.highest(high, length))
+
+f_recent(bool condition, simple int lookback) =>
+    int bars = ta.barssince(condition)
+    not na(bars) and bars <= lookback
+
+f_in_window(int left, int right) =>
+    time >= left and time <= right
+
+f_json(string action, float longScore, float shortScore) =>
+    string scorePart = includeScoresInAlerts ? ',"longScore":' + str.tostring(longScore, "#.##") + ',"shortScore":' + str.tostring(shortScore, "#.##") : ""
+    '{"botId":"' + botId + '","action":"' + action + '","symbol":"' + syminfo.ticker + '","price":' + str.tostring(close, format.mintick) + scorePart + '}'
+
+f_weighted_pct(float raw, float weight) =>
+    weight > 0.0 ? math.max(0.0, math.min(100.0, 100.0 * raw / weight)) : 0.0
+
+// === RESEARCH PRESET MODULE GATES ===
+customPreset = researchPreset == "Custom toggles"
+activeRSI = enableRSI and (customPreset or researchPreset == "01 RSI only" or researchPreset == "02 RSI + FibBB" or researchPreset == "03 Add Trend/HTF" or researchPreset == "04 Add Ichimoku" or researchPreset == "05 Add Candles" or researchPreset == "06 Add Chart Patterns" or researchPreset == "07 Full weighted")
+activeFibBB = enableFibBB and (customPreset or researchPreset == "02 RSI + FibBB" or researchPreset == "03 Add Trend/HTF" or researchPreset == "04 Add Ichimoku" or researchPreset == "05 Add Candles" or researchPreset == "06 Add Chart Patterns" or researchPreset == "07 Full weighted")
+activeTrendMA = enableTrendMA and (customPreset or researchPreset == "03 Add Trend/HTF" or researchPreset == "04 Add Ichimoku" or researchPreset == "05 Add Candles" or researchPreset == "06 Add Chart Patterns" or researchPreset == "07 Full weighted")
+activeIchimoku = enableIchimoku and (customPreset or researchPreset == "04 Add Ichimoku" or researchPreset == "05 Add Candles" or researchPreset == "06 Add Chart Patterns" or researchPreset == "07 Full weighted")
+activeCandles = enableCandles and (customPreset or researchPreset == "05 Add Candles" or researchPreset == "06 Add Chart Patterns" or researchPreset == "07 Full weighted")
+activePatterns = enablePatterns and (customPreset or researchPreset == "06 Add Chart Patterns" or researchPreset == "07 Full weighted")
+
+// === EXECUTION WINDOWS ===
+inBacktestDateRange = f_in_window(startTime, endTime)
+inInSample = f_in_window(inSampleStart, inSampleEnd)
+inOOS = f_in_window(oosStart, oosEnd)
+inPaper = f_in_window(paperStart, paperEnd)
+segmentOK = validationSegment == "Full selected range" ? inBacktestDateRange : validationSegment == "In-sample only" ? inInSample : validationSegment == "Out-of-sample only" ? inOOS : inPaper
+signalGate = not confirmedOnly or barstate.isconfirmed
+flat = strategy.position_size == 0
+allowShorts = tradeMode == "Derivatives" and tradeDirection == "Long + Short"
+
+// === CORE CALCULATIONS ===
+trendMA = f_ma(close, trendLen, maType)
+htfMARepainting = request.security(syminfo.tickerid, htfTf, f_ma(close, trendLen, maType), barmerge.gaps_off, barmerge.lookahead_off)
+htfMANonRepaint = request.security(syminfo.tickerid, htfTf, f_ma(close, trendLen, maType)[1], barmerge.gaps_off, barmerge.lookahead_on)
+htfMA = nonRepaintHTF ? htfMANonRepaint : htfMARepainting
+
+trendBull = close > trendMA and trendMA >= trendMA[1]
+trendBear = close < trendMA and trendMA <= trendMA[1]
+htfBull = close > htfMA and htfMA >= htfMA[1]
+htfBear = close < htfMA and htfMA <= htfMA[1]
+longRegimeOK = not activeTrendMA or trendFilter == "Off" or (trendBull and (trendFilter != "Chart + HTF" or htfBull))
+shortRegimeOK = not activeTrendMA or trendFilter == "Off" or (trendBear and (trendFilter != "Chart + HTF" or htfBear))
+
+rsi = ta.rsi(rsiSrc, rsiLen)
+rsiMid = math.avg(rsiOS, rsiOB)
+
+basis = f_ma(bbSrc, bbLen, bbBasisType)
+dev = bbMult * ta.stdev(bbSrc, bbLen)
+upper1 = basis + 0.236 * dev
+upper2 = basis + 0.382 * dev
+upper3 = basis + 0.500 * dev
+upper4 = basis + 0.618 * dev
+upper5 = basis + 0.764 * dev
+upper6 = basis + 1.000 * dev
+lower1 = basis - 0.236 * dev
+lower2 = basis - 0.382 * dev
+lower3 = basis - 0.500 * dev
+lower4 = basis - 0.618 * dev
+lower5 = basis - 0.764 * dev
+lower6 = basis - 1.000 * dev
+
+atr = ta.atr(atrLen)
+atrPct = close == 0.0 ? na : atr / close * 100.0
+volumeSma = ta.sma(volume, volumeLen)
+volumeOK = not useVolumeFilter or volume >= volumeSma * volumeMult
+volatilityOK = not useAtrFilter or (atrPct >= minAtrPct and atrPct <= maxAtrPct)
+filtersOK = volumeOK and volatilityOK
+
+// === ICHIMOKU ===
+conversionLine = f_donchian(conversionPeriods)
+baseLine = f_donchian(basePeriods)
+leadLine1 = math.avg(conversionLine, baseLine)
+leadLine2 = f_donchian(spanBPeriods)
+ichiBull = close > math.max(leadLine1, leadLine2) and conversionLine > baseLine
+ichiBear = close < math.min(leadLine1, leadLine2) and conversionLine < baseLine
+
+// === RSI SETUPS / CONFIRMATIONS ===
+recentLongRSI = activeRSI and f_recent(rsi <= rsiOS, rsiSetupLookback)
+recentShortRSI = activeRSI and f_recent(rsi >= rsiOB, rsiSetupLookback)
+longRSIReclaim = activeRSI and ta.crossover(rsi, rsiOS)
+shortRSIReclaim = activeRSI and ta.crossunder(rsi, rsiOB)
+rsiLongVote = longRSIReclaim ? 1.0 : recentLongRSI and rsi < rsiMid ? 0.50 : 0.0
+rsiShortVote = shortRSIReclaim ? 1.0 : recentShortRSI and rsi > rsiMid ? 0.50 : 0.0
+rsiExitLongVote = activeRSI and rsi >= rsiOB ? 1.0 : activeRSI and rsi > rsiMid ? 0.35 : 0.0
+rsiExitShortVote = activeRSI and rsi <= rsiOS ? 1.0 : activeRSI and rsi < rsiMid ? 0.35 : 0.0
+
+// === FIB BB SETUPS / CONFIRMATIONS ===
+recentLongBB = activeFibBB and f_recent(low <= lower6, bbSetupLookback)
+recentShortBB = activeFibBB and f_recent(high >= upper6, bbSetupLookback)
+longBBReclaim = activeFibBB and ta.crossover(close, lower5)
+shortBBReclaim = activeFibBB and ta.crossunder(close, upper5)
+closeCrossUnderBasis = activeFibBB and ta.crossunder(close, basis)
+closeCrossOverBasis = activeFibBB and ta.crossover(close, basis)
+fibBBLongVote = longBBReclaim ? 1.0 : recentLongBB and close > lower6 ? 0.50 : 0.0
+fibBBShortVote = shortBBReclaim ? 1.0 : recentShortBB and close < upper6 ? 0.50 : 0.0
+fibBBExitLongVote = closeCrossUnderBasis ? 1.0 : activeFibBB and high >= upper6 ? 0.60 : 0.0
+fibBBExitShortVote = closeCrossOverBasis ? 1.0 : activeFibBB and low <= lower6 ? 0.60 : 0.0
+
+// === TREND / ICHIMOKU VOTES ===
+trendLongVote = activeTrendMA ? longRegimeOK ? 1.0 : 0.0 : 0.0
+trendShortVote = activeTrendMA ? shortRegimeOK ? 1.0 : 0.0 : 0.0
+trendExitLongVote = activeTrendMA and trendBear ? 1.0 : 0.0
+trendExitShortVote = activeTrendMA and trendBull ? 1.0 : 0.0
+ichiLongVote = activeIchimoku ? ichiBull ? 1.0 : 0.0 : 0.0
+ichiShortVote = activeIchimoku ? ichiBear ? 1.0 : 0.0 : 0.0
+ichiExitLongVote = activeIchimoku and ichiBear ? 1.0 : 0.0
+ichiExitShortVote = activeIchimoku and ichiBull ? 1.0 : 0.0
+
+// === CANDLESTICK PATTERN ENGINE ===
+bodyHigh = math.max(open, close)
+bodyLow = math.min(open, close)
+bodySize = math.abs(close - open)
+prevBodySize = math.abs(close[1] - open[1])
+candleRange = high - low
+safeBody = math.max(bodySize, syminfo.mintick)
+upperWick = high - bodyHigh
+lowerWick = bodyLow - low
+bull382 = activeCandles and use382Candle and candleRange > syminfo.mintick and bodyLow >= low + candleRange * 0.382 and close > open
+bear382 = activeCandles and use382Candle and candleRange > syminfo.mintick and bodyHigh <= high - candleRange * 0.382 and close < open
+bullEngulf = activeCandles and useEngulfing and close > open and close[1] < open[1] and bodySize > prevBodySize and bodyHigh >= math.max(open[1], close[1])
+bearEngulf = activeCandles and useEngulfing and close < open and close[1] > open[1] and bodySize > prevBodySize and bodyLow <= math.min(open[1], close[1])
+bullCloseBreak = activeCandles and useCloseBreak and close > high[1]
+bearCloseBreak = activeCandles and useCloseBreak and close < low[1]
+bullWickReject = activeCandles and useWickReject and lowerWick / safeBody >= wickToBodyMin and close > bodyLow
+bearWickReject = activeCandles and useWickReject and upperWick / safeBody >= wickToBodyMin and close < bodyHigh
+bullCandleEvent = bull382 or bullEngulf or bullCloseBreak or bullWickReject
+bearCandleEvent = bear382 or bearEngulf or bearCloseBreak or bearWickReject
+recentBullCandle = activeCandles and f_recent(bullCandleEvent, candleSetupLookback)
+recentBearCandle = activeCandles and f_recent(bearCandleEvent, candleSetupLookback)
+candleLongVote = bullCandleEvent ? 1.0 : recentBullCandle ? 0.50 : 0.0
+candleShortVote = bearCandleEvent ? 1.0 : recentBearCandle ? 0.50 : 0.0
+candleExitLongVote = bearCandleEvent ? 1.0 : recentBearCandle ? 0.40 : 0.0
+candleExitShortVote = bullCandleEvent ? 1.0 : recentBullCandle ? 0.40 : 0.0
+
+// === CHART / BREAKOUT PATTERN ENGINE ===
+pivotLow = ta.pivotlow(low, pivotLeft, pivotRight)
+pivotHigh = ta.pivothigh(high, pivotLeft, pivotRight)
+var float prevPivotLow = na
+var float lastPivotLow = na
+var float prevPivotHigh = na
+var float lastPivotHigh = na
+var int prevPivotLowBar = na
+var int lastPivotLowBar = na
+var int prevPivotHighBar = na
+var int lastPivotHighBar = na
+if not na(pivotLow)
+    prevPivotLow := lastPivotLow
+    prevPivotLowBar := lastPivotLowBar
+    lastPivotLow := pivotLow
+    lastPivotLowBar := bar_index - pivotRight
+if not na(pivotHigh)
+    prevPivotHigh := lastPivotHigh
+    prevPivotHighBar := lastPivotHighBar
+    lastPivotHigh := pivotHigh
+    lastPivotHighBar := bar_index - pivotRight
+
+haveTwoLows = not na(prevPivotLow) and not na(lastPivotLow)
+haveTwoHighs = not na(prevPivotHigh) and not na(lastPivotHigh)
+nearDoubleLow = haveTwoLows and math.abs(lastPivotLow - prevPivotLow) / close * 100.0 <= doubleTolerancePct
+nearDoubleHigh = haveTwoHighs and math.abs(lastPivotHigh - prevPivotHigh) / close * 100.0 <= doubleTolerancePct
+necklineLong = ta.highest(high, patternLookback)
+necklineShort = ta.lowest(low, patternLookback)
+doubleBottomBreak = activePatterns and nearDoubleLow and ta.crossover(close, necklineLong[1])
+doubleTopBreak = activePatterns and nearDoubleHigh and ta.crossunder(close, necklineShort[1])
+flagHigh = ta.highest(high[1], flagLen)
+flagLow = ta.lowest(low[1], flagLen)
+flagRangePct = close == 0.0 ? na : (flagHigh - flagLow) / close * 100.0
+bullFlagBreak = activePatterns and flagRangePct <= flagMaxRangePct and close > flagHigh and close > trendMA
+bearFlagBreak = activePatterns and flagRangePct <= flagMaxRangePct and close < flagLow and close < trendMA
+risingSupport = activePatterns and haveTwoLows and lastPivotLow > prevPivotLow
+fallingResistance = activePatterns and haveTwoHighs and lastPivotHigh < prevPivotHigh
+ascendingBreak = activePatterns and risingSupport and close > ta.highest(high[1], patternLookback)
+descendingBreak = activePatterns and fallingResistance and close < ta.lowest(low[1], patternLookback)
+bullChartEvent = doubleBottomBreak or bullFlagBreak or ascendingBreak
+bearChartEvent = doubleTopBreak or bearFlagBreak or descendingBreak
+recentBullChart = activePatterns and f_recent(bullChartEvent, candleSetupLookback)
+recentBearChart = activePatterns and f_recent(bearChartEvent, candleSetupLookback)
+patternLongVote = bullChartEvent ? 1.0 : recentBullChart ? 0.50 : 0.0
+patternShortVote = bearChartEvent ? 1.0 : recentBearChart ? 0.50 : 0.0
+patternExitLongVote = bearChartEvent ? 1.0 : recentBearChart ? 0.40 : 0.0
+patternExitShortVote = bullChartEvent ? 1.0 : recentBullChart ? 0.40 : 0.0
+
+// === WEIGHTED SCORE AGGREGATION ===
+float longRaw = 0.0
+float shortRaw = 0.0
+float longExitRaw = 0.0
+float shortExitRaw = 0.0
+float entryWeightTotal = 0.0
+float exitWeightTotal = 0.0
+
+if activeRSI and useRSIForEntry and rsiEntryWeight > 0
+    entryWeightTotal += rsiEntryWeight
+    longRaw += rsiEntryWeight * rsiLongVote
+    shortRaw += rsiEntryWeight * rsiShortVote
+if activeFibBB and useFibBBForEntry and fibBBEntryWeight > 0
+    entryWeightTotal += fibBBEntryWeight
+    longRaw += fibBBEntryWeight * fibBBLongVote
+    shortRaw += fibBBEntryWeight * fibBBShortVote
+if activeTrendMA and useTrendForEntry and trendEntryWeight > 0
+    entryWeightTotal += trendEntryWeight
+    longRaw += trendEntryWeight * trendLongVote
+    shortRaw += trendEntryWeight * trendShortVote
+if activeIchimoku and useIchiForEntry and ichiEntryWeight > 0
+    entryWeightTotal += ichiEntryWeight
+    longRaw += ichiEntryWeight * ichiLongVote
+    shortRaw += ichiEntryWeight * ichiShortVote
+if activeCandles and useCandlesForEntry and candleEntryWeight > 0
+    entryWeightTotal += candleEntryWeight
+    longRaw += candleEntryWeight * candleLongVote
+    shortRaw += candleEntryWeight * candleShortVote
+if activePatterns and usePatternsForEntry and patternEntryWeight > 0
+    entryWeightTotal += patternEntryWeight
+    longRaw += patternEntryWeight * patternLongVote
+    shortRaw += patternEntryWeight * patternShortVote
+
+if activeRSI and useRSIForExit and rsiExitWeight > 0
+    exitWeightTotal += rsiExitWeight
+    longExitRaw += rsiExitWeight * rsiExitLongVote
+    shortExitRaw += rsiExitWeight * rsiExitShortVote
+if activeFibBB and useFibBBForExit and fibBBExitWeight > 0
+    exitWeightTotal += fibBBExitWeight
+    longExitRaw += fibBBExitWeight * fibBBExitLongVote
+    shortExitRaw += fibBBExitWeight * fibBBExitShortVote
+if activeTrendMA and useTrendForExit and trendExitWeight > 0
+    exitWeightTotal += trendExitWeight
+    longExitRaw += trendExitWeight * trendExitLongVote
+    shortExitRaw += trendExitWeight * trendExitShortVote
+if activeIchimoku and useIchiForExit and ichiExitWeight > 0
+    exitWeightTotal += ichiExitWeight
+    longExitRaw += ichiExitWeight * ichiExitLongVote
+    shortExitRaw += ichiExitWeight * ichiExitShortVote
+if activeCandles and useCandlesForExit and candleExitWeight > 0
+    exitWeightTotal += candleExitWeight
+    longExitRaw += candleExitWeight * candleExitLongVote
+    shortExitRaw += candleExitWeight * candleExitShortVote
+if activePatterns and usePatternsForExit and patternExitWeight > 0
+    exitWeightTotal += patternExitWeight
+    longExitRaw += patternExitWeight * patternExitLongVote
+    shortExitRaw += patternExitWeight * patternExitShortVote
+
+longScore = f_weighted_pct(longRaw, entryWeightTotal)
+shortScore = f_weighted_pct(shortRaw, entryWeightTotal)
+longExitScore = f_weighted_pct(longExitRaw, exitWeightTotal)
+shortExitScore = f_weighted_pct(shortExitRaw, exitWeightTotal)
+primaryLongSetup = recentLongRSI or recentLongBB or recentBullCandle or recentBullChart or longRSIReclaim or longBBReclaim or bullCandleEvent or bullChartEvent
+primaryShortSetup = recentShortRSI or recentShortBB or recentBearCandle or recentBearChart or shortRSIReclaim or shortBBReclaim or bearCandleEvent or bearChartEvent
+primaryLongOK = not requirePrimarySetup or primaryLongSetup
+primaryShortOK = not requirePrimarySetup or primaryShortSetup
+
+// === SIGNALS ===
+longSignal = segmentOK and signalGate and flat and filtersOK and longRegimeOK and longScore >= entryThreshold and primaryLongOK
+shortSignal = segmentOK and signalGate and flat and allowShorts and filtersOK and shortRegimeOK and shortScore >= entryThreshold and primaryShortOK
+longScoreExit = exitOnOppositeScore and strategy.position_size > 0 and longExitScore >= exitThreshold
+shortScoreExit = exitOnOppositeScore and strategy.position_size < 0 and shortExitScore >= exitThreshold
+
+// === ALERT STRINGS ===
+buyLongMsg = f_json("BUY", longScore, shortScore)
+sellLongMsg = f_json("SELL", longScore, shortScore)
+sellShortMsg = f_json("SELL_SHORT", longScore, shortScore)
+buyCoverMsg = f_json("BUY_TO_COVER", longScore, shortScore)
+
+// === ORDERS ===
+if longSignal
+    strategy.entry("L", strategy.long, alert_message = buyLongMsg, comment = "Long: weighted confluence")
+
+if shortSignal
+    strategy.entry("S", strategy.short, alert_message = sellShortMsg, comment = "Short: weighted confluence")
+
+// === RISK ENGINE ===
+var float entryAtr = na
+newLong = strategy.position_size > 0 and strategy.position_size[1] <= 0
+newShort = strategy.position_size < 0 and strategy.position_size[1] >= 0
+flatNow = strategy.position_size == 0
+if newLong or newShort
+    entryAtr := atr
+if flatNow
+    entryAtr := na
+riskAtr = freezeRiskAtEntry ? nz(entryAtr, atr) : atr
+avg = strategy.position_avg_price
+
+longPctStop = avg * (1.0 - stopPct / 100.0)
+longAtrStop = avg - riskAtr * atrStopMult
+longStopBase = switch riskModel
+    "Percent"          => longPctStop
+    "ATR"              => longAtrStop
+    "Wider of % / ATR" => math.min(longPctStop, longAtrStop)
+    => math.max(longPctStop, longAtrStop)
+longMATrail = useMATrailingStop and activeTrendMA ? trendMA : na
+longStopBase2 = useMATrailingStop and not na(longMATrail) ? math.max(longStopBase, longMATrail) : longStopBase
+longRisk = avg - longStopBase2
+longTarget = avg + longRisk * rewardRisk
+longBEActive = useBreakeven and strategy.position_size > 0 and longRisk > 0 and high >= avg + longRisk * breakevenAtR
+longStop = longBEActive ? math.max(longStopBase2, avg * (1.0 + breakevenOffsetPct / 100.0)) : longStopBase2
+
+shortPctStop = avg * (1.0 + stopPct / 100.0)
+shortAtrStop = avg + riskAtr * atrStopMult
+shortStopBase = switch riskModel
+    "Percent"          => shortPctStop
+    "ATR"              => shortAtrStop
+    "Wider of % / ATR" => math.max(shortPctStop, shortAtrStop)
+    => math.min(shortPctStop, shortAtrStop)
+shortMATrail = useMATrailingStop and activeTrendMA ? trendMA : na
+shortStopBase2 = useMATrailingStop and not na(shortMATrail) ? math.min(shortStopBase, shortMATrail) : shortStopBase
+shortRisk = shortStopBase2 - avg
+shortTarget = avg - shortRisk * rewardRisk
+shortBEActive = useBreakeven and strategy.position_size < 0 and shortRisk > 0 and low <= avg - shortRisk * breakevenAtR
+shortStop = shortBEActive ? math.min(shortStopBase2, avg * (1.0 - breakevenOffsetPct / 100.0)) : shortStopBase2
+
+if strategy.position_size > 0 and longRisk > 0
+    strategy.exit("XL Risk", from_entry = "L", stop = longStop, limit = useTakeProfit ? longTarget : na, alert_message = sellLongMsg, comment_profit = "Long TP", comment_loss = "Long SL")
+
+if strategy.position_size < 0 and shortRisk > 0
+    strategy.exit("XS Risk", from_entry = "S", stop = shortStop, limit = useTakeProfit ? shortTarget : na, alert_message = buyCoverMsg, comment_profit = "Short TP", comment_loss = "Short SL")
+
+if longScoreExit
+    strategy.close("L", alert_message = sellLongMsg, comment = "Long weighted exit")
+
+if shortScoreExit
+    strategy.close("S", alert_message = buyCoverMsg, comment = "Short weighted exit")
+
+if closeOutsideRange and exitOnDateEnd and not segmentOK and strategy.position_size != 0
+    strategy.close_all(alert_message = strategy.position_size > 0 ? sellLongMsg : buyCoverMsg, comment = "Outside active research segment")
+
+// === PLOTS AND VISUALS ===
+regimeColor = trendBull ? color.new(color.lime, 0) : trendBear ? color.new(color.red, 0) : color.new(color.gray, 0)
+scoreColor = longScore > shortScore ? color.new(color.lime, 0) : shortScore > longScore ? color.new(color.red, 0) : color.new(color.gray, 0)
+researchBg = validationSegment == "In-sample only" and inInSample ? color.new(color.blue, 94) : validationSegment == "Out-of-sample only" and inOOS ? color.new(color.purple, 94) : validationSegment == "Forward/Paper only" and inPaper ? color.new(color.orange, 94) : na
+bgcolor(showResearchZones ? researchBg : na, title = "Research segment background")
+bgcolor(activeTrendMA and showRegimeBg ? trendBull ? color.new(color.green, 92) : trendBear ? color.new(color.red, 94) : na : na, title = "Regime background")
+barcolor(colorBars ? scoreColor : na)
+
+plot(activeTrendMA and showMA ? trendMA : na, "Trend MA", color = regimeColor, linewidth = 2)
+plot(activeTrendMA and showHTFMA ? htfMA : na, "HTF Trend MA", color = color.new(color.orange, 0), linewidth = 2)
+plot(activeRSI ? rsi : na, "RSI data-window only", display = display.data_window)
+plot(showScorePlots ? longScore : na, "Long score", display = display.data_window)
+plot(showScorePlots ? shortScore : na, "Short score", display = display.data_window)
+plot(showScorePlots ? longExitScore : na, "Long exit score", display = display.data_window)
+plot(showScorePlots ? shortExitScore : na, "Short exit score", display = display.data_window)
+
+bbBasisPlot = plot(activeFibBB and showFibBB ? basis : na, "Fib BB Basis", color = color.new(color.fuchsia, 0), linewidth = 2)
+u1 = plot(activeFibBB and showFibBB ? upper1 : na, "Fib BB +0.236", color = color.new(color.white, 55))
+u2 = plot(activeFibBB and showFibBB ? upper2 : na, "Fib BB +0.382", color = color.new(color.white, 50))
+u3 = plot(activeFibBB and showFibBB ? upper3 : na, "Fib BB +0.500", color = color.new(color.white, 45))
+u4 = plot(activeFibBB and showFibBB ? upper4 : na, "Fib BB +0.618", color = color.new(color.white, 40))
+u5 = plot(activeFibBB and showFibBB ? upper5 : na, "Fib BB +0.764", color = color.new(color.white, 35))
+u6 = plot(activeFibBB and showFibBB ? upper6 : na, "Fib BB +1.000", color = color.new(color.red, 0), linewidth = 2)
+l1 = plot(activeFibBB and showFibBB ? lower1 : na, "Fib BB -0.236", color = color.new(color.white, 55))
+l2 = plot(activeFibBB and showFibBB ? lower2 : na, "Fib BB -0.382", color = color.new(color.white, 50))
+l3 = plot(activeFibBB and showFibBB ? lower3 : na, "Fib BB -0.500", color = color.new(color.white, 45))
+l4 = plot(activeFibBB and showFibBB ? lower4 : na, "Fib BB -0.618", color = color.new(color.white, 40))
+l5 = plot(activeFibBB and showFibBB ? lower5 : na, "Fib BB -0.764", color = color.new(color.white, 35))
+l6 = plot(activeFibBB and showFibBB ? lower6 : na, "Fib BB -1.000", color = color.new(color.green, 0), linewidth = 2)
+fill(u6, l6, color = activeFibBB and showFibBB and showFibFill ? color.new(color.gray, 96) : na, title = "Fib BB envelope")
+
+plot(showRiskLines and strategy.position_size > 0 ? longStop : na, "Long stop", color = color.new(color.red, 0), linewidth = 2, style = plot.style_linebr)
+plot(showRiskLines and strategy.position_size > 0 and useTakeProfit ? longTarget : na, "Long target", color = color.new(color.green, 0), linewidth = 2, style = plot.style_linebr)
+plot(showRiskLines and strategy.position_size < 0 ? shortStop : na, "Short stop", color = color.new(color.red, 0), linewidth = 2, style = plot.style_linebr)
+plot(showRiskLines and strategy.position_size < 0 and useTakeProfit ? shortTarget : na, "Short target", color = color.new(color.green, 0), linewidth = 2, style = plot.style_linebr)
+
+plot(activeIchimoku and showIchimoku ? conversionLine : na, "Ichimoku Conversion", color = color.new(color.red, 0))
+plot(activeIchimoku and showIchimoku ? baseLine : na, "Ichimoku Base", color = color.new(color.blue, 0))
+plot(activeIchimoku and showIchimoku ? close : na, "Ichimoku Lagging Span", color = color.new(color.orange, 0), offset = -displacement + 1)
+ichiA = plot(activeIchimoku and showIchimoku ? leadLine1 : na, "Ichimoku Leading Span A", color = color.new(color.purple, 0), offset = displacement - 1)
+ichiB = plot(activeIchimoku and showIchimoku ? leadLine2 : na, "Ichimoku Leading Span B", color = color.new(color.lime, 0), offset = displacement - 1)
+fill(ichiA, ichiB, color = activeIchimoku and showIchimoku ? leadLine1 > leadLine2 ? color.new(color.green, 88) : color.new(color.red, 88) : na, title = "Ichimoku Cloud")
+
+plotshape(showSignals and longSignal, title = "Long entry", location = location.belowbar, style = shape.labelup, text = "LONG", color = color.new(color.green, 0), textcolor = color.white, size = size.tiny)
+plotshape(showSignals and shortSignal, title = "Short entry", location = location.abovebar, style = shape.labeldown, text = "SHORT", color = color.new(color.red, 0), textcolor = color.white, size = size.tiny)
+plotshape(showSignals and longScoreExit, title = "Long signal exit", location = location.abovebar, style = shape.labeldown, text = "XL", color = color.new(color.orange, 0), textcolor = color.white, size = size.tiny)
+plotshape(showSignals and shortScoreExit, title = "Short signal exit", location = location.belowbar, style = shape.labelup, text = "XS", color = color.new(color.orange, 0), textcolor = color.white, size = size.tiny)
+
+plotshape(activeCandles and showCandlePatterns and bull382, title = "Bull 38.2 candle", location = location.belowbar, style = shape.triangleup, text = "38B", color = color.new(color.lime, 0), textcolor = color.white, size = size.tiny)
+plotshape(activeCandles and showCandlePatterns and bear382, title = "Bear 38.2 candle", location = location.abovebar, style = shape.triangledown, text = "38S", color = color.new(color.red, 0), textcolor = color.white, size = size.tiny)
+plotshape(activeCandles and showCandlePatterns and bullEngulf, title = "Bull engulfing", location = location.belowbar, style = shape.labelup, text = "ENG", color = color.new(color.green, 0), textcolor = color.white, size = size.tiny)
+plotshape(activeCandles and showCandlePatterns and bearEngulf, title = "Bear engulfing", location = location.abovebar, style = shape.labeldown, text = "ENG", color = color.new(color.maroon, 0), textcolor = color.white, size = size.tiny)
+plotshape(activeCandles and showCandlePatterns and bullCloseBreak, title = "Bull close above", location = location.belowbar, style = shape.circle, text = "CA", color = color.new(color.teal, 0), textcolor = color.white, size = size.tiny)
+plotshape(activeCandles and showCandlePatterns and bearCloseBreak, title = "Bear close below", location = location.abovebar, style = shape.circle, text = "CB", color = color.new(color.orange, 0), textcolor = color.white, size = size.tiny)
+plotshape(activeCandles and showCandlePatterns and bullWickReject, title = "Bull wick rejection", location = location.belowbar, style = shape.diamond, text = "WR", color = color.new(color.aqua, 0), textcolor = color.black, size = size.tiny)
+plotshape(activeCandles and showCandlePatterns and bearWickReject, title = "Bear wick rejection", location = location.abovebar, style = shape.diamond, text = "WR", color = color.new(color.yellow, 0), textcolor = color.black, size = size.tiny)
+
+plotshape(activePatterns and showChartPatterns and not na(pivotLow), title = "Pivot low", location = location.belowbar, style = shape.xcross, text = "PL", color = color.new(color.green, 40), textcolor = color.white, size = size.tiny, offset = -pivotRight)
+plotshape(activePatterns and showChartPatterns and not na(pivotHigh), title = "Pivot high", location = location.abovebar, style = shape.xcross, text = "PH", color = color.new(color.red, 40), textcolor = color.white, size = size.tiny, offset = -pivotRight)
+plotshape(activePatterns and showChartPatterns and doubleBottomBreak, title = "Double bottom break", location = location.belowbar, style = shape.labelup, text = "DB", color = color.new(color.lime, 0), textcolor = color.white, size = size.small)
+plotshape(activePatterns and showChartPatterns and doubleTopBreak, title = "Double top break", location = location.abovebar, style = shape.labeldown, text = "DT", color = color.new(color.red, 0), textcolor = color.white, size = size.small)
+plotshape(activePatterns and showChartPatterns and bullFlagBreak, title = "Bull flag break", location = location.belowbar, style = shape.labelup, text = "FLAG", color = color.new(color.green, 0), textcolor = color.white, size = size.tiny)
+plotshape(activePatterns and showChartPatterns and bearFlagBreak, title = "Bear flag break", location = location.abovebar, style = shape.labeldown, text = "FLAG", color = color.new(color.maroon, 0), textcolor = color.white, size = size.tiny)
+plotshape(activePatterns and showChartPatterns and ascendingBreak, title = "Ascending breakout", location = location.belowbar, style = shape.labelup, text = "ASC", color = color.new(color.teal, 0), textcolor = color.white, size = size.tiny)
+plotshape(activePatterns and showChartPatterns and descendingBreak, title = "Descending breakout", location = location.abovebar, style = shape.labeldown, text = "DESC", color = color.new(color.orange, 0), textcolor = color.white, size = size.tiny)
+
+// === ALERTCONDITIONS ===
+alertcondition(longSignal, title = "Long signal", message = "Long signal on {{ticker}} at {{close}}")
+alertcondition(shortSignal, title = "Short signal", message = "Short signal on {{ticker}} at {{close}}")
+alertcondition(longScoreExit, title = "Long signal exit", message = "Exit long on {{ticker}} at {{close}}")
+alertcondition(shortScoreExit, title = "Short signal exit", message = "Exit short on {{ticker}} at {{close}}")
+alertcondition(bullCandleEvent, title = "Bull candle pattern", message = "Bull candle pattern on {{ticker}} at {{close}}")
+alertcondition(bearCandleEvent, title = "Bear candle pattern", message = "Bear candle pattern on {{ticker}} at {{close}}")
+alertcondition(bullChartEvent, title = "Bull chart pattern", message = "Bull chart pattern on {{ticker}} at {{close}}")
+alertcondition(bearChartEvent, title = "Bear chart pattern", message = "Bear chart pattern on {{ticker}} at {{close}}")
+
+// === DASHBOARD ===
+var table dash = table.new(position.top_right, 2, 12, border_width = 1)
+if showDashboard and barstate.islast
+    string regimeTxt = trendBull ? "Bull" : trendBear ? "Bear" : "Neutral"
+    string htfTxt = htfBull ? "HTF Bull" : htfBear ? "HTF Bear" : "HTF Neutral"
+    string posTxt = strategy.position_size > 0 ? "Long" : strategy.position_size < 0 ? "Short" : "Flat"
+    string segmentTxt = validationSegment == "Full selected range" ? "Full" : validationSegment == "In-sample only" ? "IS" : validationSegment == "Out-of-sample only" ? "OOS" : "Paper"
+    string modulesTxt = (activeRSI ? "R" : "-") + (activeFibBB ? "B" : "-") + (activeTrendMA ? "M" : "-") + (activeIchimoku ? "I" : "-") + (activeCandles ? "C" : "-") + (activePatterns ? "P" : "-")
+    string setupTxt = primaryLongSetup ? "Long setup" : primaryShortSetup ? "Short setup" : "None"
+    string filterTxt = filtersOK ? "OK" : "Blocked"
+    table.cell(dash, 0, 0, "CTAPv6", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 0, researchPreset, text_color = color.white, bgcolor = color.new(color.blue, 20))
+    table.cell(dash, 0, 1, "Segment", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 1, segmentTxt + " / " + (segmentOK ? "ON" : "OFF"), text_color = color.white, bgcolor = segmentOK ? color.new(color.green, 30) : color.new(color.gray, 30))
+    table.cell(dash, 0, 2, "Mode", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 2, tradeMode + " / " + tradeDirection, text_color = color.white, bgcolor = allowShorts ? color.new(color.purple, 30) : color.new(color.gray, 30))
+    table.cell(dash, 0, 3, "Modules", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 3, modulesTxt, text_color = color.white, bgcolor = color.new(color.gray, 20))
+    table.cell(dash, 0, 4, "Position", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 4, posTxt, text_color = color.white, bgcolor = strategy.position_size > 0 ? color.new(color.green, 20) : strategy.position_size < 0 ? color.new(color.red, 20) : color.new(color.gray, 20))
+    table.cell(dash, 0, 5, "Regime", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 5, regimeTxt + " / " + htfTxt, text_color = color.white, bgcolor = trendBull ? color.new(color.green, 20) : trendBear ? color.new(color.red, 20) : color.new(color.gray, 20))
+    table.cell(dash, 0, 6, "Setup", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 6, setupTxt, text_color = color.white, bgcolor = color.new(color.gray, 20))
+    table.cell(dash, 0, 7, "Long Score", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 7, str.tostring(longScore, "#.##"), text_color = color.white, bgcolor = longScore >= entryThreshold ? color.new(color.green, 20) : color.new(color.gray, 20))
+    table.cell(dash, 0, 8, "Short Score", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 8, str.tostring(shortScore, "#.##"), text_color = color.white, bgcolor = shortScore >= entryThreshold ? color.new(color.red, 20) : color.new(color.gray, 20))
+    table.cell(dash, 0, 9, "RSI / ATR%", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 9, str.tostring(rsi, "#.##") + " / " + str.tostring(atrPct, "#.##") + "%", text_color = color.white, bgcolor = volatilityOK ? color.new(color.green, 35) : color.new(color.red, 25))
+    table.cell(dash, 0, 10, "Volume", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 10, volumeOK ? "OK" : "Low", text_color = color.white, bgcolor = volumeOK ? color.new(color.green, 35) : color.new(color.red, 25))
+    table.cell(dash, 0, 11, "Filters", text_color = color.white, bgcolor = color.new(color.black, 0))
+    table.cell(dash, 1, 11, filterTxt, text_color = color.white, bgcolor = filtersOK ? color.new(color.green, 35) : color.new(color.red, 25))

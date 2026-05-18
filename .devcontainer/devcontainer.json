@@ -1,0 +1,70 @@
+// GitHub Codespaces and VS Code Dev Containers — Polymarket-Trader
+{
+  "name": "Polymarket Trader",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-1-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20",
+      "pnpmVersion": "10.11.0",
+      "installYarnUsingApt": false
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+
+  "containerEnv": {
+    "RUST_LOG": "info",
+    "RUST_BACKTRACE": "1"
+  },
+
+  "remoteEnv": {
+    "CARGO_INCREMENTAL": "1"
+  },
+
+  "forwardPorts": [8080, 5173, 9090],
+  "portsAttributes": {
+    "8080": {
+      "label": "Dashboard (pt-cli / pt-dashboard)",
+      "onAutoForward": "notify"
+    },
+    "5173": {
+      "label": "Vite frontend (nx dev)",
+      "onAutoForward": "openBrowser"
+    },
+    "9090": {
+      "label": "Strategy lab static server",
+      "onAutoForward": "silent"
+    }
+  },
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-python.python"
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.checkOnSave": true,
+        "editor.formatOnSave": true,
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer"
+        }
+      }
+    },
+    "codespaces": {
+      "openFiles": ["README.md", "AGENTS.md"]
+    }
+  }
+}

@@ -1,0 +1,342 @@
+version: 2
+registry_name: cloud-agent-granular-codegen-skills-v2
+visual_skills_default: off
+purpose: >
+  Granular request-to-pseudocode-to-codegen skill registry for Cloud Agent SDLC pipelines.
+  Each skill is a narrow transformation with declared inputs, outputs, and next-skill handoff.
+minimal_p0_codegen_bundle:
+  - request-intake-normalizer
+  - objective-classifier
+  - problem-type-router
+  - authority-and-constraint-extractor
+  - domain-context-locator
+  - impacted-system-cartographer
+  - blast-radius-preflight-analyzer
+  - architecture-snapshot-reader
+  - insertion-point-locator
+  - abstraction-opportunity-finder
+  - contract-first-io-schema-writer
+  - data-model-type-system-designer
+  - pseudocode-spec-writer
+  - algorithm-decomposition-planner
+  - memory-lifecycle-analyzer
+  - complexity-notation-assessor
+  - pseudocode-review-verifier
+  - test-from-pseudocode-generator
+  - pseudocode-to-language-plan-compiler
+  - codegen-contract-builder
+  - code-from-pseudocode-generator
+  - type-safety-implementation-enforcer
+  - implementation-insertion-verifier
+  - generated-code-reviewer
+  - test-execution-verifier
+  - adr-draft-writer
+  - decision-tradeoff-ledger
+  - parity-sync-manager
+  - memory-continuity-manager
+skills:
+  - name: request-intake-normalizer
+    priority: P0
+    mode: required
+    stage: intake
+    inputs: [raw_request, repository_context, actor, cadence_or_event, available_connectors]
+    outputs: [request_envelope.json, assumptions, missing_inputs, next_skill_handoff]
+    next: [objective-classifier]
+  - name: objective-classifier
+    priority: P0
+    mode: required
+    stage: intake
+    inputs: [request_envelope.json]
+    outputs: [objective_classification.json, primary_objective, secondary_objectives, risk_precheck]
+    next: [problem-type-router]
+  - name: problem-type-router
+    priority: P0
+    mode: required
+    stage: intake
+    inputs: [objective_classification.json, repo_memory, skill_registry]
+    outputs: [route_plan.json, required_skills, optional_skills_default_off, blocked_paths]
+    next: [authority-and-constraint-extractor, domain-context-locator]
+  - name: authority-and-constraint-extractor
+    priority: P0
+    mode: required
+    stage: define
+    inputs: [request_envelope.json, workspace_authority_stack, docs, runbooks, current_task]
+    outputs: [constraint_contract.json, authority_stack, approval_boundaries, quality_bar]
+    next: [domain-context-locator]
+  - name: domain-context-locator
+    priority: P0
+    mode: default-on
+    stage: discover
+    inputs: [route_plan.json, repository_index, knowledge_index]
+    outputs: [context_pack_manifest.json, candidate_paths, relevant_docs, missing_context]
+    next: [impacted-system-cartographer]
+  - name: impacted-system-cartographer
+    priority: P0
+    mode: default-on
+    stage: discover
+    inputs: [context_pack_manifest.json, dependency_graph, changed_or_target_paths]
+    outputs: [impacted_systems.json, impact_summary, blast_radius_seed]
+    next: [blast-radius-preflight-analyzer, architecture-snapshot-reader]
+  - name: blast-radius-preflight-analyzer
+    priority: P0
+    mode: default-on
+    stage: discover
+    inputs: [impacted_systems.json, target_paths, request_classification]
+    outputs: [blast_radius_report.json, risk_score, risk_gates, manual_review_triggers]
+    next: [architecture-snapshot-reader]
+  - name: architecture-snapshot-reader
+    priority: P0
+    mode: default-on
+    stage: design
+    inputs: [context_pack_manifest.json, impacted_systems.json, authority_stack]
+    outputs: [architecture_snapshot.json, current_boundaries, known_tradeoffs, architecture_gaps]
+    next: [insertion-point-locator]
+  - name: architecture-drift-detector
+    priority: P1
+    mode: default-on
+    stage: design_verify
+    inputs: [architecture_snapshot.json, adr_index, schemas, code_reality]
+    outputs: [architecture_drift_report.json, drift_severity, repair_candidates]
+    next: [insertion-point-locator, adr-draft-writer]
+  - name: insertion-point-locator
+    priority: P0
+    mode: default-on
+    stage: design
+    inputs: [architecture_snapshot.json, blast_radius_report.json, request_contract]
+    outputs: [insertion_point_map.json, owned_files, forbidden_files, integration_points, test_targets]
+    next: [abstraction-opportunity-finder]
+  - name: abstraction-opportunity-finder
+    priority: P0
+    mode: default-on
+    stage: design
+    inputs: [insertion_point_map.json, architecture_snapshot.json, repetition_or_variation_evidence]
+    outputs: [abstraction_decision.json, abstraction_candidates, reuse_justification, do_not_abstract_notes]
+    next: [base-interface-class-planner, contract-first-io-schema-writer]
+  - name: base-interface-class-planner
+    priority: P1
+    mode: default-on
+    stage: design
+    inputs: [abstraction_decision.json, language_context, runtime_constraints]
+    outputs: [interface_plan.json, base_types, extension_points, migration_steps, compatibility_notes]
+    next: [adapter-boundary-planner, contract-first-io-schema-writer]
+  - name: adapter-boundary-planner
+    priority: P1
+    mode: default-on
+    stage: design
+    inputs: [interface_plan.json, integration_requirements, event_contracts]
+    outputs: [adapter_boundary_contract.json, ports, adapters, error_boundaries, retry_policy, observability_points]
+    next: [contract-first-io-schema-writer]
+  - name: dependency-inversion-planner
+    priority: P1
+    mode: default-on
+    stage: design
+    inputs: [architecture_snapshot.json, interface_plan.json, adapter_boundary_contract.json]
+    outputs: [dependency_inversion_plan.json, allowed_imports, disallowed_imports, refactor_steps]
+    next: [contract-first-io-schema-writer]
+  - name: contract-first-io-schema-writer
+    priority: P0
+    mode: required
+    stage: design
+    inputs: [request_contract, insertion_point_map.json, interface_plan.json]
+    outputs: [io_contract.schema.json, example_inputs, example_outputs, error_schema, compatibility_rules]
+    next: [data-model-type-system-designer, event-contract-modeler]
+  - name: data-model-type-system-designer
+    priority: P0
+    mode: default-on
+    stage: design
+    inputs: [io_contract.schema.json, language_context, framework_context]
+    outputs: [type_system_plan.json, types_to_create, types_to_reuse, type_safety_gates]
+    next: [pseudocode-spec-writer]
+  - name: event-contract-modeler
+    priority: P1
+    mode: default-on-when-event-driven
+    stage: design
+    inputs: [io_contract.schema.json, adapter_boundary_contract.json, runtime_topology]
+    outputs: [event_contract.json, event_flow, handler_contracts, idempotency_rules]
+    next: [pseudocode-spec-writer]
+  - name: pseudocode-spec-writer
+    priority: P0
+    mode: required
+    stage: design
+    inputs: [io_contract.schema.json, type_system_plan.json, insertion_point_map.json, acceptance_criteria]
+    outputs: [pseudocode_contract.md, pseudocode_contract.json, control_flow, data_flow, side_effects]
+    next: [algorithm-decomposition-planner, memory-lifecycle-analyzer]
+  - name: algorithm-decomposition-planner
+    priority: P0
+    mode: default-on
+    stage: design
+    inputs: [pseudocode_contract.json, architecture_snapshot.json]
+    outputs: [algorithm_decomposition.json, function_inventory, module_boundaries, call_graph]
+    next: [complexity-notation-assessor, concurrency-state-safety-analyzer]
+  - name: memory-lifecycle-analyzer
+    priority: P0
+    mode: default-on
+    stage: design
+    inputs: [pseudocode_contract.json, type_system_plan.json, language_context]
+    outputs: [memory_lifecycle_report.json, state_ownership_map, lifetime_notes, retention_risks]
+    next: [complexity-notation-assessor, pseudocode-review-verifier]
+  - name: complexity-notation-assessor
+    priority: P0
+    mode: default-on
+    stage: design_verify
+    inputs: [algorithm_decomposition.json, memory_lifecycle_report.json, data_size_assumptions]
+    outputs: [complexity_assessment.json, time_complexity, space_complexity, performance_budget, hotspots]
+    next: [observability-instrumentation-planner, pseudocode-review-verifier]
+  - name: concurrency-state-safety-analyzer
+    priority: P1
+    mode: default-on-when-async-or-concurrent
+    stage: design_verify
+    inputs: [algorithm_decomposition.json, event_contract.json, runtime_context]
+    outputs: [concurrency_safety_report.json, state_risks, lock_strategy, cancellation_policy]
+    next: [pseudocode-review-verifier]
+  - name: observability-instrumentation-planner
+    priority: P1
+    mode: default-on
+    stage: design
+    inputs: [io_contract.schema.json, complexity_assessment.json, runtime_context]
+    outputs: [observability_plan.json, log_points, metrics, trace_spans, alerts]
+    next: [pseudocode-review-verifier]
+  - name: pseudocode-review-verifier
+    priority: P0
+    mode: required
+    stage: design_gate
+    inputs: [pseudocode_contract.json, io_contract.schema.json, type_system_plan.json, complexity_assessment.json, memory_lifecycle_report.json]
+    outputs: [pseudocode_review_report.json, definition_of_ready, blocking_gaps, approved_for_codegen]
+    next: [test-from-pseudocode-generator, pseudocode-to-language-plan-compiler]
+  - name: test-from-pseudocode-generator
+    priority: P0
+    mode: required
+    stage: plan_verify
+    inputs: [pseudocode_contract.json, acceptance_criteria, io_contract.schema.json, risk_gates]
+    outputs: [test_specification.json, test_files_to_create, fixtures, expected_results]
+    next: [pseudocode-to-language-plan-compiler]
+  - name: pseudocode-to-language-plan-compiler
+    priority: P0
+    mode: required
+    stage: plan_implement
+    inputs: [pseudocode_review_report.json, language_context, insertion_point_map.json, test_specification.json]
+    outputs: [codegen_plan.json, file_edit_plan, language_rules, implementation_sequence]
+    next: [codegen-contract-builder]
+  - name: codegen-contract-builder
+    priority: P0
+    mode: required
+    stage: implement
+    inputs: [codegen_plan.json, file_locks, active_pr, work_order]
+    outputs: [codegen_contract.json, allowed_files, forbidden_files, validation_commands, rollback_plan]
+    next: [code-from-pseudocode-generator]
+  - name: code-from-pseudocode-generator
+    priority: P0
+    mode: default-on
+    stage: implement
+    inputs: [codegen_contract.json, pseudocode_contract.json, repo_files]
+    outputs: [implementation_diff, changed_files, implementation_notes, open_questions]
+    next: [type-safety-implementation-enforcer, generated-code-reviewer]
+  - name: type-safety-implementation-enforcer
+    priority: P0
+    mode: default-on
+    stage: implement_verify
+    inputs: [implementation_diff, io_contract.schema.json, type_system_plan.json, language_context]
+    outputs: [type_safety_report.json, violations, fix_plan, typecheck_commands]
+    next: [generated-code-reviewer]
+  - name: implementation-insertion-verifier
+    priority: P0
+    mode: default-on
+    stage: implement_verify
+    inputs: [implementation_diff, insertion_point_map.json, codegen_contract.json]
+    outputs: [insertion_verification_report.json, scope_violations, layering_violations, approved]
+    next: [generated-code-reviewer]
+  - name: generated-code-reviewer
+    priority: P0
+    mode: default-on
+    stage: verify
+    inputs: [implementation_diff, test_specification.json, complexity_assessment.json, observability_plan.json]
+    outputs: [generated_code_review.md, review_findings.json, required_fixes, ready_for_validation]
+    next: [test-execution-verifier, adr-draft-writer]
+  - name: test-execution-verifier
+    priority: P0
+    mode: required
+    stage: verify
+    inputs: [validation_commands, changed_files, test_specification.json]
+    outputs: [validation_report.json, pass_fail, evidence_bundle, next_fix_work_order]
+    next: [decision-tradeoff-ledger, parity-sync-manager]
+  - name: adr-draft-writer
+    priority: P0
+    mode: default-on
+    stage: design_integrate
+    inputs: [decision_context, options, chosen_option, consequences, affected_artifacts]
+    outputs: [adr.md, adr_metadata.json, decision_summary, followup_actions]
+    next: [adr-indexer]
+  - name: adr-indexer
+    priority: P1
+    mode: default-on
+    stage: integrate_operate
+    inputs: [adr.md, work_order, decision_ledger, evidence_bundle]
+    outputs: [adr_index_patch.json, cross_links, inspection_tags]
+    next: [decision-tradeoff-ledger]
+  - name: decision-tradeoff-ledger
+    priority: P0
+    mode: required
+    stage: all
+    inputs: [decision_context, adr_metadata.json, agent_reasoning_summary, human_overrides]
+    outputs: [decision_ledger_entry.json, inspection_summary, reversal_conditions]
+    next: [parity-sync-manager, memory-continuity-manager]
+  - name: human-code-delta-ingestor
+    priority: P0
+    mode: default-on-when-human-edits-detected
+    stage: operate_verify
+    inputs: [git_diff, commits, human_notes, active_work_order]
+    outputs: [human_delta_record.json, reverse_sync_plan, missing_docs, required_adr_updates]
+    next: [code-to-pseudocode-reconciler, software-engineer-decision-capture]
+  - name: software-engineer-decision-capture
+    priority: P1
+    mode: default-on-when-human-edits-detected
+    stage: operate_verify
+    inputs: [human_delta_record.json, diff_summary, existing_adr_index]
+    outputs: [human_decision_capture.md, questions_for_engineer, adr_update_candidates]
+    next: [adr-draft-writer]
+  - name: code-to-pseudocode-reconciler
+    priority: P0
+    mode: default-on
+    stage: operate_verify
+    inputs: [human_delta_record.json, current_pseudocode_contract, current_schemas, architecture_snapshot]
+    outputs: [pseudocode_patch.json, schema_patch_candidates, diagram_patch_candidates, parity_gaps]
+    next: [parity-sync-manager]
+  - name: semantic-diff-explainer
+    priority: P1
+    mode: default-on
+    stage: verify_integrate
+    inputs: [git_diff, artifact_diffs, work_order]
+    outputs: [semantic_diff_report.md, risk_summary, review_questions]
+    next: [decision-tradeoff-ledger]
+  - name: performance-budget-enforcer
+    priority: P1
+    mode: default-on
+    stage: verify_operate
+    inputs: [complexity_assessment.json, benchmark_results, runtime_metrics, code_diff]
+    outputs: [performance_budget_report.json, violations, mitigation_work_orders]
+    next: [memory-continuity-manager]
+  - name: parity-sync-manager
+    priority: P0
+    mode: required
+    stage: integrate_operate
+    inputs: [pseudocode_patch.json, schema_patch_candidates, implementation_diff, validation_report, adr_index]
+    outputs: [parity_report.json, out_of_sync_artifacts, sync_patches, human_review_needed]
+    next: [memory-continuity-manager]
+  - name: pair-programming-copilot-router
+    priority: P2
+    mode: default-off
+    stage: all
+    inputs: [operator_mode, active_work_order, current_artifacts]
+    outputs: [pairing_plan, questions, optional_diagrams, manual_checkpoints]
+    next: [varies]
+optional_visual_skills_default_off:
+  - request-scope-map-diagrammer
+  - c4-diagram-generator
+  - uml-component-modeler
+  - sequence-flow-generator
+  - state-machine-modeler
+  - dataflow-event-modeler
+  - algorithm-flowchart-generator
+  - memory-lifetime-flowchart
+  - work-order-dag-visualizer
+  - blast-radius-graph-visualizer

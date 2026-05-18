@@ -116,6 +116,11 @@ def candidate_summary(candidate: Dict[str, Any], market: str) -> Dict[str, Any]:
         "avg_trades": float(candidate.get("avg_trades", 0.0)),
         "market_count": int(candidate.get("market_count", 0)),
         "selected_market": market,
+        "objective_breakdown": candidate.get("objective_breakdown", {}),
+        "stability": candidate.get("stability", {}),
+        "risk_gate": candidate.get("risk_gate", {}),
+        "promotion_gate": candidate.get("promotion_gate", {}),
+        "rejection_reasons": candidate.get("rejection_reasons", []),
     }
 
 
@@ -316,6 +321,11 @@ def main() -> int:
         result["status"] = "no_promotion"
         result["decision"] = {
             "reason": "candidate did not beat incumbent score gate",
+            "reason_code": "incumbent_score_gate",
+            "reason_detail": {
+                "candidate_score": float(selected_candidate.get("score", 0.0)),
+                "incumbent_score": float((incumbent or {}).get("score", 0.0)),
+            },
             "min_score_delta": min_score_delta,
         }
         write_json(cycle_summary_path, result)
@@ -389,6 +399,8 @@ def main() -> int:
         result["status"] = "rejected_after_replay"
         result["decision"] = {
             "reason": "replay acceptance failed",
+            "reason_code": "replay_acceptance_failed",
+            "reason_detail": acceptance_summary,
             "require_acceptance_pass": True,
         }
         write_json(cycle_summary_path, result)
@@ -408,6 +420,11 @@ def main() -> int:
     result["status"] = "promoted"
     result["decision"] = {
         "reason": "candidate cleared incumbent and replay gates",
+        "reason_code": "promoted_after_replay_gate",
+        "reason_detail": {
+            "acceptance_status": acceptance_summary.get("status"),
+            "promotion_gate": result["candidate"].get("promotion_gate"),
+        },
         "state_path": str(state_path),
     }
     write_json(cycle_summary_path, result)

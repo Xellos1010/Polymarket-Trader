@@ -871,9 +871,9 @@ fn run_evaluator(
     params: &HashMap<String, Value>,
 ) -> Result<f64, String> {
     let payload = serde_json::to_string(params).map_err(|e| e.to_string())?;
-    let output = Command::new("zsh")
-        .arg("-lc")
-        .arg(cmd)
+    let (program, args) = parse_command_line(cmd)?;
+    let output = Command::new(&program)
+        .args(args)
         .env("PT_PINE_SCRIPT", script_path)
         .env("PT_PINE_CANDIDATE_JSON", payload)
         .output()
@@ -897,6 +897,14 @@ fn run_evaluator(
         .trim()
         .parse::<f64>()
         .map_err(|e| format!("invalid evaluator score '{}': {e}", score_line.trim()))
+}
+
+fn parse_command_line(cmd: &str) -> Result<(String, Vec<String>), String> {
+    let parts = shell_words::split(cmd).map_err(|e| format!("invalid evaluator command: {e}"))?;
+    let (program, args) = parts
+        .split_first()
+        .ok_or_else(|| "evaluator command must not be empty".to_string())?;
+    Ok((program.clone(), args.to_vec()))
 }
 
 fn make_rng(seed: Option<u64>) -> StdRng {
@@ -940,7 +948,9 @@ fn now_unix() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_config_path;
+    use super::{parse_command_line, resolve_config_path, run_evaluator};
+    use serde_json::Value;
+    use std::collections::HashMap;
 
     #[test]
     fn resolve_config_uses_env_when_default_is_passed() {
@@ -956,6 +966,31 @@ mod tests {
         let path = resolve_config_path("config/custom.toml");
         assert_eq!(path, "config/custom.toml");
         std::env::remove_var("PT_CONFIG_PATH");
+    }
+
+    #[test]
+    fn parse_command_line_preserves_quoted_segments() {
+        let (program, args) =
+            parse_command_line("python3 -c 'import sys; print(sys.argv[1])' \"two words\"")
+                .expect("parse evaluator command");
+
+        assert_eq!(program, "python3");
+        assert_eq!(args[0], "-c");
+        assert_eq!(args[1], "import sys; print(sys.argv[1])");
+        assert_eq!(args[2], "two words");
+    }
+
+    #[test]
+    fn run_evaluator_executes_without_shell_dependency() {
+        let params = HashMap::from([("threshold".to_string(), Value::from(0.42))]);
+        let score = run_evaluator(
+            "python3 -c 'import os; print(1.25)'",
+            "pine-scripts/example.pine",
+            &params,
+        )
+        .expect("run evaluator");
+
+        assert_eq!(score, 1.25);
     }
 }
 

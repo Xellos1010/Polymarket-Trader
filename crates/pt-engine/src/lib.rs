@@ -18,6 +18,7 @@ use pt_core::{
     MarketSelection, MarketSnapshot, MetricsRegistry, PtError, PtResult, RiskState, Side,
     TradingViewBias,
 };
+use pt_ai_agent::ProposalQueue;
 use pt_dashboard::{router as dashboard_router, DashboardHandles, DashboardState};
 use pt_market_discovery::MarketDiscoveryClient;
 use pt_polymarket::{
@@ -512,6 +513,7 @@ impl TradingEngine {
             fused_bias: self.state.fused_bias.clone(),
             inventory_usd: self.state.inventory_usd.clone(),
             coinbase: Default::default(),
+            proposal_queue: ProposalQueue::new(),
         });
 
         tokio::spawn(async move {

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Polymarket SDLC Orchestrator"
+  short_description: "Routes repo work through the SDLC control plane."
+  default_prompt: "Use $polymarket-sdlc-orchestrator to route repo work through discovery, planning, verification, and continuity updates."

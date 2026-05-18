@@ -235,6 +235,88 @@ const agentConsole = {
   ],
 };
 
+const strategyCandidatesResponse = {
+  product_id: "BTC-USD",
+  source_report_path: "data/strategy_lab/optimize-fixture.json",
+  cycle_summary_path: "data/strategy_lab/hourly_optimizer_runs/cycle-fixture.json",
+  candidates: [
+    {
+      rank: 1,
+      product_id: "BTC-USD",
+      selected_market: "BTC-USD",
+      variant: "microstructure_v2",
+      params: { short_window: 5, long_window: 21 },
+      score: 0.55,
+      objective_breakdown: {
+        net_return_after_costs: 0.12,
+        drawdown_penalty: 0.03,
+        turnover_penalty: 0.01,
+        stability_penalty: 0.005,
+        final_score: 0.55,
+      },
+      stability: {
+        splits_requested: 3,
+        score_stddev: 0.01,
+        return_stddev: 0.02,
+        penalty: 0.005,
+        positive_windows: 3,
+      },
+      risk_gate: {
+        status: "pass",
+        failure_count: 0,
+        reason_codes: [],
+      },
+      promotion_gate: {
+        status: "eligible_for_manual_review",
+        requires_replay_acceptance: true,
+        replay_acceptance_status: "pass",
+        promotion_status: "promoted",
+        source_run_id: "cycle-fixture-1",
+      },
+      rejection_reasons: [],
+      source_report_path: "data/strategy_lab/optimize-fixture.json",
+      cycle_summary_path: "data/strategy_lab/hourly_optimizer_runs/cycle-fixture.json",
+    },
+    {
+      rank: 2,
+      product_id: "BTC-USD",
+      selected_market: "BTC-USD",
+      variant: "microstructure_v1",
+      params: { short_window: 7, long_window: 34 },
+      score: -0.12,
+      objective_breakdown: {
+        net_return_after_costs: 0.01,
+        drawdown_penalty: 0.09,
+        turnover_penalty: 0.02,
+        stability_penalty: 0.02,
+        final_score: -0.12,
+      },
+      stability: {
+        splits_requested: 3,
+        score_stddev: 0.15,
+        return_stddev: 0.18,
+        penalty: 0.02,
+        positive_windows: 1,
+      },
+      risk_gate: {
+        status: "fail",
+        failure_count: 1,
+        reason_codes: ["max_drawdown_exceeded"],
+      },
+      promotion_gate: {
+        status: "blocked",
+        requires_replay_acceptance: true,
+        replay_acceptance_status: null,
+        promotion_status: "rejected_after_replay",
+        source_run_id: "cycle-fixture-2",
+      },
+      rejection_reasons: ["risk:max_drawdown_exceeded@BTC-USD"],
+      source_report_path: "data/strategy_lab/optimize-fixture.json",
+      cycle_summary_path: "data/strategy_lab/hourly_optimizer_runs/cycle-fixture.json",
+    },
+  ],
+};
+
 function installFetchMock(overrides?: Record<string, Response>) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -270,6 +352,9 @@ function installFetchMock(overrides?: Record<string, Response>) {
     }
     if (url === "/api/v1/agent/console") {
       return Promise.resolve(jsonResponse(agentConsole));
+    }
+    if (url === "/api/v1/strategy-candidates" || url === "/api/v1/strategy-candidates?product_id=BTC-USD") {
+      return Promise.resolve(jsonResponse(strategyCandidatesResponse));
     }
     if (url === "/api/v1/products/BTC-USD") {
       return Promise.resolve(jsonResponse(productDetail));
@@ -428,6 +513,21 @@ describe("App", () => {
     cards.forEach((card) => {
       expect(card.querySelectorAll("button")).toHaveLength(0);
     });
+  });
+
+  it("renders ranked strategy candidates with promotion and rejection evidence", async () => {
+    installFetchMock();
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Selected Market" });
+    fireEvent.click(screen.getByRole("button", { name: /Validate Strategy Lab/i }));
+
+    expect(await screen.findByRole("heading", { name: "Candidate Review" })).toBeInTheDocument();
+    expect(await screen.findByText(/#1 microstructure_v2/i)).toBeInTheDocument();
+    expect(screen.getByText(/promotion promoted · replay pass/i)).toBeInTheDocument();
+    expect(screen.getByText("risk:max_drawdown_exceeded@BTC-USD")).toBeInTheDocument();
+    expect(screen.getByText(/optimizer evidence only/i)).toBeInTheDocument();
   });
 
   it("renders main surfaces when multiple endpoints fail simultaneously", async () => {

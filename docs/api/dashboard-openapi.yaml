@@ -238,6 +238,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StrategiesResponse'
+  /api/v1/strategy-candidates:
+    get:
+      summary: Ranked strategy candidates with objective breakdown and promotion evidence
+      parameters:
+        - in: query
+          name: product_id
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyCandidatesResponse'
   /api/v1/mode:
     post:
       summary: Change workstation mode
@@ -294,6 +310,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StrategyLabImportSummary'
+  /api/v1/agent/console:
+    get:
+      summary: Agent Console view — autonomy tier, pending proposals, and operator context
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentConsoleView'
+  /api/v1/agent/proposals:
+    get:
+      summary: List all agent proposals
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentApprovalItem'
+    post:
+      summary: Submit a new agent proposal for operator review
+      responses:
+        '201':
+          description: Created
+  /api/v1/agent/proposals/{id}/resolve:
+    post:
+      summary: Approve or reject a pending agent proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Resolved proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentApprovalItem'
+        '404':
+          description: Proposal not found
+  /api/v1/ai-metrics:
+    get:
+      summary: AI model routing and cost telemetry
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiMetricsView'
 components:
   schemas:
     Health:
@@ -680,9 +750,139 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProductImportActivationView'
+    StrategyCandidateObjectiveBreakdown:
+      type: object
+      required: [net_return_after_costs, drawdown_penalty, turnover_penalty, stability_penalty, final_score]
+      properties:
+        net_return_after_costs: { type: number }
+        drawdown_penalty: { type: number }
+        turnover_penalty: { type: number }
+        stability_penalty: { type: number }
+        final_score: { type: number }
+    StrategyCandidateStabilityView:
+      type: object
+      required: [splits_requested, score_stddev, return_stddev, penalty, positive_windows]
+      properties:
+        splits_requested: { type: integer }
+        score_stddev: { type: number }
+        return_stddev: { type: number }
+        penalty: { type: number }
+        positive_windows: { type: integer }
+    StrategyCandidateRiskGateView:
+      type: object
+      required: [status, failure_count, reason_codes]
+      properties:
+        status: { type: string }
+        failure_count: { type: integer }
+        reason_codes:
+          type: array
+          items: { type: string }
+    StrategyCandidatePromotionGateView:
+      type: object
+      required: [status, requires_replay_acceptance]
+      properties:
+        status: { type: string }
+        requires_replay_acceptance: { type: boolean }
+        replay_acceptance_status:
+          type: string
+          nullable: true
+        promotion_status:
+          type: string
+          nullable: true
+        source_run_id:
+          type: string
+          nullable: true
+    StrategyCandidateReviewView:
+      type: object
+      required: [rank, variant, params, score, objective_breakdown, stability, risk_gate, promotion_gate, rejection_reasons]
+      properties:
+        rank: { type: integer }
+        product_id:
+          type: string
+          nullable: true
+        selected_market:
+          type: string
+          nullable: true
+        variant: { type: string }
+        params:
+          type: object
+          additionalProperties: true
+        score: { type: number }
+        objective_breakdown:
+          $ref: '#/components/schemas/StrategyCandidateObjectiveBreakdown'
+        stability:
+          $ref: '#/components/schemas/StrategyCandidateStabilityView'
+        risk_gate:
+          $ref: '#/components/schemas/StrategyCandidateRiskGateView'
+        promotion_gate:
+          $ref: '#/components/schemas/StrategyCandidatePromotionGateView'
+        rejection_reasons:
+          type: array
+          items: { type: string }
+        source_report_path:
+          type: string
+          nullable: true
+        cycle_summary_path:
+          type: string
+          nullable: true
+    StrategyCandidatesResponse:
+      type: object
+      required: [candidates]
+      properties:
+        product_id:
+          type: string
+          nullable: true
+        source_report_path:
+          type: string
+          nullable: true
+        cycle_summary_path:
+          type: string
+          nullable: true
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/StrategyCandidateReviewView'
     ActionResponse:
       type: object
       required: [ok, message]
       properties:
         ok: { type: boolean }
         message: { type: string }
+    AgentApprovalItem:
+      type: object
+      required: [id, title, description, severity, status]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        severity: { type: string }
+        status: { type: string }
+        product_id:
+          type: string
+          nullable: true
+    AgentConsoleView:
+      type: object
+      required: [autonomy_tier, live_arm, next_action, blocked_markets, imports_loaded, recommended_products, approvals]
+      properties:
+        autonomy_tier: { type: string }
+        live_arm:
+          $ref: '#/components/schemas/LiveArmState'
+        next_action: { type: string }
+        blocked_markets: { type: integer }
+        imports_loaded: { type: integer }
+        recommended_products:
+          type: array
+          items: { type: string }
+        approvals:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentApprovalItem'
+    AiMetricsView:
+      type: object
+      required: [local_requests_total, openrouter_requests_total, openrouter_spend_today_usd, openrouter_cap_usd, routing_policy]
+      properties:
+        local_requests_total: { type: number }
+        openrouter_requests_total: { type: number }
+        openrouter_spend_today_usd: { type: number }
+        openrouter_cap_usd: { type: number }
+        routing_policy: { type: string }

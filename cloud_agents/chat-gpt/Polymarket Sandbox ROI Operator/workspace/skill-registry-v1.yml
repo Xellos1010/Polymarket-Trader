@@ -1,0 +1,98 @@
+version: 1
+registry_name: cloud-agent-sdlc-skills-v1
+visual_skills_default: off
+minimal_p0_bundle:
+  - cloud-agent-sdlc-orchestrator
+  - sdlc-phase-router
+  - scheduler-cadence-runner
+  - memory-continuity-manager
+  - continuity-writer
+  - file-lock-coordinator
+  - pr-integration-governor
+  - repository-intake-auditor
+  - workspace-authority-resolver
+  - roadmap-feature-factory
+  - scope-chunker
+  - risk-blast-radius-analyzer
+  - test-strategy-generator
+  - independent-verifier
+  - trace-evidence-collector
+  - human-decision-escalator
+  - branch-bloat-reconciler
+  - cloud-agent-ops-sentinel
+skills:
+  - name: cloud-agent-sdlc-orchestrator
+    priority: P0
+    mode: required
+    stage: all
+    description: Master lifecycle router for repo, project, stage, cadence, skills, blockers, and output contracts.
+  - name: sdlc-phase-router
+    priority: P0
+    mode: required
+    stage: all
+    description: Classify requests and scheduled runs into SDLC stages and phase gates.
+  - name: scheduler-cadence-runner
+    priority: P0
+    mode: required
+    stage: operate
+    description: Interpret hourly, four-hour, daily, weekly, and local 24/7 cadences into safe job behavior.
+  - name: memory-continuity-manager
+    priority: P0
+    mode: required
+    stage: all
+    description: Manage durable working memory, continuity, work orders, locks, decisions, evidence, and fix memories.
+  - name: continuity-writer
+    priority: P0
+    mode: required
+    stage: all
+    description: Patch continuity state safely.
+  - name: file-lock-coordinator
+    priority: P0
+    mode: required
+    stage: plan_implement
+    description: Coordinate locks for safe parallel work.
+  - name: pr-integration-governor
+    priority: P0
+    mode: required
+    stage: integrate
+    description: Enforce one active PR per lane.
+  - name: repository-intake-auditor
+    priority: P0
+    mode: default-on
+    stage: discover
+    description: Audit repository structure and current state.
+  - name: roadmap-feature-factory
+    priority: P0
+    mode: default-on
+    stage: discover_plan_operate
+    description: Create and refresh the feature roadmap.
+  - name: scope-chunker
+    priority: P0
+    mode: required
+    stage: plan
+    description: Produce bounded work orders.
+  - name: risk-blast-radius-analyzer
+    priority: P0
+    mode: default-on
+    stage: plan_verify_integrate
+    description: Analyze changed/proposed files for hidden risk.
+  - name: c4-diagram-generator
+    priority: P1
+    mode: default-off
+    stage: design
+    description: Optional C4 visual modeler.
+  - name: uml-component-modeler
+    priority: P1
+    mode: default-off
+    stage: design
+    description: Optional UML component and class modeler.
+  - name: sequence-flow-generator
+    priority: P1
+    mode: default-off
+    stage: design
+    description: Optional sequence diagram modeler.
+  - name: dataflow-event-modeler
+    priority: P1
+    mode: default-off
+    stage: design
+    description: Optional event/dataflow modeler.

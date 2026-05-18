@@ -1,0 +1,4 @@
+interface:
+  display_name: "Issue PR Coordinator"
+  short_description: "Track issues, PRs, and shared-file coordination."
+  default_prompt: "Use $issue-pr-coordinator to create issues, track progress, and coordinate PRs safely."

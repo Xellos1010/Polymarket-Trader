@@ -1,0 +1,32 @@
+{
+  "market": "SOL-USD",
+  "metrics": {
+    "bars": 300,
+    "max_drawdown": 0.003413876423886872,
+    "sharpe_like": 0.9662762476054688,
+    "total_return": 0.008962272268876914,
+    "trades": 3
+  },
+  "promoted_at_epoch": 1778991597,
+  "replay": {
+    "frames": 300,
+    "market_id": "coinbase-sim-sol_usd",
+    "path": "data/replay/phase1-20260517-sol55.ndjson",
+    "token_id": "sim-sol_usd"
+  },
+  "source_report": "data/strategy_lab/backtest-20260517-041937.json",
+  "variant": "sma_baseline",
+  "verification": {
+    "commands": [
+      "cargo run -p pt-cli -- run --config config/config.toml",
+      "cargo run -p pt-cli -- status --url http://127.0.0.1:8080/health"
+    ],
+    "config_patch": {
+      "engine": {
+        "mode": "replay",
+        "replay_path": "data/replay/phase1-20260517-sol55.ndjson"
+      }
+    },
+    "required_mode": "replay"
+  }
+}

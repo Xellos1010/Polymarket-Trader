@@ -4094,6 +4094,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pt-ai-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "parking_lot",
+ "pt-core",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "pt-cli"
 version = "0.1.0"
 dependencies = [
@@ -4103,6 +4121,7 @@ dependencies = [
  "dotenvy",
  "lazy_static",
  "parking_lot",
+ "pt-ai-agent",
  "pt-coinbase",
  "pt-core",
  "pt-dashboard",
@@ -4168,6 +4187,7 @@ dependencies = [
  "axum",
  "chrono",
  "parking_lot",
+ "pt-ai-agent",
  "pt-coinbase",
  "pt-core",
  "reqwest 0.12.28",
@@ -4192,6 +4212,7 @@ dependencies = [
  "http-body-util",
  "parking_lot",
  "parquet",
+ "pt-ai-agent",
  "pt-coinbase",
  "pt-core",
  "pt-dashboard",

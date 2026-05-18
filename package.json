@@ -8,6 +8,9 @@
     "node": ">=20",
     "pnpm": ">=9"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["nx", "esbuild"]
+  },
   "scripts": {
     "nx": "nx",
     "verify": "nx run-many -t fmt check clippy test build --projects=polymarket-trader",

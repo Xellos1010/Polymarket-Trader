@@ -28,4 +28,4 @@ Run a constrained `$10-$50` live pilot focused on safety and process verificatio
 - No unexpected auto-halts.
 - No unhedged delta breaches.
 - Daily loss cap respected.
-- Clear post-run notes captured in `docs/SESSION_CONTEXT.md`.
+- Clear post-run notes captured in `docs/development/SESSION_CONTEXT.md`.

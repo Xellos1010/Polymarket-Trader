@@ -3,16 +3,16 @@
 ## Current Cycle Override
 
 Before starting feature work, salvaging payload from older branches, or making a merge-readiness claim, review these files in order:
-- `docs/WORK_STATUS.md`
-- `docs/WORK_STATUS.json`
+- `docs/development/WORK_STATUS.md`
+- `docs/development/WORK_STATUS.json`
 - `docs/archive/program-history-2026/INTEGRATION_BOARD.md` (historical)
-- `docs/SESSION_CONTEXT.md`
+- `docs/development/SESSION_CONTEXT.md`
 
 Current grounded state for this cycle:
-- the repo is in Phase 0: repo readiness
-- PR `#51` is the only active integration PR
-- issue `#48` compile recovery is the next code-bearing slice
-- issue `#9` and deferred branch salvage remain paused until the Phase 0 validation ladder is green again
+- the repo is in Phase 1: sandbox trading / paper ROI preparation
+- `main` is the canonical integration branch with 0 open PRs
+- issue `#59` is the next code-bearing slice
+- issues `#60` and `#61` remain queued behind `#59`
 
 ## Local-First Rule
 
@@ -23,7 +23,7 @@ Do not run CI/CD or deployment automation until the canonical local validation l
 ```
 
 Reference guide:
-- `docs/LOCAL_VALIDATION.md`
+- `docs/development/LOCAL_VALIDATION.md`
 
 The minimum ladder includes:
 1. `cargo fmt --all`
@@ -101,7 +101,7 @@ cargo run -p pt-cli -- preflight-live --timeout-ms 3000
 
 ## Live and guarded flows
 
-Pilot and smoke flows are documented in **`docs/TINY_LIVE_PILOT.md`**, **`docs/RUNBOOK.md`**, and **`scripts/tiny_live_pilot.sh`**. Several historical `pt-cli` subcommands (`wallet-*`, `coinbase-smoke`, `pilot-start`, `run-homebase`, `verify-promoted`, …) are **not** in the current CLI; prefer dashboard/API plus the scripts above.
+Pilot and smoke flows are documented in **`docs/development/TINY_LIVE_PILOT.md`**, **`docs/development/RUNBOOK.md`**, and **`scripts/tiny_live_pilot.sh`**. Several historical `pt-cli` subcommands (`wallet-*`, `coinbase-smoke`, `pilot-start`, `run-homebase`, `verify-promoted`, …) are **not** in the current CLI; prefer dashboard/API plus the scripts above.
 
 ## Dashboard HTTP smoke checks
 
@@ -139,7 +139,7 @@ Use `bias_gain` per variant to control plugin influence.
 
 Save session checkpoint:
 ```bash
-./scripts/save_context.sh "note" docs/SESSION_CONTEXT.md config/config.toml
+./scripts/save_context.sh "note" docs/development/SESSION_CONTEXT.md config/config.toml
 ```
 
 Export external AI bundle:

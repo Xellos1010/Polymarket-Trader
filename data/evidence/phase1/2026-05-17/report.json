@@ -1,0 +1,112 @@
+{
+  "runs": [
+    {
+      "checks": {
+        "manifest_valid": true,
+        "max_abs_unhedged_delta_ok": true,
+        "metrics_complete": true,
+        "modeled_cost_roi_positive": true,
+        "paper_soak": true,
+        "replay_acceptance": true,
+        "risk_breaches_clear": true
+      },
+      "generated_at": "2026-05-17T04:21:49.012716+00:00",
+      "manifest": {
+        "artifacts": {
+          "metrics": "data/evidence/phase1/2026-05-17/run-001/metrics.json",
+          "paper_soak": "data/evidence/phase1/2026-05-17/run-001/paper_soak.json",
+          "promotion_source": "data/tuning/phase1-20260517-sol55.json",
+          "replay_acceptance": "data/evidence/phase1/2026-05-17/run-001/replay_acceptance.json",
+          "replay_source": "data/replay/phase1-20260517-sol55.ndjson",
+          "sqlite_source": null
+        },
+        "generated_at": "2026-05-17T04:21:49.012716+00:00",
+        "phase": "Phase 1",
+        "run_label": "run-001",
+        "schema_version": 1
+      },
+      "net_pnl_after_costs": 8.962272268876914,
+      "notes": [],
+      "risk_breaches": [],
+      "run_label": "run-001",
+      "status": "pass"
+    },
+    {
+      "checks": {
+        "manifest_valid": true,
+        "max_abs_unhedged_delta_ok": true,
+        "metrics_complete": true,
+        "modeled_cost_roi_positive": true,
+        "paper_soak": true,
+        "replay_acceptance": true,
+        "risk_breaches_clear": true
+      },
+      "generated_at": "2026-05-17T04:22:06.845378+00:00",
+      "manifest": {
+        "artifacts": {
+          "metrics": "data/evidence/phase1/2026-05-17/run-002/metrics.json",
+          "paper_soak": "data/evidence/phase1/2026-05-17/run-002/paper_soak.json",
+          "promotion_source": "data/tuning/phase1-20260517-sol55.json",
+          "replay_acceptance": "data/evidence/phase1/2026-05-17/run-002/replay_acceptance.json",
+          "replay_source": "data/replay/phase1-20260517-sol55.ndjson",
+          "sqlite_source": null
+        },
+        "generated_at": "2026-05-17T04:22:06.845378+00:00",
+        "phase": "Phase 1",
+        "run_label": "run-002",
+        "schema_version": 1
+      },
+      "net_pnl_after_costs": 8.962272268876914,
+      "notes": [],
+      "risk_breaches": [],
+      "run_label": "run-002",
+      "status": "pass"
+    },
+    {
+      "checks": {
+        "manifest_valid": true,
+        "max_abs_unhedged_delta_ok": true,
+        "metrics_complete": true,
+        "modeled_cost_roi_positive": true,
+        "paper_soak": true,
+        "replay_acceptance": true,
+        "risk_breaches_clear": true
+      },
+      "generated_at": "2026-05-17T04:22:24.665365+00:00",
+      "manifest": {
+        "artifacts": {
+          "metrics": "data/evidence/phase1/2026-05-17/run-003/metrics.json",
+          "paper_soak": "data/evidence/phase1/2026-05-17/run-003/paper_soak.json",
+          "promotion_source": "data/tuning/phase1-20260517-sol55.json",
+          "replay_acceptance": "data/evidence/phase1/2026-05-17/run-003/replay_acceptance.json",
+          "replay_source": "data/replay/phase1-20260517-sol55.ndjson",
+          "sqlite_source": null
+        },
+        "generated_at": "2026-05-17T04:22:24.665365+00:00",
+        "phase": "Phase 1",
+        "run_label": "run-003",
+        "schema_version": 1
+      },
+      "net_pnl_after_costs": 8.962272268876914,
+      "notes": [],
+      "risk_breaches": [],
+      "run_label": "run-003",
+      "status": "pass"
+    }
+  ],
+  "summary": {
+    "aggregate_net_pnl_after_costs": 26.88681680663074,
+    "generated_at": "2026-05-17T04:22:24.724943+00:00",
+    "independence_ok": true,
+    "notes": [],
+    "phase": "Phase 1",
+    "required_independent_runs": 3,
+    "run_count": 3,
+    "status": "pass",
+    "status_counts": {
+      "fail": 0,
+      "incomplete": 0,
+      "pass": 3
+    }
+  }
+}

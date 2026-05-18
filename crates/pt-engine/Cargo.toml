@@ -37,6 +37,7 @@ pt-order-manager = { path = "../pt-order-manager" }
 pt-route = { path = "../pt-route" }
 pt-kraken = { path = "../pt-kraken" }
 pt-gemini = { path = "../pt-gemini" }
+pt-ai-agent = { path = "../pt-ai-agent" }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

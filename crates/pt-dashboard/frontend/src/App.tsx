@@ -226,6 +226,51 @@ type AgentConsoleView = {
   approvals: AgentApprovalItem[];
 };
 
+type StrategyCandidateReview = {
+  rank: number;
+  product_id?: string | null;
+  selected_market?: string | null;
+  variant: string;
+  params: Record<string, number | string | boolean | null>;
+  score: number;
+  objective_breakdown: {
+    net_return_after_costs: number;
+    drawdown_penalty: number;
+    turnover_penalty: number;
+    stability_penalty: number;
+    final_score: number;
+  };
+  stability: {
+    splits_requested: number;
+    score_stddev: number;
+    return_stddev: number;
+    penalty: number;
+    positive_windows: number;
+  };
+  risk_gate: {
+    status: string;
+    failure_count: number;
+    reason_codes: string[];
+  };
+  promotion_gate: {
+    status: string;
+    requires_replay_acceptance: boolean;
+    replay_acceptance_status?: string | null;
+    promotion_status?: string | null;
+    source_run_id?: string | null;
+  };
+  rejection_reasons: string[];
+  source_report_path?: string | null;
+  cycle_summary_path?: string | null;
+};
+
+type StrategyCandidatesResponse = {
+  product_id?: string | null;
+  source_report_path?: string | null;
+  cycle_summary_path?: string | null;
+  candidates: StrategyCandidateReview[];
+};
+
 type WorkspaceTab = {
   id: WorkspaceId;
   label: string;
@@ -525,6 +570,7 @@ export default function App() {
   const [listingRows, setListingRows] = useState<ListingRadarRow[]>([]);
   const [riskOverview, setRiskOverview] = useState<RiskOverview | null>(null);
   const [agentConsole, setAgentConsole] = useState<AgentConsoleView | null>(null);
+  const [strategyCandidates, setStrategyCandidates] = useState<StrategyCandidatesResponse | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<string>("");
   const [detail, setDetail] = useState<ProductDetail | null>(INITIAL_DETAIL);
   const [listingDetail, setListingDetail] = useState<ListingRadarDetail | null>(null);
@@ -542,7 +588,7 @@ export default function App() {
 
     async function tick() {
       try {
-        const [scannerRows, strategyState, orderRows, listingRadarRows, nextRiskOverview, nextAgentConsole] =
+        const [scannerRows, strategyState, orderRows, listingRadarRows, nextRiskOverview, nextAgentConsole, nextStrategyCandidates] =
           await Promise.all([
             getJson<ScannerRow[]>("/api/v1/scanner"),
             getJson<StrategiesResponse>("/api/v1/strategies"),
@@ -550,6 +596,9 @@ export default function App() {
             getJson<ListingRadarRow[]>("/api/v1/listings"),
             getJson<RiskOverview>("/api/v1/risk/overview"),
             getJson<AgentConsoleView>("/api/v1/agent/console"),
+            getJson<StrategyCandidatesResponse>(
+              `/api/v1/strategy-candidates${selectedProduct ? `?product_id=${encodeURIComponent(selectedProduct)}` : ""}`,
+            ),
           ]);
         if (cancelled) {
           return;
@@ -560,6 +609,7 @@ export default function App() {
         setListingRows(listingRadarRows);
         setRiskOverview(nextRiskOverview);
         setAgentConsole(nextAgentConsole);
+        setStrategyCandidates(nextStrategyCandidates);
         setModeDraft(strategyState.mode);
         if (!selectedProduct) {
           const fallbackProduct = scannerRows[0]?.product_id ?? listingRadarRows[0]?.product_id;
@@ -612,6 +662,7 @@ export default function App() {
   const topRow = scanner[0];
   const tone: Tone = topRow ? scoreTone(topRow.score) : "flat";
   const liveArm = strategies?.live_arm;
+  const primaryCandidate = strategyCandidates?.candidates[0] ?? null;
 
   const selection = useMemo(() => {
     return scanner.find((row) => row.product_id === selectedProduct) ?? null;
@@ -879,22 +930,88 @@ export default function App() {
 
             <div className="panel">
               <div className="panel-title">
-                <h2>Strategy Deployment Map</h2>
-                <span>{strategies?.strategies.length ?? 0}</span>
+                <h2>Candidate Review</h2>
+                <span>{strategyCandidates?.candidates.length ?? 0}</span>
               </div>
-              <div className="strategy-list dense">
-                {(strategies?.strategies ?? []).map((strategy) => (
-                  <div key={strategy.product_id} className="strategy-card">
-                    <strong>{strategy.product_id}</strong>
-                    <span>{strategy.strategy_name}</span>
-                    <small>
-                      threshold {strategy.score_threshold.toFixed(2)} / $
-                      {strategy.quote_size_usd.toFixed(0)}
-                    </small>
+              <div className="reason-stack">
+                {primaryCandidate ? (
+                  <>
+                    <div className="reason-card">
+                      <strong>
+                        #{primaryCandidate.rank} {primaryCandidate.variant}
+                      </strong>
+                      <p>
+                        Score {primaryCandidate.score.toFixed(3)} · promotion {primaryCandidate.promotion_gate.promotion_status ?? primaryCandidate.promotion_gate.status}
+                        {primaryCandidate.promotion_gate.replay_acceptance_status
+                          ? ` · replay ${primaryCandidate.promotion_gate.replay_acceptance_status}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="reason-card">
+                      <strong>Objective breakdown</strong>
+                      <p>
+                        net {primaryCandidate.objective_breakdown.net_return_after_costs.toFixed(3)} ·
+                        dd {primaryCandidate.objective_breakdown.drawdown_penalty.toFixed(3)} ·
+                        turn {primaryCandidate.objective_breakdown.turnover_penalty.toFixed(3)} ·
+                        stability {primaryCandidate.objective_breakdown.stability_penalty.toFixed(3)}
+                      </p>
+                    </div>
+                    <div className="reason-card">
+                      <strong>Lineage</strong>
+                      <p>
+                        {(primaryCandidate.selected_market ?? primaryCandidate.product_id ?? "market pending")} ·
+                        {primaryCandidate.promotion_gate.source_run_id ? ` run ${primaryCandidate.promotion_gate.source_run_id}` : " local candidate"}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="reason-card">
+                    <strong>No candidate report loaded</strong>
+                    <p>Run the local optimizer lane to populate ranking, rejection, and promotion evidence.</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Ranked Candidates</h2>
+              <span>{selectedProduct || "all products"}</span>
+            </div>
+            <div className="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Variant</th>
+                    <th>Params</th>
+                    <th>Score</th>
+                    <th>Risk</th>
+                    <th>Promotion</th>
+                    <th>Rejections</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(strategyCandidates?.candidates ?? []).map((candidate) => (
+                    <tr key={`${candidate.variant}-${candidate.rank}`}>
+                      <td>{candidate.rank}</td>
+                      <td>{candidate.variant}</td>
+                      <td>
+                        s{candidate.params.short_window ?? "-"} / l{candidate.params.long_window ?? "-"}
+                      </td>
+                      <td>{candidate.score.toFixed(3)}</td>
+                      <td>{candidate.risk_gate.status}</td>
+                      <td>{candidate.promotion_gate.promotion_status ?? candidate.promotion_gate.status}</td>
+                      <td>{candidate.rejection_reasons.join(", ") || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted">
+              Candidate ranking is optimizer evidence only. Replay and paper evidence remain separate gates.
+            </p>
           </div>
         </section>
       );

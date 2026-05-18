@@ -32,7 +32,7 @@ cargo run -p pt-cli -- tune-pine \
 
 ## 4) Validate in strategy lab (Python driver)
 
-Backtest, optimize, and optional local static server (same commands as `docs/LOCAL_VALIDATION.md`):
+Backtest, optimize, and optional local static server (same commands as `docs/development/LOCAL_VALIDATION.md`):
 
 ```bash
 cp config/coinbase_strategy_lab.example.json config/coinbase_strategy_lab.json

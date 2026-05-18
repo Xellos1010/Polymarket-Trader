@@ -59,7 +59,17 @@
     "min_gap": 2,
     "top_n": 20,
     "drawdown_penalty": 0.8,
-    "turnover_penalty": 0.2
+    "turnover_penalty": 0.2,
+    "stability_penalty": 0.35,
+    "stability_splits": 3,
+    "max_candidates": 200,
+    "max_markets": 4,
+    "max_variants": 3,
+    "max_runtime_sec": 10.0,
+    "max_drawdown": 0.35,
+    "max_trade_rate": 0.2,
+    "min_total_return": -0.05,
+    "requires_replay_acceptance": true
   },
   "overlap": {
     "candles_before": 0,

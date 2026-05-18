@@ -8,6 +8,10 @@ use pt_core::{
     WorkstationOrder, WorkstationOrderStatus, WorkstationProduct,
 };
 use pt_dashboard::{router, CoinbaseDashboardHandles, DashboardHandles, DashboardState};
+use pt_dashboard::{
+    StrategyCandidateObjectiveBreakdown, StrategyCandidatePromotionGateView,
+    StrategyCandidateReviewView, StrategyCandidateRiskGateView, StrategyCandidateStabilityView,
+};
 use serde_json::{json, Value};
 use std::{collections::HashMap, fs, sync::Arc};
 use tower::util::ServiceExt;
@@ -164,6 +168,48 @@ fn fixture_state() -> DashboardState {
         confidence: None,
         timeframe: Some("300s_candles".to_string()),
     }];
+    *coinbase.strategy_candidates.write() = vec![StrategyCandidateReviewView {
+        rank: 1,
+        product_id: Some("BTC-USD".to_string()),
+        selected_market: Some("BTC-USD".to_string()),
+        variant: "sma_baseline".to_string(),
+        params: serde_json::Map::from_iter([
+            ("short_window".to_string(), json!(5)),
+            ("long_window".to_string(), json!(21)),
+        ]),
+        score: 0.42,
+        objective_breakdown: StrategyCandidateObjectiveBreakdown {
+            net_return_after_costs: 0.12,
+            drawdown_penalty: 0.02,
+            turnover_penalty: 0.01,
+            stability_penalty: 0.005,
+            final_score: 0.42,
+        },
+        stability: StrategyCandidateStabilityView {
+            splits_requested: 3,
+            score_stddev: 0.01,
+            return_stddev: 0.02,
+            penalty: 0.005,
+            positive_windows: 3,
+        },
+        risk_gate: StrategyCandidateRiskGateView {
+            status: "pass".to_string(),
+            failure_count: 0,
+            reason_codes: Vec::new(),
+        },
+        promotion_gate: StrategyCandidatePromotionGateView {
+            status: "eligible_for_manual_review".to_string(),
+            requires_replay_acceptance: true,
+            replay_acceptance_status: Some("pass".to_string()),
+            promotion_status: Some("promoted".to_string()),
+            source_run_id: Some("cycle-fixture-1".to_string()),
+        },
+        rejection_reasons: Vec::new(),
+        source_report_path: Some("data/strategy_lab/optimize-fixture.json".to_string()),
+        cycle_summary_path: Some(
+            "data/strategy_lab/hourly_optimizer_runs/cycle-fixture.json".to_string(),
+        ),
+    }];
     *coinbase.product_details.write() = HashMap::from([(
         "BTC-USD".to_string(),
         ProductDetailView {
@@ -224,6 +270,7 @@ fn fixture_state() -> DashboardState {
         fused_bias: Arc::new(RwLock::new(bias)),
         inventory_usd: Arc::new(RwLock::new(5.0)),
         coinbase,
+        proposal_queue: pt_ai_agent::ProposalQueue::new(),
     })
 }
 
@@ -393,6 +440,12 @@ async fn state_endpoints_match_openapi_contract() {
         ("GET", "/api/v1/orders", "/api/v1/orders", None),
         ("GET", "/api/v1/strategies", "/api/v1/strategies", None),
         (
+            "GET",
+            "/api/v1/strategy-candidates",
+            "/api/v1/strategy-candidates?product_id=BTC-USD",
+            None,
+        ),
+        (
             "POST",
             "/api/v1/mode",
             "/api/v1/mode",
@@ -475,11 +528,16 @@ fn openapi_contains_all_runtime_paths() {
         "/api/v1/products/{product_id}",
         "/api/v1/orders",
         "/api/v1/strategies",
+        "/api/v1/strategy-candidates",
         "/api/v1/mode",
         "/api/v1/live/arm",
         "/api/v1/live/disarm",
         "/api/v1/orders/{order_id}/cancel",
         "/api/v1/strategy-lab/import",
+        "/api/v1/agent/console",
+        "/api/v1/agent/proposals",
+        "/api/v1/agent/proposals/{id}/resolve",
+        "/api/v1/ai-metrics",
     ];
 
     for p in required_paths {

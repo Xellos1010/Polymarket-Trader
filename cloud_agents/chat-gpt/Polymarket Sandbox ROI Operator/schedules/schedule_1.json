@@ -1,0 +1,5 @@
+{
+    "run_every": "1h",
+    "channel":"#financial-trading",
+    "instructions": "Run the hourly technical work cycle for the coordinated Polymarket-Trader and lambda-tradingviewer-ws repos. Review the current active issue, the latest tracked event, open PR state, and any file-overlap or merge-conflict risk. Prioritize bug checks that still need confirmation, validation work that is already in progress, and the next safe bounded technical task. If the same file is touched across multiple issues or PRs, call that out explicitly and recommend or maintain an isolated coordinating PR that references every related issue and PR for that file. Post a concise channel update with: active issue, repo, current gate, what changed since the last tracked event, blocker or validation result, PR status, merge-risk status, and one next safe action."
+}

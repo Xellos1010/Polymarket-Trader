@@ -1031,6 +1031,141 @@ def run_overlap_data(config: dict) -> dict:
     }
 
 
+def optimize_window_slices(total_bars: int, splits: int) -> List[Tuple[int, int]]:
+    if total_bars <= 0:
+        return []
+    splits = max(1, splits)
+    if splits == 1:
+        return [(0, total_bars)]
+
+    window = max(2, total_bars // splits)
+    slices: List[Tuple[int, int]] = []
+    start = 0
+    for idx in range(splits):
+        end = total_bars if idx == splits - 1 else min(total_bars, start + window)
+        if end - start >= 2:
+            slices.append((start, end))
+        start = end
+        if start >= total_bars:
+            break
+    return slices
+
+
+def evaluate_risk_gate(
+    per_market: Sequence[dict],
+    *,
+    max_drawdown: float,
+    max_trade_rate: float,
+    min_total_return: float,
+    min_sharpe_like: Optional[float],
+) -> Tuple[dict, List[str]]:
+    failures: List[dict] = []
+    rejection_reasons: List[str] = []
+
+    for row in per_market:
+        market = str(row.get("market", "unknown"))
+        metrics = row.get("metrics", {})
+        drawdown = float(metrics.get("max_drawdown", 0.0))
+        trades = float(metrics.get("trades", 0.0))
+        bars = max(1.0, float(metrics.get("bars", 0.0)))
+        trade_rate = float(row.get("trade_rate", trades / bars))
+        total_return = float(metrics.get("total_return", 0.0))
+        sharpe_like = float(metrics.get("sharpe_like", 0.0))
+
+        market_failures: List[str] = []
+        if drawdown > max_drawdown:
+            market_failures.append("max_drawdown_exceeded")
+        if trade_rate > max_trade_rate:
+            market_failures.append("trade_rate_exceeded")
+        if total_return < min_total_return:
+            market_failures.append("return_below_minimum")
+        if min_sharpe_like is not None and sharpe_like < min_sharpe_like:
+            market_failures.append("sharpe_like_below_minimum")
+
+        if market_failures:
+            failures.append(
+                {
+                    "market": market,
+                    "failures": market_failures,
+                    "metrics": {
+                        "max_drawdown": drawdown,
+                        "trade_rate": trade_rate,
+                        "total_return": total_return,
+                        "sharpe_like": sharpe_like,
+                    },
+                }
+            )
+            for failure in market_failures:
+                rejection_reasons.append(f"risk:{failure}@{market}")
+
+    return (
+        {
+            "status": "pass" if not failures else "fail",
+            "thresholds": {
+                "max_drawdown": max_drawdown,
+                "max_trade_rate": max_trade_rate,
+                "min_total_return": min_total_return,
+                "min_sharpe_like": min_sharpe_like,
+            },
+            "failures": failures,
+        },
+        rejection_reasons,
+    )
+
+
+def build_promotion_gate(
+    risk_gate: dict,
+    rejection_reasons: Sequence[str],
+    requires_replay_acceptance: bool,
+) -> dict:
+    eligible = risk_gate.get("status") == "pass" and not rejection_reasons
+    reason_codes = [reason.split("@", 1)[0].replace("risk:", "") for reason in rejection_reasons]
+    return {
+        "status": "eligible_for_manual_review" if eligible else "blocked",
+        "requires_replay_acceptance": requires_replay_acceptance,
+        "requires_manual_promotion": True,
+        "reason_codes": reason_codes,
+    }
+
+
+def objective_meta(config: dict, variants_considered: Sequence[str], markets_considered: Sequence[str]) -> dict:
+    optimize = config.get("optimize", {})
+    return {
+        "formula": "net_return_after_costs - drawdown_penalty - turnover_penalty - stability_penalty",
+        "weights": {
+            "drawdown_penalty": float(optimize.get("drawdown_penalty", 0.8)),
+            "turnover_penalty": float(optimize.get("turnover_penalty", 0.2)),
+            "stability_penalty": float(optimize.get("stability_penalty", 0.35)),
+        },
+        "risk_thresholds": {
+            "max_drawdown": float(optimize.get("max_drawdown", 0.35)),
+            "max_trade_rate": float(optimize.get("max_trade_rate", 0.2)),
+            "min_total_return": float(optimize.get("min_total_return", -0.05)),
+            "min_sharpe_like": (
+                None
+                if optimize.get("min_sharpe_like") is None
+                else float(optimize.get("min_sharpe_like", 0.0))
+            ),
+        },
+        "bounds": {
+            "max_candidates": int(optimize.get("max_candidates", 200)),
+            "max_markets": int(optimize.get("max_markets", max(1, len(markets_considered)))),
+            "max_variants": int(optimize.get("max_variants", max(1, len(variants_considered)))),
+            "max_runtime_sec": (
+                None
+                if optimize.get("max_runtime_sec") is None
+                else float(optimize.get("max_runtime_sec"))
+            ),
+            "stability_splits": int(optimize.get("stability_splits", 3)),
+        },
+        "notes": [
+            "total_return already includes modeled fees/slippage from the backtest engine",
+            "risk failures are hard disqualifiers for promotion eligibility",
+            "promotion still requires replay acceptance after optimize ranking",
+        ],
+    }
+
+
 def run_optimize_data(config: dict) -> dict:
     provider = config.get("provider", "coinbase")
     granularity = int(config.get("granularity_sec", 300))
@@ -1048,10 +1183,30 @@ def run_optimize_data(config: dict) -> dict:
     top_n = int(optimize.get("top_n", 15))
     drawdown_penalty = float(optimize.get("drawdown_penalty", 0.8))
     turnover_penalty = float(optimize.get("turnover_penalty", 0.2))
+    stability_penalty_weight = float(optimize.get("stability_penalty", 0.35))
+    stability_splits = max(1, int(optimize.get("stability_splits", 3)))
+    max_candidates = max(1, int(optimize.get("max_candidates", 200)))
+    max_markets = max(1, int(optimize.get("max_markets", max(1, len(markets)))))
+    max_variants = max(1, int(optimize.get("max_variants", max(1, len(variants)))))
+    max_runtime_sec = (
+        None if optimize.get("max_runtime_sec") is None else max(0.01, float(optimize.get("max_runtime_sec")))
+    )
+    max_drawdown = float(optimize.get("max_drawdown", 0.35))
+    max_trade_rate = float(optimize.get("max_trade_rate", 0.2))
+    min_total_return = float(optimize.get("min_total_return", -0.05))
+    min_sharpe_like = (
+        None if optimize.get("min_sharpe_like") is None else float(optimize.get("min_sharpe_like", 0.0))
+    )
+    requires_replay_acceptance = bool(optimize.get("requires_replay_acceptance", True))
+
+    bounded_markets = [str(m).strip() for m in markets[:max_markets] if str(m).strip()]
+    bounded_variants = variants[:max_variants]
+    objective_descriptor = objective_meta(config, [v["name"] for v in bounded_variants], bounded_markets)
+    started_at = time.monotonic()
 
     market_candles: Dict[str, List[Candle]] = {}
     errors = []
-    for market in markets:
+    for market in bounded_markets:
         try:
             candles = fetch_candles_retry(provider, market, granularity, limit)
         except Exception as exc:
@@ -1060,7 +1215,9 @@ def run_optimize_data(config: dict) -> dict:
         market_candles[market] = candles
 
     rankings = []
-    for variant in variants:
+    candidate_count = 0
+    runtime_limited = False
+    for variant in bounded_variants:
         variant_name = variant["name"]
         bias_gain = float(variant.get("bias_gain", 0.0))
         plugins = variant.get("plugins", [])
@@ -1072,6 +1229,11 @@ def run_optimize_data(config: dict) -> dict:
 
         for short_window in short_windows:
             for long_window in long_windows:
+                if candidate_count >= max_candidates:
+                    break
+                if max_runtime_sec is not None and (time.monotonic() - started_at) >= max_runtime_sec:
+                    runtime_limited = True
+                    break
                 if long_window <= short_window + min_gap:
                     continue
 
@@ -1093,17 +1255,61 @@ def run_optimize_data(config: dict) -> dict:
                     )
                     metrics = bt_res["metrics"]
                     trade_rate = metrics["trades"] / max(1, metrics["bars"])
+                    window_scores = []
+                    window_returns = []
+                    for start, end in optimize_window_slices(len(candles), stability_splits):
+                        window_candles = candles[start:end]
+                        if len(window_candles) < long_window + 2:
+                            continue
+                        window_bias = bias_series[start:end] if bias_series is not None else None
+                        window_result = backtest_sma_crossover(
+                            window_candles,
+                            short_window=short_window,
+                            long_window=long_window,
+                            fee_bps=strategy["fee_bps"],
+                            slippage_bps=strategy["slippage_bps"],
+                            starting_equity=strategy["starting_equity"],
+                            bias_series=window_bias,
+                            bias_gain=bias_gain,
+                        )
+                        window_metrics = window_result["metrics"]
+                        window_trade_rate = window_metrics["trades"] / max(1, window_metrics["bars"])
+                        window_score = (
+                            window_metrics["total_return"]
+                            - drawdown_penalty * window_metrics["max_drawdown"]
+                            - turnover_penalty * window_trade_rate
+                        )
+                        window_scores.append(window_score)
+                        window_returns.append(float(window_metrics["total_return"]))
+
                     score = (
                         metrics["total_return"]
                         - drawdown_penalty * metrics["max_drawdown"]
                         - turnover_penalty * trade_rate
                     )
+                    score_stddev = (
+                        statistics.pstdev(window_scores) if len(window_scores) > 1 else 0.0
+                    )
+                    return_stddev = (
+                        statistics.pstdev(window_returns) if len(window_returns) > 1 else 0.0
+                    )
+                    stability_penalty = stability_penalty_weight * score_stddev
                     per_market.append(
                         {
                             "market": market,
                             "score": score,
                             "metrics": metrics,
                             "trade_rate": trade_rate,
+                            "window_scores": window_scores,
+                            "window_returns": window_returns,
+                            "stability": {
+                                "splits_requested": stability_splits,
+                                "splits_evaluated": len(window_scores),
+                                "score_stddev": score_stddev,
+                                "return_stddev": return_stddev,
+                                "positive_windows": sum(1 for value in window_returns if value > 0),
+                                "penalty": stability_penalty,
+                            },
                         }
                     )
 
@@ -1114,32 +1320,97 @@ def run_optimize_data(config: dict) -> dict:
                 avg_return = statistics.fmean(x["metrics"]["total_return"] for x in per_market)
                 avg_drawdown = statistics.fmean(x["metrics"]["max_drawdown"] for x in per_market)
                 avg_trades = statistics.fmean(x["metrics"]["trades"] for x in per_market)
+                avg_trade_rate = statistics.fmean(x["trade_rate"] for x in per_market)
+                stability_score_stddev = statistics.fmean(
+                    x["stability"]["score_stddev"] for x in per_market
+                )
+                stability_return_stddev = statistics.fmean(
+                    x["stability"]["return_stddev"] for x in per_market
+                )
+                stability_penalty = stability_penalty_weight * stability_score_stddev
+                rejection_reasons: List[str] = []
+                risk_gate, risk_rejections = evaluate_risk_gate(
+                    per_market,
+                    max_drawdown=max_drawdown,
+                    max_trade_rate=max_trade_rate,
+                    min_total_return=min_total_return,
+                    min_sharpe_like=min_sharpe_like,
+                )
+                rejection_reasons.extend(risk_rejections)
+                if stability_score_stddev > 0.12:
+                    rejection_reasons.append("stability:score_stddev_above_threshold")
+                if stability_return_stddev > 0.12:
+                    rejection_reasons.append("stability:return_stddev_above_threshold")
+                final_score = avg_score - stability_penalty
+                promotion_gate = build_promotion_gate(
+                    risk_gate,
+                    rejection_reasons,
+                    requires_replay_acceptance=requires_replay_acceptance,
+                )
+                ranking_score = final_score if not rejection_reasons else final_score - 1000.0
 
                 rankings.append(
                     {
                         "variant": variant_name,
                         "params": {"short_window": short_window, "long_window": long_window},
-                        "score": avg_score,
+                        "score": final_score,
+                        "ranking_score": ranking_score,
                         "avg_return": avg_return,
                         "avg_drawdown": avg_drawdown,
                         "avg_trades": avg_trades,
+                        "avg_trade_rate": avg_trade_rate,
                         "market_count": len(per_market),
+                        "objective_breakdown": {
+                            "net_return_after_costs": avg_return,
+                            "drawdown_penalty": drawdown_penalty * avg_drawdown,
+                            "turnover_penalty": turnover_penalty * avg_trade_rate,
+                            "stability_penalty": stability_penalty,
+                            "final_score": final_score,
+                        },
+                        "stability": {
+                            "splits_requested": stability_splits,
+                            "score_stddev": stability_score_stddev,
+                            "return_stddev": stability_return_stddev,
+                            "penalty": stability_penalty,
+                            "positive_windows": sum(
+                                x["stability"]["positive_windows"] for x in per_market
+                            ),
+                        },
+                        "risk_gate": risk_gate,
+                        "promotion_gate": promotion_gate,
+                        "rejection_reasons": rejection_reasons,
                         "per_market": per_market,
                     }
                 )
+                candidate_count += 1
+            if candidate_count >= max_candidates or runtime_limited:
+                break
+        if candidate_count >= max_candidates or runtime_limited:
+            break
 
-    rankings.sort(key=lambda x: x["score"], reverse=True)
+    rankings.sort(key=lambda x: x["ranking_score"], reverse=True)
     top = rankings[:top_n]
+    for idx, row in enumerate(top, start=1):
+        row["rank"] = idx
+        row.pop("ranking_score", None)
 
     return {
         "meta": {
             "provider": provider,
             "granularity_sec": granularity,
             "markets": list(market_candles.keys()),
-            "variants": [v["name"] for v in variants],
+            "variants": [v["name"] for v in bounded_variants],
             "top_n": top_n,
-            "drawdown_penalty": drawdown_penalty,
-            "turnover_penalty": turnover_penalty,
+            "objective": objective_descriptor,
+            "candidate_count": candidate_count,
+            "bounded_search": {
+                "max_candidates": max_candidates,
+                "max_markets": max_markets,
+                "max_variants": max_variants,
+                "max_runtime_sec": max_runtime_sec,
+                "runtime_limited": runtime_limited,
+                "elapsed_sec": round(time.monotonic() - started_at, 6),
+            },
         },
         "top": top,
         "errors": errors,
@@ -1264,15 +1535,15 @@ def render_overlap_html(payload: dict, out_path: pathlib.Path) -> None:
 def render_optimize_html(payload: dict, out_path: pathlib.Path) -> None:
     body = """
 <h2>Coinbase Strategy Lab: Optimization</h2>
-<div class="card hint">Objective = avg_return - drawdown_penalty*avg_drawdown - turnover_penalty*trade_rate</div>
+<div class="card hint">Objective = net return after modeled costs - drawdown penalty - turnover penalty - stability penalty. Risk failures block promotion eligibility.</div>
 <div class="card"><table class="table" id="rankings"></table></div>
 <div class="card error" id="errors"></div>
 """
 
     script = (
         common_chart_js()
-        + "const head='<tr><th>rank</th><th>variant</th><th>short</th><th>long</th><th>score</th><th>avg_return</th><th>avg_drawdown</th><th>avg_trades</th><th>markets</th></tr>';"
-        "const rows=(DATA.top||[]).map((x,i)=>`<tr><td>${i+1}</td><td>${x.variant}</td><td>${x.params.short_window}</td><td>${x.params.long_window}</td><td>${fmt(x.score,6)}</td><td>${fmt(x.avg_return,6)}</td><td>${fmt(x.avg_drawdown,6)}</td><td>${fmt(x.avg_trades,2)}</td><td>${x.market_count}</td></tr>`).join('');"
+        + "const head='<tr><th>rank</th><th>variant</th><th>short</th><th>long</th><th>score</th><th>stability</th><th>risk</th><th>promotion</th><th>rejections</th></tr>';"
+        "const rows=(DATA.top||[]).map((x,i)=>`<tr><td>${x.rank??(i+1)}</td><td>${x.variant}</td><td>${x.params.short_window}</td><td>${x.params.long_window}</td><td>${fmt(x.score,6)}</td><td>${fmt(x.stability?.penalty,6)}</td><td>${x.risk_gate?.status||'-'}</td><td>${x.promotion_gate?.status||'-'}</td><td>${(x.rejection_reasons||[]).join(', ')||'-'}</td></tr>`).join('');"
         "document.getElementById('rankings').innerHTML=head+rows;"
         "document.getElementById('errors').innerHTML=(DATA.errors||[]).map(e=>`${e.market}: ${e.error}`).join('<br/>')||'none';"
     )

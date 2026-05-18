@@ -1,0 +1,7 @@
+{
+    "run_every": "Sun,Mon,Tue,Wed,Thu,Fri,Sat",
+    "run_at": "09:00",
+    "timezone": "America/New_York",
+    "channel":"#financial-trading",
+    "instructions": "Run the daily development report for the coordinated Polymarket-Trader and lambda-tradingviewer-ws repos. Use the adversarial review document, issue ledger, PR ledger, and current repo state to summarize daily progress. Include active issues, implementation and validation movement, PR status changes, blocked work, merge-conflict risk, file-overlap aggregation decisions, and the one highest-priority next safe action. Post the report to the channel in a compact operator-friendly format."
+}

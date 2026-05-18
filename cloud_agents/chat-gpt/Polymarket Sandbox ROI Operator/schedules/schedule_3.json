@@ -1,0 +1,7 @@
+{
+    "run_every": "Mon",
+    "run_at": "09:00",
+    "timezone": "America/New_York",
+    "channel":"#financial-trading",
+    "instructions": "Run the weekly engineering and integration review for the coordinated Polymarket-Trader and lambda-tradingviewer-ws repos. Summarize completed issues, in-progress issues, PR review and approval state, blocked work, cross-repo dependencies, files touched by multiple issues, isolated coordinating PR requirements, validation outcomes, and the recommended sequence for the next week. Highlight any merge-conflict exposure across integrations and any tasks that must remain grouped into a single isolated PR. Post the report to the channel in a concise but complete weekly summary."
+}

@@ -72,6 +72,17 @@ When a change touches `crates/pt-dashboard/frontend`, also run:
 ```bash
 pnpm exec nx run pt-dashboard-frontend:test
 pnpm exec nx run pt-dashboard-frontend:build
+pnpm --dir crates/pt-dashboard/frontend benchmark
+```
+
+For strategy benchmark changes or benchmark baseline refreshes, also run:
+
+```bash
+python3 tools/strategy_benchmark.py \
+  --config config/coinbase_strategy_lab.example.json \
+  --out-dir artifacts/benchmarks/$(date +%F) \
+  --replay data/replay/strategy_lab_promoted.ndjson \
+  --promotion data/tuning/strategy_lab_promoted.json
 ```
 
 ## What CI covers
@@ -97,7 +108,8 @@ Useful outputs to keep when a run fails or when Phase 1 evidence is being review
 - `data/strategy_lab/` reports and exports
 - `data/replay/` replay artifacts
 - `data/soak/` paper-soak JSON and logs
-- `docs/SESSION_CONTEXT.md` checkpoints when preserving context
+- `artifacts/benchmarks/<date>/` frontend and strategy benchmark JSON/Markdown
+- `docs/development/SESSION_CONTEXT.md` checkpoints when preserving context
 
 ## Common failure points
 

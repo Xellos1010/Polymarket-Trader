@@ -2,7 +2,7 @@
 
 ## Maintainer status (optional)
 
-Program status, boards, and session notes live in `docs/WORK_STATUS.md`, `docs/WORK_STATUS.json`, `docs/archive/program-history-2026/INTEGRATION_BOARD.md` (historical snapshot), and `docs/SESSION_CONTEXT.md`. Timelines there may lag the default procedures below; prefer this runbook plus [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md) and [api/dashboard-openapi.yaml](api/dashboard-openapi.yaml) for “what to run now.”
+Program status, boards, and session notes live in `docs/development/WORK_STATUS.md`, `docs/development/WORK_STATUS.json`, `docs/archive/program-history-2026/INTEGRATION_BOARD.md` (historical snapshot), and `docs/development/SESSION_CONTEXT.md`. Timelines there may lag the default procedures below; prefer this runbook plus [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md) and [api/dashboard-openapi.yaml](api/dashboard-openapi.yaml) for “what to run now.”
 
 ## Pre-merge validation
 
@@ -13,7 +13,7 @@ Before merge, deployment, or any operator-readiness claim, run the canonical loc
 ```
 
 Reference guide:
-- `docs/LOCAL_VALIDATION.md`
+- `docs/development/LOCAL_VALIDATION.md`
 
 ## Startup
 ```bash
@@ -47,6 +47,18 @@ Phase 1 evidence bundle:
   --metrics data/evidence/run-001-metrics.json
 ```
 
+Phase 1 metrics derivation:
+```bash
+python3 tools/phase1_metrics.py \
+  --report data/strategy_lab/<report>.json \
+  --promotion data/tuning/strategy_lab_promoted.json \
+  --replay-acceptance data/evidence/phase1/20260426/run-001/replay_acceptance.json \
+  --paper-soak data/soak/paper-soak-20260426-010203.json \
+  --market SOL-USD \
+  --variant sma_baseline \
+  --out data/evidence/run-001-metrics.json
+```
+
 Phase 1 gate report:
 ```bash
 python3 tools/phase1_gate_report.py \
@@ -65,6 +77,18 @@ Interpretation:
 - `pass` means at least three independent runs were present, aggregate net PnL after costs stayed positive, and no hard risk breach was detected.
 - `fail` means a hard gate was violated.
 - `incomplete` means evidence is missing, malformed, or not yet repeatable across three runs.
+
+Benchmark harnesses:
+```bash
+pnpm --dir crates/pt-dashboard/frontend benchmark
+python3 tools/strategy_benchmark.py \
+  --config config/coinbase_strategy_lab.example.json \
+  --out-dir artifacts/benchmarks/$(date +%F) \
+  --replay data/replay/strategy_lab_promoted.ndjson \
+  --promotion data/tuning/strategy_lab_promoted.json
+```
+
+Benchmark outputs are local fixture/workstation measurements only. Do not treat them as replay or paper evidence.
 
 ## Live readiness gate
 ```bash
@@ -99,7 +123,7 @@ Use **`GET /api/v1/orders`** (and related OpenAPI paths) for current workstation
 5. If exchange or hedge is degraded, keep `halt` or `flatten` active.
 6. Preserve a context snapshot:
    ```bash
-   ./scripts/save_context.sh "incident note" docs/SESSION_CONTEXT.md config/config.toml
+   ./scripts/save_context.sh "incident note" docs/development/SESSION_CONTEXT.md config/config.toml
    ```
 
 ## Rollback
@@ -107,9 +131,9 @@ Use **`GET /api/v1/orders`** (and related OpenAPI paths) for current workstation
 - Code rollback (git): `git revert <commit>` and redeploy.
 
 ## Post-incident
-- Append notes to `docs/SESSION_CONTEXT.md`.
+- Append notes to `docs/development/SESSION_CONTEXT.md`.
 - Update `docs/SDLC_CHECKLIST.md` if process or tooling gaps were found.
-- Update `docs/WORK_STATUS.md` and `docs/WORK_STATUS.json` if the incident changes the active blocker or next safe slice.
+- Update `docs/development/WORK_STATUS.md` and `docs/development/WORK_STATUS.json` if the incident changes the active blocker or next safe slice.
 
 ## External AI handoff
 ```bash

@@ -70,7 +70,9 @@ impl RiskEngine {
             return deny("DAILY_LOSS_LIMIT", Some("daily_loss_limit_pct"));
         }
 
-        if st.open_notional_total + quote.bid_sz > self.cfg.max_total_open_notional {
+        let reserved_notional = quote_reserved_notional(quote);
+
+        if st.open_notional_total + reserved_notional > self.cfg.max_total_open_notional {
             return deny("MAX_TOTAL_OPEN_NOTIONAL", Some("max_total_open_notional"));
         }
 
@@ -78,7 +80,7 @@ impl RiskEngine {
             .open_notional_per_market
             .get(&quote.market_id)
             .unwrap_or(&0.0);
-        if current_market_notional + quote.bid_sz > self.cfg.max_notional_per_market {
+        if current_market_notional + reserved_notional > self.cfg.max_notional_per_market {
             return deny("MAX_NOTIONAL_PER_MARKET", Some("max_notional_per_market"));
         }
 
@@ -106,7 +108,8 @@ impl RiskEngine {
 
     pub fn reserve_quote_exposure(&self, quote: &QuoteIntent) {
         let mut st = self.state.write();
-        st.open_notional_total += quote.bid_sz;
+        let reserved_notional = quote_reserved_notional(quote);
+        st.open_notional_total += reserved_notional;
         let is_new_market = !st.open_notional_per_market.contains_key(&quote.market_id);
         if is_new_market {
             st.open_markets += 1;
@@ -115,7 +118,7 @@ impl RiskEngine {
             .open_notional_per_market
             .entry(quote.market_id.clone())
             .or_insert(0.0);
-        *e += quote.bid_sz;
+        *e += reserved_notional;
     }
 
     pub fn release_market_exposure(&self, market_id: &str) {
@@ -195,12 +198,17 @@ fn deny(reason: &str, limit: Option<&str>) -> RiskDecision {
     }
 }
 
+fn quote_reserved_notional(quote: &QuoteIntent) -> f64 {
+    quote.bid_sz + quote.ask_sz
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn risk_cfg() -> RiskConfig {
         RiskConfig {
+            deployed_capital_usd: 50.0,
             daily_loss_limit_pct: 0.02,
             max_notional_per_market: 5.0,
             max_total_open_notional: 10.0,
@@ -266,9 +274,9 @@ mod tests {
     #[test]
     fn max_notional_per_market_is_enforced() {
         let engine = RiskEngine::new(risk_cfg(), 50.0);
-        engine.reserve_quote_exposure(&quote("m1", 3.0));
+        engine.reserve_quote_exposure(&quote("m1", 2.0));
 
-        let decision = engine.evaluate_quote(&quote("m1", 3.0), 100);
+        let decision = engine.evaluate_quote(&quote("m1", 1.0), 100);
         assert!(!decision.allow);
         assert_eq!(decision.reason_code, "MAX_NOTIONAL_PER_MARKET");
     }
@@ -303,13 +311,33 @@ mod tests {
         engine.reserve_quote_exposure(&quote("m2", 4.0));
 
         let snapshot = engine.snapshot();
-        assert_eq!(snapshot.open_notional, 9.0);
+        assert_eq!(snapshot.open_notional, 18.0);
         assert_eq!(snapshot.open_markets, 2);
 
         engine.release_market_exposure("m1");
         let snapshot = engine.snapshot();
-        assert_eq!(snapshot.open_notional, 4.0);
+        assert_eq!(snapshot.open_notional, 8.0);
         assert_eq!(snapshot.open_markets, 1);
+    }
+
+    #[test]
+    fn dual_sided_quote_counts_against_market_limit() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+
+        let decision = engine.evaluate_quote(&quote("m1", 3.0), 100);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "MAX_NOTIONAL_PER_MARKET");
+    }
+
+    #[test]
+    fn dual_sided_quote_counts_against_total_limit() {
+        let engine = RiskEngine::new(risk_cfg(), 50.0);
+        engine.reserve_quote_exposure(&quote("m1", 2.0));
+        engine.reserve_quote_exposure(&quote("m2", 2.0));
+
+        let decision = engine.evaluate_quote(&quote("m1", 1.5), 100);
+        assert!(!decision.allow);
+        assert_eq!(decision.reason_code, "MAX_TOTAL_OPEN_NOTIONAL");
     }
 
     #[test]

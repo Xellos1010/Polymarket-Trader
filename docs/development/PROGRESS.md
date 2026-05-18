@@ -12,7 +12,7 @@ Grounded current state:
 - Issue `#48` is the `active_now` code-bearing slice.
 - Issue `#9` remains paused until compile integrity is restored and the local validation ladder is green.
 - Remote branch search shows 44 visible `codex/` branches and the control files classify the full set.
-- `docs/WORK_STATUS.md` is the operator-readable stage tracker and `docs/WORK_STATUS.json` is the machine-readable mirror.
+- `docs/development/WORK_STATUS.md` is the operator-readable stage tracker and `docs/development/WORK_STATUS.json` is the machine-readable mirror.
 - The visible Phase 0 recovery reference branches do not contain a cleaner Slice 1 payload for the two blocked Rust files, so the next meaningful improvement still belongs directly on PR `#51`.
 
 ## Validation evidence status
@@ -66,8 +66,8 @@ Grounded current state:
 
 Canonical branch-classification source (historical snapshot):
 - `docs/archive/program-history-2026/INTEGRATION_BOARD.md`
-- `docs/WORK_STATUS.md`
-- `docs/WORK_STATUS.json`
+- `docs/development/WORK_STATUS.md`
+- `docs/development/WORK_STATUS.json`
 
 ## Next queue
 1. Issue `#48`: repair `crates/pt-cli/src/main.rs` and `crates/pt-coinbase/src/lib.rs` only.

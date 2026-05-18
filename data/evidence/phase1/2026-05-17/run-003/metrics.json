@@ -1,0 +1,29 @@
+{
+  "adverse_selection": 0.0,
+  "daily_loss_limit_breached": false,
+  "derived_from": {
+    "fee_bps": 8.0,
+    "gross_turnover": 259.31,
+    "paper_soak_max_abs_unhedged_delta": 0.0,
+    "paper_soak_pass": true,
+    "promotion_market": "SOL-USD",
+    "promotion_variant": "sma_baseline",
+    "replay_acceptance_status": "pass",
+    "report_bars": 300,
+    "report_total_return": 0.008962272268876914,
+    "slippage_bps": 2.0,
+    "source_report": "data/strategy_lab/backtest-20260517-041937.json"
+  },
+  "fees": 0.207448,
+  "gas_amortized": 0.0,
+  "hedge_cost": 0.0,
+  "market": "SOL-USD",
+  "max_market_notional_breached": false,
+  "max_total_open_notional_breached": false,
+  "max_unhedged_delta_breached": false,
+  "net_pnl_after_costs": 8.962272268876914,
+  "slippage": 0.051862,
+  "stale_book_breached": false,
+  "unexpected_auto_halt": false,
+  "variant": "sma_baseline"
+}
