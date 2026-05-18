@@ -520,9 +520,157 @@ pub fn max_drawdown(equity: &[f64]) -> f64 {
     max_dd
 }
 
+/// Williams %R: -100 * (highest_high - close) / (highest_high - lowest_low) over `len` bars.
+/// Returns values in [-100, 0]; None for warmup bars.
+pub fn williams_r(candles: &[Candle], len: usize) -> Vec<Option<f64>> {
+    let n = candles.len();
+    if len == 0 || n < len {
+        return vec![None; n];
+    }
+    let mut out = vec![None; n];
+    for i in (len - 1)..n {
+        let window = &candles[i + 1 - len..=i];
+        let hh = window.iter().map(|c| c.high).fold(f64::NEG_INFINITY, f64::max);
+        let ll = window.iter().map(|c| c.low).fold(f64::INFINITY, f64::min);
+        let range = hh - ll;
+        if range > 0.0 {
+            out[i] = Some(-100.0 * (hh - candles[i].close) / range);
+        } else {
+            out[i] = Some(-50.0);
+        }
+    }
+    out
+}
+
+/// Commodity Channel Index: (typical_price - sma(tp, len)) / (0.015 * mean_deviation).
+/// Returns None for warmup bars.
+pub fn cci(candles: &[Candle], len: usize) -> Vec<Option<f64>> {
+    let n = candles.len();
+    if len == 0 || n < len {
+        return vec![None; n];
+    }
+    let tp: Vec<f64> = candles
+        .iter()
+        .map(|c| (c.high + c.low + c.close) / 3.0)
+        .collect();
+    let tp_sma = sma(&tp, len);
+    let mut out = vec![None; n];
+    for i in (len - 1)..n {
+        if let Some(mean) = tp_sma[i] {
+            let dev: f64 = tp[i + 1 - len..=i]
+                .iter()
+                .map(|v| (v - mean).abs())
+                .sum::<f64>()
+                / len as f64;
+            if dev > 0.0 {
+                out[i] = Some((tp[i] - mean) / (0.015 * dev));
+            } else {
+                out[i] = Some(0.0);
+            }
+        }
+    }
+    out
+}
+
+pub struct KeltnerBands {
+    pub middle: Vec<Option<f64>>,
+    pub upper: Vec<Option<f64>>,
+    pub lower: Vec<Option<f64>>,
+}
+
+/// Keltner Channels: middle = EMA(close, len); upper/lower = middle ± mult * ATR(atr_len).
+pub fn keltner(candles: &[Candle], len: usize, atr_len: usize, mult: f64) -> KeltnerBands {
+    let n = candles.len();
+    let cl = closes(candles);
+    let middle = ema(&cl, len);
+    let atr_series = atr(candles, atr_len);
+    let mut upper = vec![None; n];
+    let mut lower = vec![None; n];
+    for i in 0..n {
+        if let (Some(m), Some(a)) = (middle[i], atr_series[i]) {
+            upper[i] = Some(m + mult * a);
+            lower[i] = Some(m - mult * a);
+        }
+    }
+    KeltnerBands {
+        middle,
+        upper,
+        lower,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::macd;
+    use super::{cci, keltner, macd, williams_r};
+    use crate::types::Candle;
+
+    fn flat_candles(n: usize, price: f64) -> Vec<Candle> {
+        (0..n)
+            .map(|i| Candle {
+                ts_ms: i as i64 * 300_000,
+                open: price,
+                high: price + 1.0,
+                low: price - 1.0,
+                close: price,
+                volume: 1.0,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn williams_r_warmup_is_none() {
+        let c = flat_candles(20, 100.0);
+        let out = williams_r(&c, 14);
+        assert!(out[..13].iter().all(Option::is_none));
+        assert!(out[13].is_some());
+    }
+
+    #[test]
+    fn williams_r_range_bounds() {
+        let c = flat_candles(30, 100.0);
+        let out = williams_r(&c, 14);
+        for v in out.into_iter().flatten() {
+            assert!(v >= -100.0 && v <= 0.0);
+        }
+    }
+
+    #[test]
+    fn cci_warmup_is_none() {
+        let c = flat_candles(20, 100.0);
+        let out = cci(&c, 14);
+        assert!(out[..13].iter().all(Option::is_none));
+        assert!(out[13].is_some());
+    }
+
+    #[test]
+    fn cci_flat_prices_return_zero() {
+        let c = flat_candles(30, 100.0);
+        let out = cci(&c, 14);
+        for v in out.into_iter().flatten() {
+            assert!(v.abs() < 1e-9, "expected ~0 CCI for flat prices, got {v}");
+        }
+    }
+
+    #[test]
+    fn keltner_produces_values_from_first_bar() {
+        // EMA and RMA-based ATR both start at index 0, so Keltner bands are Some from bar 0
+        let c = flat_candles(20, 100.0);
+        let k = keltner(&c, 10, 10, 2.0);
+        assert!(k.upper[0].is_some());
+        assert!(k.lower[0].is_some());
+        assert!(k.middle[0].is_some());
+    }
+
+    #[test]
+    fn keltner_upper_gt_lower() {
+        let c = flat_candles(50, 100.0);
+        let k = keltner(&c, 10, 10, 2.0);
+        for i in 0..50 {
+            if let (Some(u), Some(l)) = (k.upper[i], k.lower[i]) {
+                assert!(u > l);
+            }
+        }
+    }
 
     #[test]
     fn macd_preserves_warmup_gaps_in_signal_and_histogram() {
