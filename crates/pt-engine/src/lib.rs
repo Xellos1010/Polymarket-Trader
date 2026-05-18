@@ -305,7 +305,10 @@ impl TradingEngine {
             cfg.signals.tradingview.k_tv,
         );
 
-        let risk = Arc::new(RiskEngine::new(cfg.risk.clone(), 50.0));
+        let risk = Arc::new(RiskEngine::new(
+            cfg.risk.clone(),
+            cfg.risk.deployed_capital_usd,
+        ));
 
         let poly_exec: Arc<dyn PolymarketExecution> = match cfg.engine.mode {
             EngineMode::Replay | EngineMode::Paper => Arc::new(PaperPolymarketExecutor),
@@ -336,7 +339,6 @@ impl TradingEngine {
                     cfg.venues.coinbase.api_base.clone(),
                     cfg.venues.coinbase.api_key.clone(),
                     cfg.venues.coinbase.api_secret.clone(),
-                    cfg.venues.coinbase.passphrase.clone(),
                 ))
             }
         };
@@ -970,5 +972,47 @@ async fn tradingview_webhook(
             state.metrics.inc_counter("tv_webhook_parse_error", 1.0);
             (axum::http::StatusCode::BAD_REQUEST, "failed to parse")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_config() -> AppConfig {
+        let raw = include_str!("../../../config/config.example.toml");
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("pt-engine-risk-{nonce}"));
+        std::fs::create_dir_all(&base).expect("create temp base");
+        let config_path = base.join("config.toml");
+        std::fs::write(&config_path, raw).expect("write temp config");
+        let mut cfg = AppConfig::from_file(&config_path).expect("load config example");
+        cfg.storage.sqlite_path = base.join("engine.sqlite").display().to_string();
+        cfg.storage.parquet_dir = base.join("parquet").display().to_string();
+        cfg
+    }
+
+    #[tokio::test]
+    async fn engine_startup_uses_configured_deployed_capital() {
+        let cfg = test_config();
+        let expected_max_daily_loss = cfg.risk.deployed_capital_usd * cfg.risk.daily_loss_limit_pct;
+        let engine = TradingEngine::new(cfg).expect("engine");
+
+        assert_eq!(
+            engine.risk.snapshot().max_daily_loss,
+            expected_max_daily_loss
+        );
+
+        let watchdog = engine.spawn_watchdog_loop();
+        tokio::time::sleep(Duration::from_millis(75)).await;
+
+        let shared_max_daily_loss = engine.state.risk_state.read().max_daily_loss;
+        watchdog.abort();
+
+        assert_eq!(shared_max_daily_loss, expected_max_daily_loss);
     }
 }

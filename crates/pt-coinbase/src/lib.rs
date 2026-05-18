@@ -80,7 +80,6 @@ pub struct CoinbaseSpotHedger {
     jwt_host_path: String,
     api_key: Option<String>,
     api_secret: Option<String>,
-    passphrase: Option<String>,
 }
 
 impl CoinbaseSpotHedger {
@@ -88,7 +87,6 @@ impl CoinbaseSpotHedger {
         api_base: impl Into<String>,
         api_key: Option<String>,
         api_secret: Option<String>,
-        passphrase: Option<String>,
     ) -> Self {
         let api_base = api_base.into();
         let jwt_host_path = derive_host_path_for_jwt(&api_base);
@@ -98,7 +96,6 @@ impl CoinbaseSpotHedger {
             jwt_host_path,
             api_key,
             api_secret,
-            passphrase,
         }
     }
 
@@ -155,14 +152,6 @@ impl CoinbaseSpotHedger {
             HeaderValue::from_str(&format!("Bearer {token}"))
                 .map_err(|e| PtError::Http(e.to_string()))?,
         );
-        if let Some(passphrase) = &self.passphrase {
-            if !passphrase.trim().is_empty() {
-                headers.insert(
-                    "CB-ACCESS-PASSPHRASE",
-                    HeaderValue::from_str(passphrase).map_err(|e| PtError::Http(e.to_string()))?,
-                );
-            }
-        }
         Ok(headers)
     }
 
@@ -314,7 +303,6 @@ pub struct CoinbaseAdvancedTradeClient {
     jwt_host_path: String,
     api_key: Option<String>,
     api_secret: Option<String>,
-    passphrase: Option<String>,
 }
 
 impl CoinbaseAdvancedTradeClient {
@@ -322,7 +310,6 @@ impl CoinbaseAdvancedTradeClient {
         api_base: impl Into<String>,
         api_key: Option<String>,
         api_secret: Option<String>,
-        passphrase: Option<String>,
     ) -> Self {
         let api_base = api_base.into();
         let jwt_host_path = derive_host_path_for_jwt(&api_base);
@@ -332,7 +319,6 @@ impl CoinbaseAdvancedTradeClient {
             jwt_host_path,
             api_key,
             api_secret,
-            passphrase,
         }
     }
 
@@ -401,14 +387,6 @@ impl CoinbaseAdvancedTradeClient {
             HeaderValue::from_str(&format!("Bearer {token}"))
                 .map_err(|e| PtError::Http(e.to_string()))?,
         );
-        if let Some(passphrase) = &self.passphrase {
-            if !passphrase.trim().is_empty() {
-                headers.insert(
-                    "CB-ACCESS-PASSPHRASE",
-                    HeaderValue::from_str(passphrase).map_err(|e| PtError::Http(e.to_string()))?,
-                );
-            }
-        }
         Ok(headers)
     }
 
@@ -917,4 +895,44 @@ fn derive_host_path_for_jwt(api_base: &str) -> String {
         }
     }
     "api.coinbase.com/api/v3/brokerage".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spot_hedger_new_accepts_two_credential_args() {
+        let h = CoinbaseSpotHedger::new(
+            "https://api.coinbase.com/api/v3/brokerage",
+            Some("key".to_string()),
+            Some("secret".to_string()),
+        );
+        assert_eq!(h.api_key.as_deref(), Some("key"));
+        assert_eq!(h.api_secret.as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn advanced_trade_client_new_accepts_two_credential_args() {
+        let c = CoinbaseAdvancedTradeClient::new(
+            "https://api.coinbase.com/api/v3/brokerage",
+            Some("key".to_string()),
+            Some("secret".to_string()),
+        );
+        assert!(c.credentials_available());
+    }
+
+    #[test]
+    fn advanced_trade_client_no_passphrase_header_field() {
+        // Compile-time proof: struct has no passphrase field.
+        // If CB-ACCESS-PASSPHRASE were ever re-added to signed_headers, this
+        // struct destructure would fail to compile.
+        let CoinbaseAdvancedTradeClient {
+            client: _,
+            api_base: _,
+            jwt_host_path: _,
+            api_key: _,
+            api_secret: _,
+        } = CoinbaseAdvancedTradeClient::new("https://api.coinbase.com/api/v3/brokerage", None, None);
+    }
 }

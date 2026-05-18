@@ -54,7 +54,6 @@ pub async fn coinbase_preflight(
         cfg.venues.coinbase.api_base.clone(),
         cfg.venues.coinbase.api_key.clone(),
         cfg.venues.coinbase.api_secret.clone(),
-        cfg.venues.coinbase.passphrase.clone(),
     );
 
     let mut checks = vec![
@@ -212,7 +211,6 @@ impl CoinbaseWorkstationRuntime {
             cfg.venues.coinbase.api_base.clone(),
             cfg.venues.coinbase.api_key.clone(),
             cfg.venues.coinbase.api_secret.clone(),
-            cfg.venues.coinbase.passphrase.clone(),
         );
 
         Ok(Self {

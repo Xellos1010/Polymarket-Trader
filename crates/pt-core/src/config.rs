@@ -48,7 +48,6 @@ pub struct CoinbaseConfig {
     pub api_base: String,
     pub api_key: Option<String>,
     pub api_secret: Option<String>,
-    pub passphrase: Option<String>,
     pub products: Vec<String>,
     pub hedge_threshold_usd: f64,
     pub hedge_max_slippage_bps: f64,
@@ -147,6 +146,8 @@ pub struct SignalsConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiskConfig {
+    #[serde(default = "default_deployed_capital_usd")]
+    pub deployed_capital_usd: f64,
     pub daily_loss_limit_pct: f64,
     pub max_notional_per_market: f64,
     pub max_total_open_notional: f64,
@@ -512,9 +513,6 @@ impl AppConfig {
         if let Some(v) = env_nonempty("COINBASE_API_SECRET") {
             self.venues.coinbase.api_secret = Some(v);
         }
-        if let Some(v) = env_nonempty("COINBASE_PASSPHRASE") {
-            self.venues.coinbase.passphrase = Some(v);
-        }
         if let Some(v) = env_nonempty("COINBASE_AUTH_PROFILE") {
             self.venues.coinbase.auth.active_profile = v;
         }
@@ -657,6 +655,11 @@ impl AppConfig {
         if self.risk.daily_loss_limit_pct <= 0.0 {
             return Err(PtError::Config(
                 "risk.daily_loss_limit_pct must be > 0".to_string(),
+            ));
+        }
+        if self.risk.deployed_capital_usd <= 0.0 {
+            return Err(PtError::Config(
+                "risk.deployed_capital_usd must be > 0".to_string(),
             ));
         }
         if self.risk.max_notional_per_market <= 0.0 {
@@ -910,6 +913,10 @@ fn default_position_reentry_min_bps() -> f64 {
     40.0
 }
 
+fn default_deployed_capital_usd() -> f64 {
+    50.0
+}
+
 fn default_max_reprice_attempts() -> usize {
     3
 }
@@ -1022,6 +1029,13 @@ mod tests {
     }
 
     #[test]
+    fn config_example_sets_non_default_deployed_capital() {
+        let raw = include_str!("../../../config/config.example.toml");
+        let cfg = toml::from_str::<AppConfig>(raw).expect("parse config example");
+        assert_eq!(cfg.risk.deployed_capital_usd, 1_000.0);
+    }
+
+    #[test]
     fn live_mode_requires_credentials() {
         let raw = include_str!("../../../config/config.example.toml");
         let mut cfg = toml::from_str::<AppConfig>(raw).expect("parse config example");
@@ -1040,7 +1054,6 @@ mod tests {
         std::env::set_var("POLYMARKET_PRIVATE_KEY", "poly_key");
         std::env::set_var("COINBASE_API_KEY", "cb_key");
         std::env::set_var("COINBASE_API_SECRET", "cb_secret");
-        std::env::set_var("COINBASE_PASSPHRASE", "cb_pass");
         std::env::set_var("TRADINGVIEW_ENDPOINT_SECRET", "tv_secret");
 
         cfg.apply_env_overrides();
@@ -1051,7 +1064,6 @@ mod tests {
         );
         assert_eq!(cfg.venues.coinbase.api_key.as_deref(), Some("cb_key"));
         assert_eq!(cfg.venues.coinbase.api_secret.as_deref(), Some("cb_secret"));
-        assert_eq!(cfg.venues.coinbase.passphrase.as_deref(), Some("cb_pass"));
         assert_eq!(
             cfg.signals.tradingview.endpoint_secret.as_deref(),
             Some("tv_secret")
@@ -1060,7 +1072,6 @@ mod tests {
         std::env::remove_var("POLYMARKET_PRIVATE_KEY");
         std::env::remove_var("COINBASE_API_KEY");
         std::env::remove_var("COINBASE_API_SECRET");
-        std::env::remove_var("COINBASE_PASSPHRASE");
         std::env::remove_var("TRADINGVIEW_ENDPOINT_SECRET");
     }
 
