@@ -9,16 +9,16 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Issue #58 closed May 17 2026 with full IR implementation: ir.rs, ir_adapter.rs, ir_exec.rs — 17 new tests, all workspace tests pass. Next: issue #59 (bounded AI optimizer objective and candidate sweep lane).",
+  "current_audit_finding": "Epics #66 and #67 fully closed on 2026-05-17. #66 children (#65, #74, #75, #76, #77) all resolved. #67 children (#78–#82, Pine parity) all resolved. Queue head is now #83 (epic #68: Webhook and Pi operator path hardening). All workspace tests pass on commit 505f6fd.",
   "audit": {
     "last_audited_on": "2026-05-17",
     "audit_source": [
       "GitHub issue state",
-      "local validation run on main commit 6fd933b",
+      "local validation run on main commit 505f6fd",
       "direct cargo test --workspace execution",
-      "subagent-driven development with spec + code quality review per task"
+      "subagent-driven development on #77, Pine parity cleanup #78-#82"
     ],
-    "validation_evidence_state": "fresh_local_run_main_6fd933b_may_17_2026_rust_pass_17_new_ir_tests",
+    "validation_evidence_state": "fresh_local_all_workspace_tests_pass_commit_505f6fd_may_17_2026",
     "truth_standard": "Status files may record operator validation evidence, and may record agent reruns when explicitly stated in audit_source."
   },
   "workflow_invariants": {
@@ -31,16 +31,100 @@
     "status_markdown_json_mirror_required": true
   },
   "current_stage": {
-    "id": "phase1_ai_optimizer_lane",
-    "label": "Bounded AI optimizer objective and candidate sweep lane",
+    "id": "phase2_webhook_pi_hardening",
+    "label": "Epic #68: Webhook and Pi-hosted operator path hardening",
     "requires_human_decision": false,
     "blocker_type": null,
-    "execution_status": "ready_for_next_pr",
-    "active_now_queue_order": 7,
-    "active_issue": 59,
-    "environment_note": "Issue #58 closed May 17 2026. IR layer complete on main (ir.rs, ir_adapter.rs, ir_exec.rs). Next: issue #59 — bounded AI optimizer objective and candidate sweep lane."
+    "execution_status": "active_queue_head_filed",
+    "active_now_queue_order": 13,
+    "active_issue": 83,
+    "environment_note": "Epics #66 and #67 closed. Active queue is epic #68 (children #83-#86). Next: #83 Pi operator path Cloudflare Tunnel topology and documented fallback."
   },
   "recently_closed_issues": [
+    {
+      "issue": 82,
+      "label": "Pine parity: normalize candlestick definitions, confluence weighting, and fee/sizing assumptions",
+      "closed_on": "2026-05-17",
+      "evidence": "RESEARCH ASSUMPTIONS block added to v3/v2 headers; candlestick definitions documented (bull382, engulf, close-break, wick-reject); weighted score semantics documented with recommended weight bounds."
+    },
+    {
+      "issue": 81,
+      "label": "Pine parity: add bounded tuning groups, OOS hooks, and experimental pattern gates",
+      "closed_on": "2026-05-17",
+      "evidence": "Bounded tuning discipline comment block added; showOOSMarkers input added; OOS START/PAPER START labels emitted at first bar of each hold-out segment in v3 and v2."
+    },
+    {
+      "issue": 80,
+      "label": "Pine parity: normalize timeout, session, and S/R break semantics",
+      "closed_on": "2026-05-17",
+      "evidence": "timedExitMode input (Bars OR Minutes/Bars only/Minutes only) added to v3 and v2; session timezone comment block added; srBreakMode input (Close/Wick) added to both."
+    },
+    {
+      "issue": 79,
+      "label": "Pine parity: freeze ATR and profit/loss zone state at entry",
+      "closed_on": "2026-05-17",
+      "evidence": "frozenStop/frozenTarget assigned at entry in v3 and v2; zone text uses frozen values when freezeRiskAtEntry=true; v1 hold gains freezeRiskAtEntry input, entryAtr/frozenStop vars, riskAtr-based catastrophic stop."
+    },
+    {
+      "issue": 78,
+      "label": "Pine parity: harden HTF confirmation, repaint guards, and entry fill semantics",
+      "closed_on": "2026-05-17",
+      "evidence": "HTF semantics documented in all four Pine scripts. v1 hold companion gains nonRepaintHTF toggle. Entry fill (signal-on-close/fill-at-next-open) documented in all scripts. phase1 lookahead_off intent clarified."
+    },
+    {
+      "issue": 77,
+      "label": "Remove deprecated Coinbase Advanced Trade passphrase header path",
+      "closed_on": "2026-05-17",
+      "evidence": "CB-ACCESS-PASSPHRASE removed from CoinbaseSpotHedger and CoinbaseAdvancedTradeClient; passphrase field removed from CoinbaseConfig; 3 new tests in pt-coinbase; cargo test --workspace passes."
+    },
+    {
+      "issue": 76,
+      "label": "Fix two-sided exposure reservation under-counting in pt-risk",
+      "closed_on": "2026-05-17",
+      "evidence": "pt-risk now reserves both bid_sz and ask_sz; cargo test -p pt-risk passes with 12 tests including dual-sided reservation coverage."
+    },
+    {
+      "issue": 75,
+      "label": "Fix shell portability in pt-cli tune-pine evaluation workflow",
+      "closed_on": "2026-05-17",
+      "evidence": "pt-cli run_evaluator now executes parsed program+args directly via shell-words instead of zsh -lc; cargo test -p pt-cli passes."
+    },
+    {
+      "issue": 74,
+      "label": "Fix MACD None-to-zero corruption in pt-strategy-lab indicators",
+      "closed_on": "2026-05-17",
+      "evidence": "pt-strategy-lab MACD now preserves warm-up gaps and seeds the signal EMA from valid MACD history only; cargo test -p pt-strategy-lab passes with 19 tests."
+    },
+    {
+      "issue": 65,
+      "label": "Confirm and fix hardcoded deployed capital in engine startup",
+      "closed_on": "2026-05-17",
+      "evidence": "TradingEngine now sources risk capital from risk.deployed_capital_usd, config example sets a non-default capital value, and cargo test -p pt-core -p pt-engine passes."
+    },
+    {
+      "issue": 10,
+      "label": "Record repeatable replay and paper evidence as a Phase 1 gate report",
+      "closed_on": "2026-05-17",
+      "evidence": "Three fresh runs under data/evidence/phase1/2026-05-17, report.json/report.md status pass, aggregate_net_pnl_after_costs 26.88681680663074."
+    },
+    {
+      "issue": 61,
+      "label": "Add visual and strategy benchmark harnesses for Coinbase workstation",
+      "closed_on": "2026-05-17",
+      "evidence": "Frontend benchmark harness and strategy_benchmark.py landed; baseline JSON/Markdown reports captured under artifacts/benchmarks/2026-05-17/."
+    },
+    {
+      "issue": 60,
+      "label": "Add strategy AI review surfaces for candidate ranking and promotion evidence",
+      "closed_on": "2026-05-17",
+      "evidence": "New /api/v1/strategy-candidates API plus dashboard candidate review UI/tests; cargo test -p pt-dashboard --test api_contract and frontend tests pass."
+    },
+    {
+      "issue": 59,
+      "label": "Implement bounded AI optimizer objective and candidate sweep lane",
+      "closed_on": "2026-05-17",
+      "evidence": "coinbase_strategy_lab optimize schema extended with objective_breakdown/stability/risk_gate/promotion_gate; sandbox optimizer cycle persists reason codes and candidate breakdowns; Python tests pass."
+    },
     {
       "issue": 58,
       "label": "Rust-native strategy IR and adapter layer for strategy AI",
@@ -99,8 +183,8 @@
     }
   },
   "active_next_step": {
-    "label": "Bounded AI optimizer objective and candidate sweep lane",
-    "source": "issue #59",
+    "label": "Advance issue #77, then continue through the filed roadmap backlog",
+    "source": "issue #77 / epic #66 / docs/development/ROADMAP_ISSUE_BACKLOG_2026-05-17.md",
     "queue_state": "active_now",
     "constraints": [
       "sandbox and paper only",
@@ -112,9 +196,9 @@
     ]
   },
   "queue_summary": {
-    "completed": 6,
+    "completed": 14,
     "active_now": 1,
-    "queued_after_current_stage": 3,
+    "queued_after_current_stage": 42,
     "blocked_on_human_decision": 0
   },
   "queue": [
@@ -164,20 +248,41 @@
       "order": 7,
       "label": "Bounded AI optimizer objective and candidate sweep lane",
       "source": "issue #59",
-      "status": "active_now",
+      "status": "completed",
       "requires_human_decision": false
     },
     {
       "order": 8,
       "label": "Strategy AI review surfaces",
       "source": "issue #60",
-      "status": "queued",
+      "status": "completed",
       "requires_human_decision": false
     },
     {
       "order": 9,
       "label": "Visual and strategy benchmark harnesses",
       "source": "issue #61",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 10,
+      "label": "Repeatable replay and paper evidence gate report",
+      "source": "issue #10",
+      "status": "completed",
+      "requires_human_decision": false
+    },
+    {
+      "order": 11,
+      "label": "Critical correctness and safety bug closure",
+      "source": "epic #66 / issue #77",
+      "status": "active_now",
+      "requires_human_decision": false
+    },
+    {
+      "order": 12,
+      "label": "Full roadmap backlog",
+      "source": "issues #66-#111 / ROADMAP_ISSUE_BACKLOG_2026-05-17.md",
       "status": "queued",
       "requires_human_decision": false
     }
