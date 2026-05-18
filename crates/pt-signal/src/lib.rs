@@ -1,3 +1,8 @@
+pub mod external;
+pub use external::{
+    ExternalSignalAdapter, FearGreedAdapter, NormalizedExternalSignal, WebhookSignalAdapter,
+};
+
 use chrono::Utc;
 use pt_core::{Asset, TradingViewBias, WalletSignal};
 use serde::Deserialize;
