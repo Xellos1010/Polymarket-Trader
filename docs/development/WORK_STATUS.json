@@ -9,7 +9,7 @@
     "id": "phase1",
     "name": "Phase 1: sandbox trading / paper ROI preparation"
   },
-  "current_audit_finding": "Epics #66-#73 are implemented. Full re-validation on 2026-05-18: cargo test --workspace (all pass, 0 failed) and cargo clippy --workspace --all-targets --all-features -- -D warnings (clean). Pi deployment deferred — Pi unreachable on LAN (192.168.4.47) and offline on Tailscale (homoplasticus-pi, last seen 5d ago). Roadmap backlog complete; 28 commits ahead of origin/main awaiting push.",
+  "current_audit_finding": "Roadmap backlog complete (epics #66-#73) plus roadmap phases 1+4+6 fully implemented (issues #112-#117). On 2026-05-18: cargo test --workspace (all pass), cargo clippy (clean), npm test (10/10), npm run build pass. Pi deployment deferred — homoplasticus-pi still unreachable (LAN + Tailscale offline).",
   "audit": {
     "last_audited_on": "2026-05-18",
     "audit_source": [
@@ -361,8 +361,8 @@
     }
   },
   "active_next_step": {
-    "label": "Roadmap backlog complete. Pending operator actions: (1) push 28 commits to origin/main, (2) deploy to Pi once homoplasticus-pi is network-reachable (LAN or Tailscale), (3) run pi-dev-deploy for issue #86 Pi soak.",
-    "source": "epics #66-#73 / docs/development/ROADMAP_ISSUE_BACKLOG_2026-05-17.md",
+    "label": "Phases 1, 4, and 6 complete. Remaining roadmap work: Phase 2 (artifact determinism), CTAPv6 parity items (Williams %R, CCI, Keltner Channels), Pi soak (#86) once Pi is reachable.",
+    "source": "ROADMAP.md phases 1-6 / issues #112-#117",
     "queue_state": "operator_action_required",
     "constraints": [
       "sandbox and paper only",
