@@ -16,6 +16,7 @@ use pt_ai_agent::{
     summarize_positions, AgentProposal, MonitoringConfig, PositionInput, ProposalKind,
     ProposalQueue,
 };
+use pt_tsdb::TsDb;
 use pt_coinbase::{CoinbaseSpotHedger, HedgeExecutor, HedgeIntent, PaperCoinbaseHedger};
 use pt_core::{
     AppConfig, Asset, EngineMode, ExecutionReport, KillSwitchState, MarketHistoryPoint,
@@ -292,6 +293,7 @@ pub struct TradingEngine {
     hedger: Arc<dyn HedgeExecutor>,
     storage: Arc<Storage>,
     proposal_queue: Arc<ProposalQueue>,
+    tsdb: Option<Arc<TsDb>>,
 }
 
 impl TradingEngine {
@@ -366,6 +368,20 @@ impl TradingEngine {
             cfg.storage.snapshot_roll_secs,
         )?);
 
+        // Derive the DuckDB TSDB path alongside the SQLite file.
+        let tsdb_path = cfg
+            .storage
+            .sqlite_path
+            .trim_end_matches(".db")
+            .to_string()
+            + "_tsdb.duckdb";
+        let tsdb = TsDb::open(&tsdb_path)
+            .map(|db| Some(Arc::new(db)))
+            .unwrap_or_else(|e| {
+                tracing::warn!(%e, "failed to open tsdb; retention task will be disabled");
+                None
+            });
+
         Ok(Self {
             cfg,
             metrics,
@@ -380,6 +396,7 @@ impl TradingEngine {
             hedger,
             storage,
             proposal_queue: Arc::new(ProposalQueue::new()),
+            tsdb,
         })
     }
 
@@ -404,6 +421,9 @@ impl TradingEngine {
         tasks.push(self.spawn_watchdog_loop());
         if self.cfg.agent.enabled {
             tasks.push(self.spawn_ai_monitor_loop());
+        }
+        if let Some(retention) = self.spawn_retention_task() {
+            tasks.push(retention);
         }
 
         info!("engine running; press Ctrl+C to stop");
@@ -1026,6 +1046,22 @@ impl TradingEngine {
                 tokio::time::sleep(Duration::from_millis(interval)).await;
             }
         })
+    }
+
+    fn spawn_retention_task(&self) -> Option<JoinHandle<()>> {
+        let db = self.tsdb.clone()?;
+        Some(tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(Duration::from_secs(3600));
+            loop {
+                ticker.tick().await;
+                for table in &["candles", "signals"] {
+                    if let Err(e) = db.prune_older_than_days(table, 90) {
+                        warn!(%e, table, "tsdb retention prune failed");
+                    }
+                }
+                info!("tsdb retention: pruned rows older than 90 days");
+            }
+        }))
     }
 }
 

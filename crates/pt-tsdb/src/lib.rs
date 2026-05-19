@@ -234,6 +234,23 @@ impl TsDb {
             .map_err(|e| PtError::Io(e.to_string()))?;
         Ok(count)
     }
+
+    /// Delete rows older than `days` days from the given table.
+    ///
+    /// Only `"candles"` and `"signals"` are accepted; any other value returns
+    /// an `Err` to prevent accidental SQL injection via the table name.
+    pub fn prune_older_than_days(&self, table: &str, days: u32) -> PtResult<()> {
+        if table != "candles" && table != "signals" {
+            return Err(PtError::Io(format!("unknown table: {table}")));
+        }
+        let threshold_ms: i64 = chrono::Utc::now().timestamp_millis()
+            - (days as i64) * 86_400_000;
+        let sql = format!("DELETE FROM {table} WHERE ts_ms < {threshold_ms}");
+        self.conn
+            .lock()
+            .execute_batch(&sql)
+            .map_err(|e| PtError::Io(e.to_string()))
+    }
 }
 
 #[cfg(test)]
@@ -341,5 +358,22 @@ mod tests {
         db.insert_signal_batch(&[]).unwrap();
         assert_eq!(db.candle_count().unwrap(), 0);
         assert_eq!(db.signal_count().unwrap(), 0);
+    }
+
+    #[test]
+    fn prune_older_than_days_removes_old_rows() {
+        let db = TsDb::open(":memory:").unwrap();
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let old_ms = now_ms - 100 * 24 * 3_600_000_i64; // 100 days ago
+        let candles = vec![
+            TsCandle { ts_ms: old_ms, product_id: "X".into(), granularity_sec: 60,
+                open: 1.0, high: 1.0, low: 1.0, close: 1.0, volume: 1.0 },
+            TsCandle { ts_ms: now_ms, product_id: "X".into(), granularity_sec: 60,
+                open: 2.0, high: 2.0, low: 2.0, close: 2.0, volume: 2.0 },
+        ];
+        db.insert_candle_batch(&candles).unwrap();
+        assert_eq!(db.candle_count().unwrap(), 2);
+        db.prune_older_than_days("candles", 90).unwrap();
+        assert_eq!(db.candle_count().unwrap(), 1);
     }
 }
