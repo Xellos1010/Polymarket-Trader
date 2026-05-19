@@ -11,6 +11,7 @@ use axum::{
 use futures::stream::{self, Stream};
 use std::convert::Infallible;
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use parking_lot::RwLock;
 use pt_signal::{
     BinanceFundingRateAdapter, ExternalSignalAdapter, FearGreedAdapter,
@@ -70,7 +71,7 @@ pub struct DashboardHandles {
     pub metrics: Arc<MetricsRegistry>,
     pub risk_state: Arc<RwLock<RiskState>>,
     pub kill_switch: Arc<RwLock<KillSwitchState>>,
-    pub latest_books: Arc<RwLock<HashMap<String, MarketSnapshot>>>,
+    pub latest_books: Arc<DashMap<String, MarketSnapshot>>,
     pub market_history: Arc<RwLock<HashMap<String, Vec<MarketHistoryPoint>>>>,
     pub recent_executions: Arc<RwLock<Vec<ExecutionReport>>>,
     pub fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
@@ -87,7 +88,7 @@ impl Default for DashboardHandles {
             metrics: Arc::new(MetricsRegistry::default()),
             risk_state: Arc::new(RwLock::new(RiskState::default())),
             kill_switch: Arc::new(RwLock::new(KillSwitchState::Running)),
-            latest_books: Arc::new(RwLock::new(HashMap::new())),
+            latest_books: Arc::new(DashMap::new()),
             market_history: Arc::new(RwLock::new(HashMap::new())),
             recent_executions: Arc::new(RwLock::new(Vec::new())),
             fused_bias: Arc::new(RwLock::new(HashMap::new())),
@@ -118,7 +119,7 @@ pub struct DashboardState {
     pub metrics: Arc<MetricsRegistry>,
     pub risk_state: Arc<RwLock<RiskState>>,
     pub kill_switch: Arc<RwLock<KillSwitchState>>,
-    pub latest_books: Arc<RwLock<HashMap<String, MarketSnapshot>>>,
+    pub latest_books: Arc<DashMap<String, MarketSnapshot>>,
     pub market_history: Arc<RwLock<HashMap<String, Vec<MarketHistoryPoint>>>>,
     pub recent_executions: Arc<RwLock<Vec<ExecutionReport>>>,
     pub fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
@@ -546,7 +547,7 @@ async fn get_risk_state(State(state): State<DashboardState>) -> Json<RiskState> 
 }
 
 async fn get_books(State(state): State<DashboardState>) -> Json<Vec<MarketSnapshot>> {
-    let mut books: Vec<MarketSnapshot> = state.latest_books.read().values().cloned().collect();
+    let mut books: Vec<MarketSnapshot> = state.latest_books.iter().map(|e| e.value().clone()).collect();
     books.sort_by(|a, b| b.ts.cmp(&a.ts));
     Json(books)
 }
@@ -554,16 +555,18 @@ async fn get_books(State(state): State<DashboardState>) -> Json<Vec<MarketSnapsh
 async fn get_markets(State(state): State<DashboardState>) -> Json<Vec<MarketView>> {
     let mut rows: Vec<MarketView> = state
         .latest_books
-        .read()
-        .values()
-        .map(|b| MarketView {
-            market_id: b.market_id.clone(),
-            token_id: b.token_id.clone(),
-            bid: b.bid,
-            ask: b.ask,
-            spread: b.spread,
-            mid: (b.bid + b.ask) / 2.0,
-            ts: b.ts.to_rfc3339(),
+        .iter()
+        .map(|e| {
+            let b = e.value();
+            MarketView {
+                market_id: b.market_id.clone(),
+                token_id: b.token_id.clone(),
+                bid: b.bid,
+                ask: b.ask,
+                spread: b.spread,
+                mid: (b.bid + b.ask) / 2.0,
+                ts: b.ts.to_rfc3339(),
+            }
         })
         .collect();
 
@@ -582,7 +585,7 @@ async fn get_market_history(
         .filter(|m| !m.trim().is_empty())
         .or_else(|| {
             let mut books: Vec<MarketSnapshot> =
-                state.latest_books.read().values().cloned().collect();
+                state.latest_books.iter().map(|e| e.value().clone()).collect();
             books.sort_by(|a, b| b.ts.cmp(&a.ts));
             books.first().map(|b| b.market_id.clone())
         });

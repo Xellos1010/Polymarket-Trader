@@ -8,6 +8,7 @@ authors.workspace = true
 [dependencies]
 chrono.workspace = true
 axum.workspace = true
+dashmap.workspace = true
 clap.workspace = true
 dotenvy.workspace = true
 parking_lot.workspace = true

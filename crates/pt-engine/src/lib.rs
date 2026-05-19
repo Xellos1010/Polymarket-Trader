@@ -9,6 +9,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
+use dashmap::DashMap;
 use parking_lot::{Mutex, RwLock};
 use parquet::arrow::ArrowWriter;
 use pt_ai_agent::{
@@ -48,7 +49,7 @@ use tracing::{error, info, warn};
 #[derive(Clone)]
 struct SharedState {
     selected_markets: Arc<RwLock<Vec<MarketSelection>>>,
-    latest_books: Arc<RwLock<HashMap<String, MarketSnapshot>>>,
+    latest_books: Arc<DashMap<String, MarketSnapshot>>,
     market_history: Arc<RwLock<HashMap<String, Vec<MarketHistoryPoint>>>>,
     recent_executions: Arc<RwLock<Vec<ExecutionReport>>>,
     fused_bias: Arc<RwLock<HashMap<Asset, f64>>>,
@@ -62,7 +63,7 @@ impl SharedState {
     fn new() -> Self {
         Self {
             selected_markets: Arc::new(RwLock::new(Vec::new())),
-            latest_books: Arc::new(RwLock::new(HashMap::new())),
+            latest_books: Arc::new(DashMap::new()),
             market_history: Arc::new(RwLock::new(HashMap::new())),
             recent_executions: Arc::new(RwLock::new(Vec::new())),
             fused_bias: Arc::new(RwLock::new(HashMap::new())),
@@ -712,7 +713,7 @@ impl TradingEngine {
                                 ts: DateTime::<Utc>::from_timestamp_millis(best.ts_ms)
                                     .unwrap_or_else(Utc::now),
                             };
-                            latest.write().insert(m.market_id.clone(), snap.clone());
+                            latest.insert(m.market_id.clone(), snap.clone());
                             push_market_history(&market_history, &snap);
                             if let Err(e) = storage.insert_snapshot(&snap) {
                                 error!(%e, "failed to persist snapshot");
@@ -757,7 +758,6 @@ impl TradingEngine {
             let mut simulator = PaperSimulator::default();
             loop {
                 let markets = selected.read().clone();
-                let books = latest.read().clone();
                 let bias_map = biases.read().clone();
 
                 let mut active: Vec<MarketSelection> = markets
@@ -773,7 +773,7 @@ impl TradingEngine {
                 });
 
                 for market in active {
-                    let Some(book) = books.get(&market.market_id) else {
+                    let Some(book) = latest.get(&market.market_id) else {
                         continue;
                     };
 
@@ -790,7 +790,7 @@ impl TradingEngine {
 
                     let Some(quote) = build_quote_intent(
                         &market,
-                        book,
+                        &*book,
                         bias_shift,
                         inv_penalty,
                         &costs,
@@ -824,7 +824,7 @@ impl TradingEngine {
                     }
 
                     if matches!(mode, EngineMode::Paper | EngineMode::Replay) {
-                        reports.extend(simulator.apply_quote(&quote, book));
+                        reports.extend(simulator.apply_quote(&quote, &*book));
                     }
 
                     for report in reports {
@@ -905,17 +905,16 @@ impl TradingEngine {
                 tokio::time::sleep(Duration::from_secs(interval_secs)).await;
 
                 let snap = risk_state.read().clone();
-                let books = state.read();
-                let inputs: Vec<PositionInput> = books
-                    .values()
-                    .map(|b| PositionInput {
-                        market_id: b.market_id.clone(),
-                        position_usd: snap.open_notional / books.len().max(1) as f64,
-                        pnl_usd: snap.daily_pnl / books.len().max(1) as f64,
+                let book_len = state.len().max(1);
+                let inputs: Vec<PositionInput> = state
+                    .iter()
+                    .map(|e| PositionInput {
+                        market_id: e.value().market_id.clone(),
+                        position_usd: snap.open_notional / book_len as f64,
+                        pnl_usd: snap.daily_pnl / book_len as f64,
                         age_secs: 0,
                     })
                     .collect();
-                drop(books);
 
                 let summary = summarize_positions(&inputs, &MonitoringConfig::default());
 

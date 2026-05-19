@@ -1,5 +1,6 @@
 use axum::{body::to_bytes, body::Body, http::Request, http::StatusCode, Router};
 use chrono::Utc;
+use dashmap::DashMap;
 use parking_lot::RwLock;
 use pt_core::{
     Asset, ExecutionReport, ExecutionStatus, KillSwitchState, LiveArmState, MarketHistoryPoint,
@@ -17,7 +18,7 @@ use std::{collections::HashMap, fs, sync::Arc};
 use tower::util::ServiceExt;
 
 fn fixture_state() -> DashboardState {
-    let mut latest_books = HashMap::new();
+    let latest_books: DashMap<String, _> = DashMap::new();
     let now = Utc::now();
     let market_id = "mkt-1".to_string();
     latest_books.insert(
@@ -264,7 +265,7 @@ fn fixture_state() -> DashboardState {
             last_update_ms: now.timestamp_millis(),
         })),
         kill_switch: Arc::new(RwLock::new(KillSwitchState::Running)),
-        latest_books: Arc::new(RwLock::new(latest_books)),
+        latest_books: Arc::new(latest_books),
         market_history: Arc::new(RwLock::new(history)),
         recent_executions: Arc::new(RwLock::new(executions)),
         fused_bias: Arc::new(RwLock::new(bias)),

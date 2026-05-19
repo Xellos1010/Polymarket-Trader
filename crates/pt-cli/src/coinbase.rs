@@ -1,4 +1,5 @@
 use chrono::Utc;
+use dashmap::DashMap;
 use parking_lot::RwLock;
 use pt_coinbase::{
     CoinbaseAdvancedTradeClient, CoinbaseAdvancedTradeOrderRequest, CoinbaseBookLevel,
@@ -200,7 +201,7 @@ impl CoinbaseWorkstationRuntime {
             metrics,
             risk_state,
             kill_switch,
-            latest_books: Arc::new(RwLock::new(HashMap::new())),
+            latest_books: Arc::new(DashMap::new()),
             market_history: Arc::new(RwLock::new(HashMap::new())),
             recent_executions: Arc::new(RwLock::new(Vec::new())),
             fused_bias: Arc::new(RwLock::new(HashMap::new())),
@@ -323,7 +324,6 @@ impl CoinbaseWorkstationRuntime {
                             if let Some(snap) = latest_book {
                                 self.state
                                     .latest_books
-                                    .write()
                                     .insert(snap.market_id.clone(), snap.clone());
                                 push_market_history(&self.state.market_history, &snap);
                             }
