@@ -4476,6 +4476,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
+ "dashmap",
  "futures",
  "parking_lot",
  "pt-ai-agent",
@@ -4503,6 +4504,7 @@ dependencies = [
  "arrow-schema 53.4.1",
  "axum",
  "chrono",
+ "dashmap",
  "hex",
  "hmac 0.12.1",
  "http-body-util",
