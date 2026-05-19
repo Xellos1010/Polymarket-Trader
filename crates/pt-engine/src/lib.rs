@@ -773,7 +773,7 @@ impl TradingEngine {
                 });
 
                 for market in active {
-                    let Some(book) = latest.get(&market.market_id) else {
+                    let Some(book) = latest.get(&market.market_id).map(|r| r.clone()) else {
                         continue;
                     };
 
@@ -790,7 +790,7 @@ impl TradingEngine {
 
                     let Some(quote) = build_quote_intent(
                         &market,
-                        &*book,
+                        &book,
                         bias_shift,
                         inv_penalty,
                         &costs,
@@ -824,7 +824,7 @@ impl TradingEngine {
                     }
 
                     if matches!(mode, EngineMode::Paper | EngineMode::Replay) {
-                        reports.extend(simulator.apply_quote(&quote, &*book));
+                        reports.extend(simulator.apply_quote(&quote, &book));
                     }
 
                     for report in reports {
@@ -957,6 +957,7 @@ impl TradingEngine {
     fn spawn_watchdog_loop(&self) -> JoinHandle<()> {
         let kill_switch = self.state.kill_switch.clone();
         let risk_state = self.state.risk_state.clone();
+        let latest_books = self.state.latest_books.clone();
         let risk = self.risk.clone();
         let storage = self.storage.clone();
         let metrics = self.metrics.clone();
@@ -975,10 +976,19 @@ impl TradingEngine {
                     }
                 }
 
-                let snap = risk.snapshot();
+                let stale_books: usize = latest_books
+                    .iter()
+                    .filter(|e| {
+                        (Utc::now() - e.value().ts).num_seconds() > 30
+                    })
+                    .count();
+
+                let mut snap = risk.snapshot();
+                snap.stale_books = stale_books;
                 metrics.set_gauge("risk_daily_pnl", snap.daily_pnl);
                 metrics.set_gauge("risk_open_notional", snap.open_notional);
                 metrics.set_gauge("risk_unhedged_delta", snap.unhedged_delta);
+                metrics.set_gauge("risk_stale_books", stale_books as f64);
                 metrics.set_gauge(
                     "risk_killswitch_running",
                     if snap.killswitch == "Running" {
