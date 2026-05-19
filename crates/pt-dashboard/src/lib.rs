@@ -1006,6 +1006,7 @@ async fn get_artifacts_compare(
     let delta_drawdown = a.max_drawdown_pct - b.max_drawdown_pct;
     let delta_trades = a.trades as i64 - b.trades as i64;
     let delta_win_rate = a.win_rate - b.win_rate;
+    let delta_pnl = a.pnl - b.pnl;
 
     (
         StatusCode::OK,
@@ -1030,7 +1031,8 @@ async fn get_artifacts_compare(
                 "total_return_pct": delta_return,
                 "max_drawdown_pct": delta_drawdown,
                 "trades": delta_trades,
-                "win_rate": delta_win_rate
+                "win_rate": delta_win_rate,
+                "pnl": delta_pnl
             }
         })),
     )
