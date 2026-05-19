@@ -681,7 +681,13 @@ impl TradingEngine {
             .max(4);
 
         tokio::spawn(async move {
+            let mut backoff_secs: u64 = 0;
             loop {
+                // Gate: sleep before polling if we were rate-limited
+                if backoff_secs > 0 {
+                    tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+                }
+
                 let markets = selected.read().clone();
                 let mut active: Vec<MarketSelection> = markets
                     .into_iter()
@@ -700,9 +706,11 @@ impl TradingEngine {
                         .unwrap_or(std::cmp::Ordering::Equal)
                 });
 
+                let mut got_429 = false;
                 for m in active {
                     match poly.get_best_book(&m.token_id_yes).await {
                         Ok(best) => {
+                            backoff_secs = 0; // reset on any success
                             let snap = MarketSnapshot {
                                 market_id: m.market_id.clone(),
                                 token_id: m.token_id_yes.clone(),
@@ -721,8 +729,18 @@ impl TradingEngine {
                             metrics.inc_counter("book_poll_ok", 1.0);
                         }
                         Err(e) => {
-                            warn!(market_id = %m.market_id, %e, "book poll failed");
-                            metrics.inc_counter("book_poll_error", 1.0);
+                            let msg = e.to_string();
+                            if msg.contains("429") {
+                                let new_backoff = (backoff_secs * 2).max(1).min(60);
+                                warn!(backoff_secs = new_backoff, "polymarket rate-limited, backing off");
+                                backoff_secs = new_backoff;
+                                got_429 = true;
+                                metrics.inc_counter("book_poll_rate_limited", 1.0);
+                                break;
+                            } else {
+                                warn!(market_id = %m.market_id, %e, "book poll failed");
+                                metrics.inc_counter("book_poll_error", 1.0);
+                            }
                         }
                     }
                 }
@@ -731,7 +749,9 @@ impl TradingEngine {
                     error!(%e, "snapshot parquet roll failed");
                 }
 
-                tokio::time::sleep(Duration::from_millis(loop_ms)).await;
+                if !got_429 {
+                    tokio::time::sleep(Duration::from_millis(loop_ms)).await;
+                }
             }
         })
     }
