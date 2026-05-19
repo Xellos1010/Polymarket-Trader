@@ -789,7 +789,7 @@ impl TradingEngine {
                         Err(e) => {
                             let msg = e.to_string();
                             if msg.contains("429") {
-                                let new_backoff = (backoff_secs * 2).max(1).min(60);
+                                let new_backoff = (backoff_secs * 2).clamp(1, 60);
                                 warn!(backoff_secs = new_backoff, "polymarket rate-limited, backing off");
                                 backoff_secs = new_backoff;
                                 got_429 = true;
