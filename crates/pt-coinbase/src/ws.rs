@@ -15,7 +15,7 @@ pub struct WsTicker {
 
 #[derive(Debug, Clone)]
 pub struct CoinbaseWsClient {
-    sender: broadcast::Sender<WsTicker>,
+    pub sender: broadcast::Sender<WsTicker>,
 }
 
 impl CoinbaseWsClient {

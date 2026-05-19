@@ -4595,6 +4595,7 @@ dependencies = [
  "alloy",
  "async-trait",
  "chrono",
+ "futures",
  "parking_lot",
  "polymarket-client-sdk",
  "pt-core",
@@ -4649,10 +4650,13 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "parking_lot",
+ "pt-coinbase",
  "pt-core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

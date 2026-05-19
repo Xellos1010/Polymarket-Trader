@@ -12,3 +12,6 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "blocking"] }
 serde.workspace = true
 serde_json.workspace = true
 pt-core = { path = "../pt-core" }
+tokio.workspace = true
+pt-coinbase = { path = "../pt-coinbase" }
+tracing.workspace = true

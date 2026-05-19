@@ -4,6 +4,9 @@ pub use external::{
     WebhookSignalAdapter,
 };
 
+pub mod cb_price;
+pub use cb_price::CoinbasePriceAdapter;
+
 use chrono::Utc;
 use pt_core::{Asset, TradingViewBias, WalletSignal};
 use serde::Deserialize;
