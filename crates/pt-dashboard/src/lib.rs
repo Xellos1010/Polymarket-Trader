@@ -447,6 +447,7 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/charts/candles/live", get(get_live_candles))
         .route("/api/v1/backtest/run", post(post_backtest_run))
         .route("/api/v1/backtest/last", get(get_backtest_last))
+        .route("/api/v1/artifacts/compare", get(get_artifacts_compare))
         .route("/api/v1/db/candles", get(get_db_candles))
         .route("/api/v1/db/signals", get(get_db_signals))
         .route("/api/v1/products/:product_id", get(get_product_detail))
@@ -973,6 +974,67 @@ async fn get_backtest_last(
         .clone()
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
+}
+
+#[derive(serde::Deserialize)]
+struct CompareQuery {
+    a: String,
+    b: String,
+}
+
+async fn get_artifacts_compare(
+    Query(q): Query<CompareQuery>,
+) -> impl IntoResponse {
+    fn load_report(run_id: &str) -> Option<pt_strategy_lab::StrategyRunReport> {
+        if run_id.contains('/') || run_id.contains("..") {
+            return None;
+        }
+        let path = format!("data/backtest/{run_id}.json");
+        let raw = std::fs::read_to_string(&path).ok()?;
+        serde_json::from_str(&raw).ok()
+    }
+
+    let (Some(a), Some(b)) = (load_report(&q.a), load_report(&q.b)) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "one or both run_ids not found"})),
+        )
+            .into_response();
+    };
+
+    let delta_return = a.total_return_pct - b.total_return_pct;
+    let delta_drawdown = a.max_drawdown_pct - b.max_drawdown_pct;
+    let delta_trades = a.trades as i64 - b.trades as i64;
+    let delta_win_rate = a.win_rate - b.win_rate;
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "a": {
+                "run_id": a.run_id,
+                "total_return_pct": a.total_return_pct,
+                "max_drawdown_pct": a.max_drawdown_pct,
+                "trades": a.trades,
+                "win_rate": a.win_rate,
+                "pnl": a.pnl
+            },
+            "b": {
+                "run_id": b.run_id,
+                "total_return_pct": b.total_return_pct,
+                "max_drawdown_pct": b.max_drawdown_pct,
+                "trades": b.trades,
+                "win_rate": b.win_rate,
+                "pnl": b.pnl
+            },
+            "delta": {
+                "total_return_pct": delta_return,
+                "max_drawdown_pct": delta_drawdown,
+                "trades": delta_trades,
+                "win_rate": delta_win_rate
+            }
+        })),
+    )
+        .into_response()
 }
 
 #[derive(serde::Deserialize)]

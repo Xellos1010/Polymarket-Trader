@@ -330,6 +330,26 @@ type TradeFill = {
   qty: number;
 };
 
+type ArtifactRunSummary = {
+  run_id: string;
+  total_return_pct: number;
+  max_drawdown_pct: number;
+  trades: number;
+  win_rate: number;
+  pnl: number;
+};
+
+type ArtifactCompareResult = {
+  a: ArtifactRunSummary;
+  b: ArtifactRunSummary;
+  delta: {
+    total_return_pct: number;
+    max_drawdown_pct: number;
+    trades: number;
+    win_rate: number;
+  };
+};
+
 type StrategyRunReport = {
   run_id: string;
   params_hash: string;
@@ -750,6 +770,11 @@ export default function App() {
   const [backtestBusy, setBacktestBusy] = useState(false);
   const [backtestProductId, setBacktestProductId] = useState("BTC-USD");
   const [backtestGranularity, setBacktestGranularity] = useState(3600);
+  const [compareRunA, setCompareRunA] = useState("");
+  const [compareRunB, setCompareRunB] = useState("");
+  const [compareResult, setCompareResult] = useState<ArtifactCompareResult | null>(null);
+  const [compareBusy, setCompareBusy] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1180,6 +1205,116 @@ export default function App() {
             <p className="muted">
               Candidate ranking is optimizer evidence only. Replay and paper evidence remain separate gates.
             </p>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Artifact Comparison</h2>
+              <span>{compareResult ? `${compareResult.a.run_id.slice(0, 8)} vs ${compareResult.b.run_id.slice(0, 8)}` : "no comparison yet"}</span>
+            </div>
+            <div className="reason-stack">
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                <input
+                  value={compareRunA}
+                  onChange={(e) => setCompareRunA(e.target.value)}
+                  placeholder="Run ID A"
+                  style={{ fontSize: "inherit", padding: "4px 8px", width: "160px" }}
+                />
+                <input
+                  value={compareRunB}
+                  onChange={(e) => setCompareRunB(e.target.value)}
+                  placeholder="Run ID B"
+                  style={{ fontSize: "inherit", padding: "4px 8px", width: "160px" }}
+                />
+                <button
+                  className="primary"
+                  disabled={compareBusy || !compareRunA || !compareRunB}
+                  onClick={() => {
+                    setCompareBusy(true);
+                    setCompareError(null);
+                    fetch(`/api/v1/artifacts/compare?a=${encodeURIComponent(compareRunA)}&b=${encodeURIComponent(compareRunB)}`)
+                      .then((r) => (r.ok ? r.json() : r.json().then((e: { error?: string }) => Promise.reject(e.error ?? r.status))))
+                      .then((result: ArtifactCompareResult) => { setCompareResult(result); setCompareError(null); })
+                      .catch((err: unknown) => { setCompareError(String(err)); setCompareResult(null); })
+                      .finally(() => setCompareBusy(false));
+                  }}
+                >
+                  {compareBusy ? "Loading…" : "Compare"}
+                </button>
+              </div>
+              {compareError && (
+                <div className="reason-card">
+                  <strong>Error</strong>
+                  <p>{compareError}</p>
+                </div>
+              )}
+              {compareResult && (() => {
+                const { a, b, delta } = compareResult;
+                type MetricRow = { label: string; aVal: string; bVal: string; deltaVal: string; good: boolean };
+                const rows: MetricRow[] = [
+                  {
+                    label: "Return %",
+                    aVal: `${(a.total_return_pct * 100).toFixed(2)}%`,
+                    bVal: `${(b.total_return_pct * 100).toFixed(2)}%`,
+                    deltaVal: `${delta.total_return_pct >= 0 ? "+" : ""}${(delta.total_return_pct * 100).toFixed(2)}%`,
+                    good: delta.total_return_pct >= 0,
+                  },
+                  {
+                    label: "Max Drawdown",
+                    aVal: `${(a.max_drawdown_pct * 100).toFixed(2)}%`,
+                    bVal: `${(b.max_drawdown_pct * 100).toFixed(2)}%`,
+                    deltaVal: `${delta.max_drawdown_pct >= 0 ? "+" : ""}${(delta.max_drawdown_pct * 100).toFixed(2)}%`,
+                    good: delta.max_drawdown_pct <= 0,
+                  },
+                  {
+                    label: "Trades",
+                    aVal: String(a.trades),
+                    bVal: String(b.trades),
+                    deltaVal: `${delta.trades >= 0 ? "+" : ""}${delta.trades}`,
+                    good: delta.trades >= 0,
+                  },
+                  {
+                    label: "Win Rate",
+                    aVal: `${(a.win_rate * 100).toFixed(1)}%`,
+                    bVal: `${(b.win_rate * 100).toFixed(1)}%`,
+                    deltaVal: `${delta.win_rate >= 0 ? "+" : ""}${(delta.win_rate * 100).toFixed(1)}%`,
+                    good: delta.win_rate >= 0,
+                  },
+                  {
+                    label: "PnL",
+                    aVal: a.pnl.toFixed(2),
+                    bVal: b.pnl.toFixed(2),
+                    deltaVal: `${(a.pnl - b.pnl) >= 0 ? "+" : ""}${(a.pnl - b.pnl).toFixed(2)}`,
+                    good: a.pnl >= b.pnl,
+                  },
+                ];
+                return (
+                  <div className="table-shell">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Metric</th>
+                          <th>Run A · {a.run_id.slice(0, 8)}</th>
+                          <th>Run B · {b.run_id.slice(0, 8)}</th>
+                          <th>Delta (A − B)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={row.label}>
+                            <td>{row.label}</td>
+                            <td>{row.aVal}</td>
+                            <td>{row.bVal}</td>
+                            <td style={{ color: row.good ? "#4ade80" : "#f87171" }}>{row.deltaVal}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p className="muted">Read-only comparison. No promotion or execution action available here.</p>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
 
           <div className="panel">
