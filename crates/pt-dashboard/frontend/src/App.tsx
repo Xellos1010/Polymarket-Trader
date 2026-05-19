@@ -297,6 +297,31 @@ type CandleView = {
   volume: number;
 };
 
+type LiveCandle = {
+  asset_id: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  ts_open_ms: number;
+  ts_close_ms: number;
+};
+
+function connectLiveCandleStream(assetId: string, onCandle: (c: LiveCandle) => void): EventSource {
+  const es = new EventSource(`/api/v1/charts/candles/live?product_id=${encodeURIComponent(assetId)}`);
+  es.addEventListener('candle', (e: MessageEvent) => {
+    try {
+      const candle: LiveCandle = JSON.parse(e.data as string);
+      onCandle(candle);
+    } catch { /* ignore parse errors */ }
+  });
+  es.onerror = () => {
+    console.warn('Live candle SSE disconnected, retrying...');
+  };
+  return es;
+}
+
 type EquityPoint = { ts_ms: number; equity: number };
 type TradeFill = {
   ts_ms: number;
@@ -431,28 +456,42 @@ function VisualWorkstation({ detail, selection }: { detail: ProductDetail; selec
 
   useEffect(() => {
     if (!liveMode) return;
-    let es: EventSource;
+    let es: EventSource | undefined;
     try {
-      es = new EventSource(`/api/v1/stream/candles?product_id=${detail.product.product_id}&granularity=${granularity}`);
-      es.onmessage = (e) => {
-        try {
-          const candle: CandleView = JSON.parse(e.data as string);
-          setRealCandles((prev) => {
-            const base = prev ?? [];
-            const next = base.filter((c) => c.time !== candle.time);
-            next.push(candle);
+      es = connectLiveCandleStream(detail.product.product_id, (candle: LiveCandle) => {
+        setRealCandles((prev) => {
+          const base = prev ?? [];
+          const existing = base[base.length - 1];
+          if (existing && existing.time === candle.ts_open_ms) {
+            // Update last bar in-place
+            const next = [...base.slice(0, -1), {
+              time: candle.ts_open_ms,
+              open: candle.open,
+              high: candle.high,
+              low: candle.low,
+              close: candle.close,
+              volume: candle.volume,
+            }];
             return next.slice(-60);
-          });
-          setCandleSource("real");
-        } catch {
-          /* ignore malformed event */
-        }
-      };
+          }
+          // Append new bar
+          const next = [...base, {
+            time: candle.ts_open_ms,
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+            volume: candle.volume,
+          }];
+          return next.slice(-60);
+        });
+        setCandleSource("real");
+      });
     } catch {
       /* EventSource not available in test environment */
     }
     return () => { es?.close(); };
-  }, [liveMode, detail.product.product_id, granularity]);
+  }, [liveMode, detail.product.product_id]);
 
   const bars = useMemo(() => {
     if (realCandles && realCandles.length >= 5) {
