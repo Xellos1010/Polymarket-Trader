@@ -23,6 +23,7 @@ pt-strategy-lab = { path = "../pt-strategy-lab" }
 pt-tsdb = { path = "../pt-tsdb" }
 futures.workspace = true
 tokio-stream.workspace = true
+async-stream = "0.3"
 
 [dev-dependencies]
 serde_json.workspace = true

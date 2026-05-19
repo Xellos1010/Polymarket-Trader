@@ -8,6 +8,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use async_stream;
 use futures::stream::{self, Stream};
 use std::convert::Infallible;
 use chrono::{DateTime, Utc};
@@ -36,6 +37,18 @@ use pt_core::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct LiveCandle {
+    pub asset_id: String,
+    pub open: f64,
+    pub high: f64,
+    pub low: f64,
+    pub close: f64,
+    pub volume: f64,
+    pub ts_open_ms: i64,
+    pub ts_close_ms: i64,
+}
 
 #[derive(Clone)]
 pub struct CoinbaseDashboardHandles {
@@ -80,6 +93,7 @@ pub struct DashboardHandles {
     pub proposal_queue: ProposalQueue,
     pub last_backtest: Arc<RwLock<Option<StrategyRunReport>>>,
     pub tsdb: Option<Arc<TsDb>>,
+    pub candle_tx: Arc<tokio::sync::broadcast::Sender<LiveCandle>>,
 }
 
 impl Default for DashboardHandles {
@@ -97,6 +111,10 @@ impl Default for DashboardHandles {
             proposal_queue: ProposalQueue::new(),
             last_backtest: Arc::new(RwLock::new(None)),
             tsdb: None,
+            candle_tx: {
+                let (tx, _) = tokio::sync::broadcast::channel(512);
+                Arc::new(tx)
+            },
         }
     }
 }
@@ -128,6 +146,7 @@ pub struct DashboardState {
     pub proposal_queue: ProposalQueue,
     pub last_backtest: Arc<RwLock<Option<StrategyRunReport>>>,
     pub tsdb: Option<Arc<TsDb>>,
+    pub candle_tx: Arc<tokio::sync::broadcast::Sender<LiveCandle>>,
 }
 
 impl DashboardState {
@@ -144,6 +163,7 @@ impl DashboardState {
             proposal_queue: handles.proposal_queue,
             last_backtest: handles.last_backtest,
             tsdb: handles.tsdb,
+            candle_tx: handles.candle_tx,
             coinbase: CoinbaseDashboardState {
                 mode: handles.coinbase.mode,
                 live_arm: handles.coinbase.live_arm,
@@ -425,6 +445,7 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/scanner", get(get_scanner))
         .route("/api/v1/candles", get(get_candles))
         .route("/api/v1/stream/candles", get(get_stream_candles))
+        .route("/api/v1/charts/candles/live", get(get_live_candles))
         .route("/api/v1/backtest/run", post(post_backtest_run))
         .route("/api/v1/backtest/last", get(get_backtest_last))
         .route("/api/v1/db/candles", get(get_db_candles))
@@ -838,6 +859,35 @@ async fn get_stream_candles(
     );
 
     Sse::new(event_stream).keep_alive(KeepAlive::default())
+}
+
+async fn get_live_candles(
+    Query(q): Query<StreamCandleQuery>,
+    State(state): State<DashboardState>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let mut rx = state.candle_tx.subscribe();
+    let asset_filter = q.product_id.clone();
+
+    let stream = async_stream::stream! {
+        loop {
+            match rx.recv().await {
+                Ok(candle) if candle.asset_id == asset_filter => {
+                    let data = serde_json::to_string(&candle).unwrap_or_default();
+                    yield Ok::<_, Infallible>(
+                        Event::default().event("candle").data(data)
+                    );
+                }
+                Ok(_) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!("live candle SSE lagged {n}");
+                    continue;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
 async fn post_backtest_run(

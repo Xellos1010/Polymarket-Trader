@@ -1,3 +1,7 @@
+pub mod candle_agg;
+pub use candle_agg::{Candle as EngineCandle, CandleAggregator};
+use pt_dashboard::LiveCandle;
+
 use arrow_array::{ArrayRef, Float64Array, RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
 use axum::{
@@ -58,6 +62,8 @@ struct SharedState {
     risk_state: Arc<RwLock<RiskState>>,
     kill_switch: Arc<RwLock<KillSwitchState>>,
     inventory_usd: Arc<RwLock<f64>>,
+    candle_agg: Arc<parking_lot::Mutex<CandleAggregator>>,
+    candle_tx: Arc<tokio::sync::broadcast::Sender<LiveCandle>>,
 }
 
 impl SharedState {
@@ -72,6 +78,11 @@ impl SharedState {
             risk_state: Arc::new(RwLock::new(RiskState::default())),
             kill_switch: Arc::new(RwLock::new(KillSwitchState::Running)),
             inventory_usd: Arc::new(RwLock::new(0.0)),
+            candle_agg: Arc::new(parking_lot::Mutex::new(CandleAggregator::new(60))),
+            candle_tx: {
+                let (tx, _) = tokio::sync::broadcast::channel(512);
+                Arc::new(tx)
+            },
         }
     }
 }
@@ -545,6 +556,7 @@ impl TradingEngine {
             proposal_queue: ProposalQueue::new(),
             last_backtest: Arc::new(parking_lot::RwLock::new(None)),
             tsdb: None,
+            candle_tx: self.state.candle_tx.clone(),
         });
 
         tokio::spawn(async move {
@@ -699,6 +711,8 @@ impl TradingEngine {
             .max_markets_quoted_simultaneously
             .saturating_mul(4)
             .max(4);
+        let candle_agg = self.state.candle_agg.clone();
+        let candle_tx = self.state.candle_tx.clone();
 
         tokio::spawn(async move {
             let mut backoff_secs: u64 = 0;
@@ -747,6 +761,28 @@ impl TradingEngine {
                                 error!(%e, "failed to persist snapshot");
                             }
                             metrics.inc_counter("book_poll_ok", 1.0);
+                            // Ingest mid-price into CandleAggregator; broadcast completed candles.
+                            {
+                                let mid = (best.best_bid + best.best_ask) / 2.0;
+                                if let Some(candle) = candle_agg.lock().ingest(
+                                    &m.market_id,
+                                    mid,
+                                    0.0,
+                                    best.ts_ms,
+                                ) {
+                                    let live = LiveCandle {
+                                        asset_id: candle.asset_id,
+                                        open: candle.open,
+                                        high: candle.high,
+                                        low: candle.low,
+                                        close: candle.close,
+                                        volume: candle.volume,
+                                        ts_open_ms: candle.ts_open_ms,
+                                        ts_close_ms: candle.ts_close_ms,
+                                    };
+                                    let _ = candle_tx.send(live);
+                                }
+                            }
                         }
                         Err(e) => {
                             let msg = e.to_string();

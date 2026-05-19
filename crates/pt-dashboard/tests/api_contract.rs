@@ -274,6 +274,10 @@ fn fixture_state() -> DashboardState {
         proposal_queue: pt_ai_agent::ProposalQueue::new(),
         last_backtest: Arc::new(RwLock::new(None)),
         tsdb: None,
+        candle_tx: {
+            let (tx, _) = tokio::sync::broadcast::channel(512);
+            Arc::new(tx)
+        },
     })
 }
 
