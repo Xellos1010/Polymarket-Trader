@@ -62,20 +62,62 @@ _pi_check_ssh_port() {
   fi
 }
 
-_pi_local_subnet24() {
+_pi_local_subnet_cidr() {
+  # Determine the CIDR (IP/prefix) of the default-route interface.
+  # On Linux: use `ip` command. On macOS: fallback to ifconfig.
+  # Returns IP/prefix (e.g., 192.168.1.100/24). Falls back to /24 if parsing fails.
+  local iface cidr
+
   if [[ "$_PT_PI_PLATFORM" == "linux" ]]; then
-    local iface_ip
-    iface_ip=$(ip route get 8.8.8.8 2>/dev/null | grep -oP 'src \K[\d.]+' | head -1 || true)
-    [[ -n "$iface_ip" ]] && echo "${iface_ip%.*}.0/24"
-    return
+    # Linux: use 'ip route get' to find default interface, then 'ip addr' to get CIDR
+    iface=$(ip route show default 2>/dev/null | awk '/default/{print $5; exit}')
+    if [[ -n "$iface" ]]; then
+      cidr=$(ip addr show dev "$iface" 2>/dev/null | awk '/inet / {print $2; exit}')
+    fi
+  else
+    # macOS: use 'route get default' to find interface, then ifconfig
+    local gw
+    gw=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
+    if [[ -n "$gw" ]]; then
+      cidr=$(ifconfig "$gw" 2>/dev/null | awk '/inet /{print $2}' | head -1)
+      if [[ -n "$cidr" ]]; then
+        # On macOS, inet line has format: inet IP netmask HEX. Extract mask.
+        local maskstr
+        maskstr=$(ifconfig "$gw" 2>/dev/null | awk '/inet /{print $4}')
+        if [[ -n "$maskstr" ]]; then
+          # Convert hex netmask (e.g., 0xffffff00) to CIDR prefix
+          local mask_int
+          mask_int=$((16#${maskstr#0x}))  # Convert hex to decimal
+          local bits=0
+          local i
+          for ((i = 31; i >= 0; i--)); do
+            if (( (mask_int >> i) & 1 )); then
+              ((bits++))
+            else
+              break
+            fi
+          done
+          cidr="${cidr}/${bits}"
+        else
+          # Fallback: assume /24
+          cidr="${cidr}/24"
+        fi
+      fi
+    fi
   fi
 
-  local iface_ip
-  iface_ip=$(route get default 2>/dev/null | awk '/interface:/{print $2}' \
-    | xargs -I{} ifconfig {} 2>/dev/null \
-    | awk '/inet /{print $2}' \
-    | head -1 || true)
-  [[ -n "$iface_ip" ]] && echo "${iface_ip%.*}.0/24"
+  if [[ -z "$cidr" || "$cidr" != */* ]]; then
+    # Last resort: try to get a local IP and assume /24
+    local fallback_ip
+    if [[ "$_PT_PI_PLATFORM" == "linux" ]]; then
+      fallback_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    else
+      fallback_ip=$(ifconfig 2>/dev/null | grep -E 'inet [0-9]' | grep -v 127.0 | awk '{print $2}' | head -1)
+    fi
+    [[ -n "$fallback_ip" ]] && cidr="${fallback_ip}/24"
+  fi
+
+  [[ -n "$cidr" ]] && echo "$cidr"
 }
 
 _pi_scan_arp_cache() {
@@ -115,23 +157,47 @@ _pi_scan_hostname_direct() {
 }
 
 _pi_scan_subnet_24() {
-  local subnet24
-  subnet24=$(_pi_local_subnet24)
-  [[ -z "$subnet24" ]] && return 0
+  local cidr
+  cidr=$(_pi_local_subnet_cidr)
+  [[ -z "$cidr" ]] && return 0
 
-  _pi_log "Sweeping ${subnet24} (parallel=${SWEEP_PARALLEL})..."
+  local ip prefix
+  ip="${cidr%/*}"
+  prefix="${cidr#*/}"
 
-  local base_ip="${subnet24%.*}"
+  # Cap at /22 (1022 usable hosts per subnet). Warn if larger.
+  if (( prefix < 22 )); then
+    _pi_log "WARNING: subnet /${prefix} exceeds /22 cap; scanning up to 1022 hosts"
+    prefix=22
+  fi
+
+  _pi_log "Sweeping ${cidr} (prefix=/${prefix}, parallel=${SWEEP_PARALLEL})..."
+
+  # Convert IP to integer to compute network and host range
+  local o1 o2 o3 o4
+  IFS='.' read -r o1 o2 o3 o4 <<< "$ip"
+  local ip_int=$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))
+  local mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+  local net_int=$(( ip_int & mask ))
+  local host_count=$(( (1 << (32 - prefix)) - 2 ))  # Exclude network and broadcast
+
   local tmpdir
   tmpdir="$(mktemp -d /tmp/pt-pi-scan.XXXXXX)"
   trap 'rm -rf "$tmpdir"' RETURN
 
   local pids=()
   local count=0
-  local i
-  for i in $(seq 1 254); do
+  local host_num
+  for (( host_num = 1; host_num <= host_count; host_num++ )); do
+    local host_ip_int=$(( net_int + host_num ))
+    local h
+    h=$(printf '%d.%d.%d.%d\n' \
+      $(( (host_ip_int >> 24) & 0xFF )) \
+      $(( (host_ip_int >> 16) & 0xFF )) \
+      $(( (host_ip_int >> 8) & 0xFF )) \
+      $(( host_ip_int & 0xFF )))
     (
-      _pi_ping_host "${base_ip}.${i}" && echo "${base_ip}.${i}" > "${tmpdir}/${i}.hit"
+      _pi_ping_host "$h" && echo "$h" > "${tmpdir}/${host_num}.hit"
     ) &
     pids+=($!)
     count=$((count + 1))
@@ -146,10 +212,10 @@ _pi_scan_subnet_24() {
   local hit
   for hit in "${tmpdir}"/*.hit; do
     [[ -f "$hit" ]] || continue
-    local ip
-    ip="$(cat "$hit")"
-    if _pi_check_ssh_port "$ip"; then
-      echo "$ip"
+    local found_ip
+    found_ip="$(cat "$hit")"
+    if _pi_check_ssh_port "$found_ip"; then
+      echo "$found_ip"
       return 0
     fi
   done
