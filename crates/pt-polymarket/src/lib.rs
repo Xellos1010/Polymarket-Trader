@@ -16,6 +16,9 @@ use reqwest::Client;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
 
+pub mod ws;
+pub use ws::{BookUpdate, PolymarketWsClient};
+
 #[derive(Debug, Clone)]
 pub struct PolymarketClient {
     client: Client,

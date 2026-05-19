@@ -9,6 +9,7 @@ authors.workspace = true
 alloy.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
+futures.workspace = true
 parking_lot.workspace = true
 polymarket-client-sdk.workspace = true
 reqwest.workspace = true
