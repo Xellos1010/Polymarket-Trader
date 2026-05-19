@@ -557,6 +557,8 @@ impl TradingEngine {
             last_backtest: Arc::new(parking_lot::RwLock::new(None)),
             tsdb: None,
             candle_tx: self.state.candle_tx.clone(),
+            workspace_tokens: Arc::new(parking_lot::Mutex::new(std::collections::HashMap::new())),
+            workspace_promoted: Arc::new(parking_lot::RwLock::new(Vec::new())),
         });
 
         tokio::spawn(async move {

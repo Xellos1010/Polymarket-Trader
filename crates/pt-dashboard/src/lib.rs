@@ -49,6 +49,24 @@ pub struct LiveCandle {
     pub ts_close_ms: i64,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GateStatus {
+    pub min_trades_ok: bool,
+    pub sharpe_ok: bool,
+    pub drawdown_ok: bool,
+    pub no_conflict_ok: bool,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct WorkspaceCandidate {
+    pub run_id: String,
+    pub sharpe: f64,
+    pub max_drawdown: f64,
+    pub trade_count: u32,
+    pub gates: GateStatus,
+}
+
 #[derive(Clone)]
 pub struct CoinbaseDashboardHandles {
     pub mode: Arc<RwLock<String>>,
@@ -93,6 +111,8 @@ pub struct DashboardHandles {
     pub last_backtest: Arc<RwLock<Option<StrategyRunReport>>>,
     pub tsdb: Option<Arc<TsDb>>,
     pub candle_tx: Arc<tokio::sync::broadcast::Sender<LiveCandle>>,
+    pub workspace_tokens: Arc<parking_lot::Mutex<HashMap<String, std::time::Instant>>>,
+    pub workspace_promoted: Arc<RwLock<Vec<String>>>,
 }
 
 impl Default for DashboardHandles {
@@ -114,6 +134,8 @@ impl Default for DashboardHandles {
                 let (tx, _) = tokio::sync::broadcast::channel(512);
                 Arc::new(tx)
             },
+            workspace_tokens: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            workspace_promoted: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -146,6 +168,8 @@ pub struct DashboardState {
     pub last_backtest: Arc<RwLock<Option<StrategyRunReport>>>,
     pub tsdb: Option<Arc<TsDb>>,
     pub candle_tx: Arc<tokio::sync::broadcast::Sender<LiveCandle>>,
+    pub workspace_tokens: Arc<parking_lot::Mutex<HashMap<String, std::time::Instant>>>,
+    pub workspace_promoted: Arc<RwLock<Vec<String>>>,
 }
 
 impl DashboardState {
@@ -174,6 +198,8 @@ impl DashboardState {
                 imports: handles.coinbase.imports,
                 strategy_candidates: handles.coinbase.strategy_candidates,
             },
+            workspace_tokens: handles.workspace_tokens,
+            workspace_promoted: handles.workspace_promoted,
         }
     }
 }
@@ -475,6 +501,9 @@ pub fn router(state: DashboardState) -> Router {
         .route("/api/v1/ai-metrics", get(get_ai_metrics))
         .route("/api/v1/agent/brief/morning", get(get_morning_brief))
         .route("/api/v1/agent/brief/eod", get(get_eod_report))
+        .route("/api/v1/workspace/candidates", get(get_workspace_candidates))
+        .route("/api/v1/workspace/request-approval", post(post_request_approval))
+        .route("/api/v1/workspace/promote", post(post_promote))
         .with_state(state)
 }
 
@@ -2174,6 +2203,111 @@ async fn get_ai_metrics(State(state): State<DashboardState>) -> Json<AiMetricsVi
             "unknown".to_string()
         },
     })
+}
+
+// ── Workspace endpoints (operator strategy promotion) ─────────────────────────
+
+async fn get_workspace_candidates(
+    State(state): State<DashboardState>,
+) -> Json<Vec<WorkspaceCandidate>> {
+    let candidates = state.coinbase.strategy_candidates.read();
+    let result: Vec<WorkspaceCandidate> = candidates.iter().map(|c| {
+        let trades = c.source_report_path.as_deref()
+            .filter(|p| !p.contains(".."))
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|raw| serde_json::from_str::<pt_strategy_lab::StrategyRunReport>(&raw).ok())
+            .map(|r| r.trades as u32)
+            .unwrap_or(0);
+        let drawdown_abs = c.objective_breakdown.drawdown_penalty.abs();
+        let score = c.objective_breakdown.final_score;
+        let run_id = c.source_report_path.clone()
+            .unwrap_or_else(|| format!("rank-{}", c.rank));
+
+        let min_trades_ok = trades >= 30;
+        let score_ok = score >= 1.0;
+        let drawdown_ok = drawdown_abs <= 0.25;
+        let reason = if !min_trades_ok {
+            Some(format!("needs >=30 trades, got {trades}"))
+        } else if !score_ok {
+            Some(format!("score {score:.2} < 1.0"))
+        } else if !drawdown_ok {
+            Some(format!("drawdown {:.1}% > 25%", drawdown_abs * 100.0))
+        } else {
+            None
+        };
+
+        WorkspaceCandidate {
+            run_id,
+            sharpe: score,
+            max_drawdown: drawdown_abs,
+            trade_count: trades,
+            gates: GateStatus { min_trades_ok, sharpe_ok: score_ok, drawdown_ok, no_conflict_ok: true, reason },
+        }
+    }).collect();
+    Json(result)
+}
+
+async fn post_request_approval(
+    State(_state): State<DashboardState>,
+) -> Json<serde_json::Value> {
+    // NOTE: tokens are stored in _state but we return them here; the actual
+    // state storage uses the workspace_tokens map.
+    let token = uuid::Uuid::new_v4().to_string();
+    _state.workspace_tokens.lock().insert(token.clone(), std::time::Instant::now());
+    Json(serde_json::json!({"token": token, "expires_in_secs": 600}))
+}
+
+async fn post_promote(
+    State(state): State<DashboardState>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let run_id = body.get("run_id").and_then(|v| v.as_str()).unwrap_or("");
+    let token  = body.get("token").and_then(|v| v.as_str()).unwrap_or("");
+
+    let valid = {
+        let mut tokens = state.workspace_tokens.lock();
+        if let Some(issued_at) = tokens.remove(token) {
+            issued_at.elapsed().as_secs() < 600
+        } else { false }
+    };
+    if !valid {
+        return (StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({"error": "invalid or expired approval token"}))).into_response();
+    }
+
+    // Find the source report path for this run_id.
+    let report_path = {
+        let candidates = state.coinbase.strategy_candidates.read();
+        candidates.iter()
+            .find(|c| c.source_report_path.as_deref() == Some(run_id)
+                   || format!("rank-{}", c.rank) == run_id)
+            .and_then(|c| c.source_report_path.clone())
+    };
+    let Some(path) = report_path else {
+        return (StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "run_id not found"}))).into_response();
+    };
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return (StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "report file not found"}))).into_response();
+    };
+    let Ok(report) = serde_json::from_str::<pt_strategy_lab::StrategyRunReport>(&raw) else {
+        return (StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "could not parse report"}))).into_response();
+    };
+
+    if report.trades < 30 {
+        return (StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({"error": format!("gate fail: needs >=30 trades, got {}", report.trades)}))).into_response();
+    }
+    if report.max_drawdown_pct.abs() > 25.0 {
+        return (StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({"error": format!("gate fail: drawdown {:.1}% > 25%", report.max_drawdown_pct.abs())}))).into_response();
+    }
+
+    state.workspace_promoted.write().push(run_id.to_string());
+    tracing::info!(run_id, "strategy promoted to paper by operator");
+    (StatusCode::OK, Json(serde_json::json!({"status": "promoted", "run_id": run_id, "mode": "paper"}))).into_response()
 }
 
 fn parse_side(raw: &str) -> Option<Side> {

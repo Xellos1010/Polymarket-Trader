@@ -278,6 +278,8 @@ fn fixture_state() -> DashboardState {
             let (tx, _) = tokio::sync::broadcast::channel(512);
             Arc::new(tx)
         },
+        workspace_tokens: Arc::new(parking_lot::Mutex::new(std::collections::HashMap::new())),
+        workspace_promoted: Arc::new(RwLock::new(Vec::new())),
     })
 }
 

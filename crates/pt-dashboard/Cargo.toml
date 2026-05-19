@@ -24,6 +24,7 @@ pt-tsdb = { path = "../pt-tsdb" }
 futures.workspace = true
 tokio-stream.workspace = true
 async-stream = "0.3"
+uuid.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

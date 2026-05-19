@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { formatBps, scoreTone } from "./format";
 
 type Tone = "buy" | "sell" | "flat";
-type WorkspaceId = "command" | "listing" | "risk" | "strategy" | "agent";
+type WorkspaceId = "command" | "listing" | "risk" | "strategy" | "agent" | "workspace";
 type ContractMode = "current-api" | "fixture-backed";
 
 type LiveArmState = {
@@ -350,6 +350,22 @@ type ArtifactCompareResult = {
   };
 };
 
+type GateStatus = {
+  min_trades_ok: boolean;
+  sharpe_ok: boolean;
+  drawdown_ok: boolean;
+  no_conflict_ok: boolean;
+  reason?: string | null;
+};
+
+type WorkspaceCandidate = {
+  run_id: string;
+  sharpe: number;
+  max_drawdown: number;
+  trade_count: number;
+  gates: GateStatus;
+};
+
 type StrategyRunReport = {
   run_id: string;
   params_hash: string;
@@ -382,6 +398,7 @@ const WORKSPACES: WorkspaceTab[] = [
   { id: "risk", label: "Risk Cockpit", kicker: "Protect" },
   { id: "strategy", label: "Strategy Lab", kicker: "Validate" },
   { id: "agent", label: "Agent Console", kicker: "Supervise" },
+  { id: "workspace", label: "Workspace", kicker: "Promote" },
 ];
 
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -776,6 +793,22 @@ export default function App() {
   const [compareBusy, setCompareBusy] = useState(false);
   const [compareError, setCompareError] = useState<string | null>(null);
 
+  // Workspace tab state
+  const [workspaceCandidates, setWorkspaceCandidates] = useState<WorkspaceCandidate[]>([]);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [workspaceSelectedRows, setWorkspaceSelectedRows] = useState<Set<string>>(new Set());
+  const [workspaceExpandedRow, setWorkspaceExpandedRow] = useState<string | null>(null);
+  const [workspaceToken, setWorkspaceToken] = useState<string | null>(null);
+  const [workspaceTokenIssuedAt, setWorkspaceTokenIssuedAt] = useState<number | null>(null);
+  const [workspaceApprovalBusy, setWorkspaceApprovalBusy] = useState(false);
+  const [workspacePromoteBusy, setWorkspacePromoteBusy] = useState(false);
+  const [workspacePromoteSuccess, setWorkspacePromoteSuccess] = useState<string | null>(null);
+  const [workspacePromoteError, setWorkspacePromoteError] = useState<string | null>(null);
+  const [workspaceCompareResult, setWorkspaceCompareResult] = useState<ArtifactCompareResult | null>(null);
+  const [workspaceCompareBusy, setWorkspaceCompareBusy] = useState(false);
+  const [workspaceCompareError, setWorkspaceCompareError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -851,6 +884,24 @@ export default function App() {
       cancelled = true;
     };
   }, [selectedProduct, orders]);
+
+  // Fetch workspace candidates when on the workspace tab
+  useEffect(() => {
+    if (activeWorkspace !== "workspace") return;
+    let cancelled = false;
+    setWorkspaceLoading(true);
+    setWorkspaceError(null);
+    fetch("/api/v1/workspace/candidates")
+      .then((r) => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
+      .then((rows: WorkspaceCandidate[]) => {
+        if (!cancelled) setWorkspaceCandidates(rows);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setWorkspaceError(String(e));
+      })
+      .finally(() => { if (!cancelled) setWorkspaceLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeWorkspace]);
 
   const topRow = scanner[0];
   const tone: Tone = topRow ? scoreTone(topRow.score) : "flat";
@@ -1426,6 +1477,278 @@ export default function App() {
                   </p>
                 </>
               )}
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    if (activeWorkspace === "workspace") {
+      const selectedArr = Array.from(workspaceSelectedRows);
+      const canCompare = selectedArr.length === 2;
+      const canPromote = workspaceToken !== null && workspaceSelectedRows.size === 1 &&
+        workspaceTokenIssuedAt !== null && (Date.now() - workspaceTokenIssuedAt) < 600_000;
+      const tokenSecsLeft = workspaceTokenIssuedAt !== null
+        ? Math.max(0, Math.floor(600 - (Date.now() - workspaceTokenIssuedAt) / 1000))
+        : 0;
+
+      return (
+        <section className="workspace-stack">
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Strategy Candidates</h2>
+              <span>{workspaceLoading ? "loading…" : `${workspaceCandidates.length} candidates`}</span>
+            </div>
+            {workspaceError && (
+              <div className="reason-card">
+                <strong>Error loading candidates</strong>
+                <p>{workspaceError}</p>
+              </div>
+            )}
+            <div className="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Run ID</th>
+                    <th>Score</th>
+                    <th>Max DD</th>
+                    <th>Trades</th>
+                    <th>Trades Gate</th>
+                    <th>Score Gate</th>
+                    <th>DD Gate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workspaceCandidates.map((c) => {
+                    const selected = workspaceSelectedRows.has(c.run_id);
+                    const expanded = workspaceExpandedRow === c.run_id;
+                    const allPass = c.gates.min_trades_ok && c.gates.sharpe_ok && c.gates.drawdown_ok;
+                    return (
+                      <>
+                        <tr
+                          key={c.run_id}
+                          style={{ cursor: "pointer", background: selected ? "rgba(119,230,255,0.08)" : undefined }}
+                          onClick={() => {
+                            setWorkspaceSelectedRows((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(c.run_id)) next.delete(c.run_id); else next.add(c.run_id);
+                              return next;
+                            });
+                          }}
+                        >
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              readOnly
+                              style={{ pointerEvents: "none" }}
+                            />
+                          </td>
+                          <td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <button
+                              style={{ background: "none", border: "none", color: "#9dd8ff", cursor: "pointer", padding: 0, fontSize: "inherit" }}
+                              onClick={(e) => { e.stopPropagation(); setWorkspaceExpandedRow(expanded ? null : c.run_id); }}
+                            >
+                              {expanded ? "▾" : "▸"}
+                            </button>
+                            {" "}{c.run_id.length > 24 ? c.run_id.slice(-24) : c.run_id}
+                          </td>
+                          <td>{c.sharpe.toFixed(3)}</td>
+                          <td>{(c.max_drawdown * 100).toFixed(1)}%</td>
+                          <td>{c.trade_count}</td>
+                          <td style={{ color: c.gates.min_trades_ok ? "#4ade80" : "#f87171" }}>{c.gates.min_trades_ok ? "✓" : "✗"}</td>
+                          <td style={{ color: c.gates.sharpe_ok ? "#4ade80" : "#f87171" }}>{c.gates.sharpe_ok ? "✓" : "✗"}</td>
+                          <td style={{ color: c.gates.drawdown_ok ? "#4ade80" : "#f87171" }}>{c.gates.drawdown_ok ? "✓" : "✗"}</td>
+                        </tr>
+                        {expanded && (
+                          <tr key={`${c.run_id}-detail`}>
+                            <td colSpan={8}>
+                              <div className="reason-card" style={{ margin: "4px 0" }}>
+                                <strong>Gate detail for {c.run_id.slice(-16)}</strong>
+                                <p>
+                                  Trades ({c.trade_count}): <span style={{ color: c.gates.min_trades_ok ? "#4ade80" : "#f87171" }}>{c.gates.min_trades_ok ? "PASS (>=30)" : "FAIL (<30)"}</span>
+                                  {" · "}
+                                  Score ({c.sharpe.toFixed(3)}): <span style={{ color: c.gates.sharpe_ok ? "#4ade80" : "#f87171" }}>{c.gates.sharpe_ok ? "PASS (>=1.0)" : "FAIL (<1.0)"}</span>
+                                  {" · "}
+                                  Drawdown ({(c.max_drawdown * 100).toFixed(1)}%): <span style={{ color: c.gates.drawdown_ok ? "#4ade80" : "#f87171" }}>{c.gates.drawdown_ok ? "PASS (<=25%)" : "FAIL (>25%)"}</span>
+                                </p>
+                                {c.gates.reason && (
+                                  <p style={{ color: "#f87171" }}>Reason: {c.gates.reason}</p>
+                                )}
+                                {allPass && (
+                                  <p style={{ color: "#4ade80" }}>All gates passed — eligible for paper promotion.</p>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {workspaceCandidates.length === 0 && !workspaceLoading && (
+              <p className="muted">No candidates available. Run the optimizer to populate this list.</p>
+            )}
+          </div>
+
+          {/* Panel 3: Comparison */}
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Compare Selected</h2>
+              <span>{canCompare ? `${selectedArr[0].slice(-8)} vs ${selectedArr[1].slice(-8)}` : "select exactly 2 rows"}</span>
+            </div>
+            <div className="reason-stack">
+              <button
+                className="primary"
+                disabled={!canCompare || workspaceCompareBusy}
+                onClick={() => {
+                  if (!canCompare) return;
+                  setWorkspaceCompareBusy(true);
+                  setWorkspaceCompareError(null);
+                  const [a, b] = selectedArr;
+                  fetch(`/api/v1/artifacts/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`)
+                    .then((r) => (r.ok ? r.json() : r.json().then((e: { error?: string }) => Promise.reject(e.error ?? r.status))))
+                    .then((result: ArtifactCompareResult) => { setWorkspaceCompareResult(result); setWorkspaceCompareError(null); })
+                    .catch((err: unknown) => { setWorkspaceCompareError(String(err)); setWorkspaceCompareResult(null); })
+                    .finally(() => setWorkspaceCompareBusy(false));
+                }}
+              >
+                {workspaceCompareBusy ? "Loading…" : "Compare"}
+              </button>
+              {workspaceCompareError && (
+                <div className="reason-card"><strong>Error</strong><p>{workspaceCompareError}</p></div>
+              )}
+              {workspaceCompareResult && (() => {
+                const { a, b, delta } = workspaceCompareResult;
+                type MetricRow = { label: string; aVal: string; bVal: string; deltaVal: string; good: boolean };
+                const rows: MetricRow[] = [
+                  { label: "Return %", aVal: `${(a.total_return_pct * 100).toFixed(2)}%`, bVal: `${(b.total_return_pct * 100).toFixed(2)}%`, deltaVal: `${delta.total_return_pct >= 0 ? "+" : ""}${(delta.total_return_pct * 100).toFixed(2)}%`, good: delta.total_return_pct >= 0 },
+                  { label: "Max Drawdown", aVal: `${(a.max_drawdown_pct * 100).toFixed(2)}%`, bVal: `${(b.max_drawdown_pct * 100).toFixed(2)}%`, deltaVal: `${delta.max_drawdown_pct >= 0 ? "+" : ""}${(delta.max_drawdown_pct * 100).toFixed(2)}%`, good: delta.max_drawdown_pct <= 0 },
+                  { label: "Trades", aVal: String(a.trades), bVal: String(b.trades), deltaVal: `${delta.trades >= 0 ? "+" : ""}${delta.trades}`, good: delta.trades >= 0 },
+                  { label: "Win Rate", aVal: `${(a.win_rate * 100).toFixed(1)}%`, bVal: `${(b.win_rate * 100).toFixed(1)}%`, deltaVal: `${delta.win_rate >= 0 ? "+" : ""}${(delta.win_rate * 100).toFixed(1)}%`, good: delta.win_rate >= 0 },
+                ];
+                return (
+                  <div className="table-shell">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Metric</th>
+                          <th>Run A · {a.run_id.slice(0, 8)}</th>
+                          <th>Run B · {b.run_id.slice(0, 8)}</th>
+                          <th>Delta (A - B)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row) => (
+                          <tr key={row.label}>
+                            <td>{row.label}</td>
+                            <td>{row.aVal}</td>
+                            <td>{row.bVal}</td>
+                            <td style={{ color: row.good ? "#4ade80" : "#f87171" }}>{row.deltaVal}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Panel 4: Promotion */}
+          <div className="panel">
+            <div className="panel-title">
+              <h2>Promote to Paper</h2>
+              <span>{workspaceToken ? `token active (${tokenSecsLeft}s)` : "no active token"}</span>
+            </div>
+            <div className="reason-stack">
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                <button
+                  className="primary"
+                  disabled={workspaceApprovalBusy || workspaceToken !== null}
+                  onClick={() => {
+                    setWorkspaceApprovalBusy(true);
+                    setWorkspacePromoteError(null);
+                    fetch("/api/v1/workspace/request-approval", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+                      .then((r) => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
+                      .then((res: { token: string }) => {
+                        setWorkspaceToken(res.token);
+                        setWorkspaceTokenIssuedAt(Date.now());
+                      })
+                      .catch((e: unknown) => setWorkspacePromoteError(String(e)))
+                      .finally(() => setWorkspaceApprovalBusy(false));
+                  }}
+                >
+                  {workspaceApprovalBusy ? "Requesting…" : workspaceToken ? "Token active" : "Request Approval"}
+                </button>
+
+                <button
+                  className="primary"
+                  disabled={!canPromote || workspacePromoteBusy}
+                  onClick={() => {
+                    if (!canPromote || !workspaceToken) return;
+                    const run_id = Array.from(workspaceSelectedRows)[0];
+                    setWorkspacePromoteBusy(true);
+                    setWorkspacePromoteError(null);
+                    setWorkspacePromoteSuccess(null);
+                    fetch("/api/v1/workspace/promote", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ run_id, token: workspaceToken }),
+                    })
+                      .then((r) => r.json().then((body: { status?: string; error?: string }) => ({ ok: r.ok, body })))
+                      .then(({ ok, body }) => {
+                        if (ok) {
+                          setWorkspacePromoteSuccess(`Promoted to paper mode: ${run_id}`);
+                          setWorkspaceToken(null);
+                          setWorkspaceTokenIssuedAt(null);
+                          setWorkspaceSelectedRows(new Set());
+                        } else {
+                          setWorkspacePromoteError(body.error ?? "promotion failed");
+                          setWorkspaceToken(null);
+                          setWorkspaceTokenIssuedAt(null);
+                        }
+                      })
+                      .catch((e: unknown) => setWorkspacePromoteError(String(e)))
+                      .finally(() => setWorkspacePromoteBusy(false));
+                  }}
+                >
+                  {workspacePromoteBusy ? "Promoting…" : "Promote to Paper"}
+                </button>
+              </div>
+
+              {workspaceToken && (
+                <div className="reason-card">
+                  <strong>Approval token active</strong>
+                  <p>
+                    Token is single-use and expires in {tokenSecsLeft}s.
+                    Select exactly one candidate row, then click "Promote to Paper".
+                    Server-side gates (trades &ge;30, drawdown &le;25%) will be enforced.
+                  </p>
+                </div>
+              )}
+
+              {workspacePromoteSuccess && (
+                <div className="reason-card good">
+                  <strong>Promoted to paper mode</strong>
+                  <p>{workspacePromoteSuccess}</p>
+                </div>
+              )}
+
+              {workspacePromoteError && (
+                <div className="reason-card">
+                  <strong>Promotion failed</strong>
+                  <p>{workspacePromoteError}</p>
+                </div>
+              )}
+
+              <p className="muted">
+                Candidates are promoted to paper mode only. No live execution will be triggered.
+                Gate checks are enforced server-side.
+              </p>
             </div>
           </div>
         </section>
