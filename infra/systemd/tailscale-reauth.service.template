@@ -1,0 +1,9 @@
+[Unit]
+Description=Tailscale re-authentication
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/tailscale up --auth-key=${TS_AUTH_KEY} --accept-routes
+RemainAfterExit=no

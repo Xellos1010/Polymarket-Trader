@@ -1,0 +1,10 @@
+[Unit]
+Description=Tailscale re-auth timer (boot + every 12h)
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=12h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -242,6 +242,26 @@
         "cwd": "{workspaceRoot}",
         "command": "./scripts/pi_dev_tailscale.sh status"
       }
+    },
+    "pi-dev-tailscale-setup": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Install Tailscale auto-reauth systemd timer on the Pi (requires PI_TAILSCALE_AUTH_KEY env var)"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_tailscale_setup.sh"
+      }
+    },
+    "pi-dev-cloudflare-setup": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Install Cloudflare Tunnel on the Pi (requires CF_TUNNEL_TOKEN env var)"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_cloudflare.sh"
+      }
     }
   }
 }
