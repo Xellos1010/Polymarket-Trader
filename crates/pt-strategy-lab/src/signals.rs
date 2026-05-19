@@ -1,11 +1,84 @@
 use crate::indicators::{
-    adx, atr, closes, cumulative_vwap, ichimoku, ma, macd, rolling_std, rsi, sma, stoch_rsi,
-    volumes,
+    adx, atr, closes, cumulative_vwap, ichimoku, ma, macd, rolling_std, rsi, session_vwap, sma,
+    stoch_rsi, volumes,
 };
 use crate::types::{
     Candle, FusionDecision, IndicatorSignal, RegimeState, StrategyProfile, TradeAction,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+
+// ---------------------------------------------------------------------------
+// SignalConfig — configuration for standalone signal evaluation functions
+// ---------------------------------------------------------------------------
+
+fn default_session_vwap_threshold() -> f64 {
+    0.005
+}
+fn default_session_start_hour() -> u32 {
+    0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignalConfig {
+    #[serde(default = "default_session_vwap_threshold")]
+    pub session_vwap_threshold: f64,
+    #[serde(default = "default_session_start_hour")]
+    pub session_start_hour_utc: u32,
+}
+
+impl Default for SignalConfig {
+    fn default() -> Self {
+        Self {
+            session_vwap_threshold: default_session_vwap_threshold(),
+            session_start_hour_utc: default_session_start_hour(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// session_vwap_signal — mean-reversion signal vs. session VWAP
+// ---------------------------------------------------------------------------
+
+/// Returns an `IndicatorSignal` when the last candle's close deviates from its
+/// session VWAP by more than `cfg.session_vwap_threshold` (a fractional value,
+/// e.g. 0.005 = 0.5%).  Returns `None` when the deviation is within threshold
+/// or there are no candles with a valid VWAP.
+///
+/// Bias convention (mean-reversion):
+///   price above VWAP → bearish bias (negative)
+///   price below VWAP → bullish bias (positive)
+pub fn session_vwap_signal(candles: &[Candle], cfg: &SignalConfig) -> Option<IndicatorSignal> {
+    if candles.is_empty() {
+        return None;
+    }
+    let vwaps = session_vwap(candles, cfg.session_start_hour_utc);
+    let last_vwap = vwaps.last()?.as_ref()?;
+    let last_close = candles.last()?.close;
+    let deviation = (last_close - last_vwap) / last_vwap;
+    if deviation.abs() < cfg.session_vwap_threshold {
+        return None;
+    }
+    // Mean-reversion: above VWAP is bearish, below is bullish.
+    let bias = if deviation > 0.0 { -1.0_f64 } else { 1.0_f64 };
+    let confidence = (deviation.abs() / cfg.session_vwap_threshold).min(1.0);
+    let regime_vote = if deviation > 0.0 {
+        RegimeState::Bear
+    } else {
+        RegimeState::Bull
+    };
+    Some(IndicatorSignal {
+        name: "session_vwap".to_string(),
+        bias,
+        confidence,
+        regime_vote,
+        metadata: json!({
+            "vwap": last_vwap,
+            "close": last_close,
+            "deviation": deviation,
+        }),
+    })
+}
 
 fn clamp(v: f64, lo: f64, hi: f64) -> f64 {
     v.max(lo).min(hi)
@@ -355,4 +428,80 @@ pub fn build_decisions(candles: &[Candle], profile: &StrategyProfile) -> Vec<Fus
     }
 
     out
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Candle;
+
+    #[test]
+    fn session_vwap_signal_above_threshold_emits_bearish() {
+        // Three candles spread across session boundaries.
+        // VWAP for the last session ≈ 1.01 (only last candle in its session
+        // given that each candle lands on a different day boundary).
+        // last close 1.01 → deviation = 0 within session; to force > threshold
+        // we use a single-candle "session" where close > typ (achieved via
+        // high/low asymmetry).
+        //
+        // Simpler: put all three candles in one session (same day) so VWAP
+        // accumulates, then make the last close diverge significantly.
+        let candles = vec![
+            Candle { ts_ms: 0,              open: 1.0, high: 1.0,  low: 1.0, close: 1.0,  volume: 100.0 },
+            Candle { ts_ms: 3_600_000,      open: 1.0, high: 1.0,  low: 1.0, close: 1.0,  volume: 100.0 },
+            Candle { ts_ms: 7_200_000,      open: 1.0, high: 1.02, low: 1.0, close: 1.02, volume: 100.0 },
+        ];
+        // VWAP after 3 candles in same session:
+        //   typ0 = 1.0, typ1 = 1.0, typ2 = (1.02+1.0+1.02)/3 ≈ 1.01333
+        //   pv = 100*1.0 + 100*1.0 + 100*1.01333 = 301.333, vv=300
+        //   vwap ≈ 1.00444
+        // deviation = (1.02 - 1.00444) / 1.00444 ≈ 0.0155 > 0.005 → signal
+        let cfg = SignalConfig {
+            session_vwap_threshold: 0.005,
+            session_start_hour_utc: 0,
+        };
+        let signal = session_vwap_signal(&candles, &cfg);
+        assert!(signal.is_some(), "should emit signal when deviation exceeds threshold");
+        let s = signal.unwrap();
+        assert!(s.bias < 0.0, "price above vwap should produce bearish (negative) bias");
+    }
+
+    #[test]
+    fn session_vwap_signal_within_threshold_returns_none() {
+        // Two candles in the same session, prices nearly identical → tiny deviation.
+        let candles = vec![
+            Candle { ts_ms: 0,         open: 1.0, high: 1.0,   low: 1.0, close: 1.0,   volume: 100.0 },
+            Candle { ts_ms: 3_600_000, open: 1.0, high: 1.001, low: 1.0, close: 1.0001, volume: 100.0 },
+        ];
+        let cfg = SignalConfig {
+            session_vwap_threshold: 0.005,
+            session_start_hour_utc: 0,
+        };
+        let signal = session_vwap_signal(&candles, &cfg);
+        assert!(signal.is_none(), "deviation within threshold should return None");
+    }
+
+    #[test]
+    fn session_vwap_signal_empty_candles_returns_none() {
+        let cfg = SignalConfig::default();
+        assert!(session_vwap_signal(&[], &cfg).is_none());
+    }
+
+    #[test]
+    fn session_vwap_signal_below_threshold_emits_bullish() {
+        // Last close well below VWAP → bullish bias.
+        let candles = vec![
+            Candle { ts_ms: 0,         open: 1.0, high: 1.05, low: 1.0, close: 1.05, volume: 200.0 },
+            Candle { ts_ms: 3_600_000, open: 1.0, high: 1.05, low: 1.0, close: 0.98, volume: 100.0 },
+        ];
+        let cfg = SignalConfig { session_vwap_threshold: 0.005, session_start_hour_utc: 0 };
+        let signal = session_vwap_signal(&candles, &cfg);
+        assert!(signal.is_some(), "should emit signal when price is below vwap by more than threshold");
+        let s = signal.unwrap();
+        assert!(s.bias > 0.0, "price below vwap should produce bullish (positive) bias");
+    }
 }
