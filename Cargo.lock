@@ -4518,6 +4518,7 @@ dependencies = [
  "pt-gemini",
  "pt-kraken",
  "pt-market-discovery",
+ "pt-order-advisor",
  "pt-order-manager",
  "pt-polymarket",
  "pt-quote",
@@ -4574,6 +4575,15 @@ dependencies = [
  "chrono",
  "pt-core",
  "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "pt-order-advisor"
+version = "0.1.0"
+dependencies = [
  "serde",
  "serde_json",
  "tracing",
