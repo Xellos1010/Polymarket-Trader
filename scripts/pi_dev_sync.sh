@@ -17,6 +17,8 @@ PI_HEALTH_URL="${PI_HEALTH_URL:-http://127.0.0.1:${PI_PUBLIC_PORT}/healthz}"
 PI_POLL_SECONDS="${PI_POLL_SECONDS:-2}"
 PI_SERVICE_TEMPLATE="${PI_SERVICE_TEMPLATE:-${ROOT_DIR}/infra/systemd/pt-engine-dev.service.template}"
 PI_BUILD_PROFILE="${PI_BUILD_PROFILE:-debug}"  # debug | release
+PI_CLOUDFLARE_ENSURE="${PI_CLOUDFLARE_ENSURE:-0}"
+PI_INFRA_RENDER="${PI_INFRA_RENDER:-${ROOT_DIR}/scripts/infra_render.sh}"
 
 usage() {
   cat <<'EOF'
@@ -36,7 +38,7 @@ Usage:
 
 Environment (see scripts/pi_lib.sh for discovery defaults):
   PI_HOST              Static host or IP (LAN or Tailscale 100.x).
-  PI_USER              Default: pi
+  PI_USER              Default: polytrader
   PI_PORT              Default: 22
   PI_DEST              Default: /home/$PI_USER/Polymarket-Trader-dev
   PI_SERVICE           Default: pt-engine-dev
@@ -45,6 +47,8 @@ Environment (see scripts/pi_lib.sh for discovery defaults):
   PI_POLL_SECONDS      Default: 2
   PI_SERVICE_TEMPLATE  Default: ./infra/systemd/pt-engine-dev.service.template
   PI_BUILD_PROFILE     debug | release (default: debug)
+  PI_CLOUDFLARE_ENSURE 1 to ensure Cloudflare tunnel after deploy; also implied when CF_TUNNEL_TOKEN is set
+  PI_CLOUDFLARE_MODE   auto | anon-systemd | managed-service (used when Cloudflare ensure is enabled)
   PI_KEY               SSH private key path (auto-detected from ~/.ssh otherwise)
 EOF
 }
@@ -82,9 +86,15 @@ rsync_repo() {
     --exclude '.git/' \
     --exclude '.nx/' \
     --exclude '.local/' \
+    --exclude '.cursor/' \
+    --exclude '.claude/' \
+    --exclude '.pytest_cache/' \
     --exclude '.env' \
     --exclude '.env.*' \
+    --exclude '3rd party docs/' \
     --exclude 'artifacts/' \
+    --exclude 'cloud_agents/' \
+    --exclude 'data/' \
     --exclude 'dist/' \
     --exclude 'node_modules/' \
     --exclude 'target/' \
@@ -97,28 +107,57 @@ rsync_repo() {
     "$ROOT_DIR/" "$PI_USER@$pi_host:$PI_DEST/"
 }
 
-# Render .env.pi locally from the calling shell, scp it to the Pi, and lock perms.
+# Render .env.pi locally from the calling shell, preserving any existing remote
+# values for keys that are not set in the current environment.
 remote_write_env_file() {
   mkdir -p "$LOCAL_DIR"
   local pi_host
   pi_host="$(resolve_pi_host)"
   local tmp_env
   tmp_env="$(mktemp "$LOCAL_DIR/pi-env.XXXXXX")"
+  local existing_env
+  existing_env="$(mktemp "$LOCAL_DIR/pi-env-existing.XXXXXX")"
+
+  if ! pi_scp "$PI_USER@$pi_host:$PI_DEST/.env.pi" "$existing_env" >/dev/null 2>&1; then
+    rm -f "$existing_env"
+    existing_env=""
+  fi
+
+  resolve_pi_env_value() {
+    local key="$1"
+    local default_value="${2:-}"
+    local current_value=""
+
+    if [[ "${!key+x}" == "x" ]]; then
+      current_value="${!key}"
+      printf '%s' "$current_value"
+      return 0
+    fi
+
+    if [[ -n "$existing_env" ]] && grep -q "^${key}=" "$existing_env"; then
+      current_value="$(awk -F= -v key="$key" '$1 == key { print substr($0, index($0, "=") + 1); exit }' "$existing_env")"
+      printf '%s' "$current_value"
+      return 0
+    fi
+
+    printf '%s' "$default_value"
+  }
 
   umask 077
   cat > "$tmp_env" <<EOF
-RUST_LOG=info
-POLYMARKET_PRIVATE_KEY=${POLYMARKET_PRIVATE_KEY:-}
-COINBASE_API_KEY=${COINBASE_API_KEY:-}
-COINBASE_API_SECRET=${COINBASE_API_SECRET:-}
-COINBASE_PASSPHRASE=${COINBASE_PASSPHRASE:-}
-COINBASE_AUTH_PROFILE=${COINBASE_AUTH_PROFILE:-}
-COINBASE_CDP_KEY_FILE=${COINBASE_CDP_KEY_FILE:-}
-COINBASE_CDP_SECRET_ID=${COINBASE_CDP_SECRET_ID:-}
-COINBASE_EXPECTED_KEY_ID=${COINBASE_EXPECTED_KEY_ID:-}
-TRADINGVIEW_ENDPOINT_SECRET=${TRADINGVIEW_ENDPOINT_SECRET:-}
-OPS_DASHBOARD_BIND=${OPS_DASHBOARD_BIND:-0.0.0.0:${PI_PUBLIC_PORT}}
-TRADINGVIEW_BIND_ADDR=${TRADINGVIEW_BIND_ADDR:-127.0.0.1:8090}
+RUST_LOG=$(resolve_pi_env_value RUST_LOG info)
+POLYMARKET_PRIVATE_KEY=$(resolve_pi_env_value POLYMARKET_PRIVATE_KEY)
+COINBASE_API_KEY=$(resolve_pi_env_value COINBASE_API_KEY)
+COINBASE_API_SECRET=$(resolve_pi_env_value COINBASE_API_SECRET)
+COINBASE_PASSPHRASE=$(resolve_pi_env_value COINBASE_PASSPHRASE)
+COINBASE_AUTH_PROFILE=$(resolve_pi_env_value COINBASE_AUTH_PROFILE)
+COINBASE_CDP_KEY_FILE=$(resolve_pi_env_value COINBASE_CDP_KEY_FILE)
+COINBASE_CDP_SECRET_ID=$(resolve_pi_env_value COINBASE_CDP_SECRET_ID)
+COINBASE_EXPECTED_KEY_ID=$(resolve_pi_env_value COINBASE_EXPECTED_KEY_ID)
+TRADINGVIEW_ENDPOINT_SECRET=$(resolve_pi_env_value TRADINGVIEW_ENDPOINT_SECRET)
+OPS_DASHBOARD_BIND=$(resolve_pi_env_value OPS_DASHBOARD_BIND "0.0.0.0:${PI_PUBLIC_PORT}")
+TRADINGVIEW_BIND_ADDR=$(resolve_pi_env_value TRADINGVIEW_BIND_ADDR 127.0.0.1:8090)
+PT_CLOUDFLARE_ORIGIN_URL=$(resolve_pi_env_value PT_CLOUDFLARE_ORIGIN_URL "http://127.0.0.1:${PI_PUBLIC_PORT}")
 EOF
 
   pi_ssh "$pi_host" "mkdir -p '$PI_DEST' && chmod 700 '$PI_DEST'"
@@ -126,6 +165,7 @@ EOF
   pi_scp "$tmp_env" "$PI_USER@$pi_host:$PI_DEST/.env.pi"
   pi_ssh "$pi_host" "chmod 600 '$PI_DEST/.env.pi' && echo '[remote] wrote $PI_DEST/.env.pi'"
   rm -f "$tmp_env"
+  [[ -n "$existing_env" ]] && rm -f "$existing_env"
 }
 
 # Render the systemd unit on the dev box (so we can review with `nx fmt` etc.),
@@ -133,15 +173,11 @@ EOF
 # intentionally limited to the three placeholders the template documents.
 render_service_unit() {
   local out_path="$1"
-  if [ ! -f "$PI_SERVICE_TEMPLATE" ]; then
-    echo "missing service template: $PI_SERVICE_TEMPLATE" >&2
+  if [ ! -x "$PI_INFRA_RENDER" ]; then
+    echo "missing infra renderer: $PI_INFRA_RENDER" >&2
     exit 1
   fi
-  sed \
-    -e "s|\${PI_SERVICE}|${PI_SERVICE}|g" \
-    -e "s|\${PI_USER}|${PI_USER}|g" \
-    -e "s|\${PI_DEST}|${PI_DEST}|g" \
-    "$PI_SERVICE_TEMPLATE" > "$out_path"
+  "$PI_INFRA_RENDER" render-service-unit "$out_path"
 }
 
 remote_deploy() {
@@ -219,16 +255,25 @@ REMOTE
   rm -f "$rendered_unit"
 }
 
+cloudflare_ensure_if_requested() {
+  if [[ "$PI_CLOUDFLARE_ENSURE" == "1" || -n "${CF_TUNNEL_TOKEN:-}" ]]; then
+    echo "[local] ensuring Cloudflare tunnel configuration"
+    "$ROOT_DIR/scripts/pi_dev_cloudflare.sh" ensure
+  fi
+}
+
 deploy_once() {
   require_cmd rsync
   require_cmd ssh
   require_cmd cargo
   require_cmd pnpm
   mkdir -p "$LOCAL_DIR"
+  "$PI_INFRA_RENDER" build >/dev/null
   frontend_build
   rsync_repo
   remote_write_env_file
   remote_deploy
+  cloudflare_ensure_if_requested
 }
 
 # Bring up a fresh Pi: APT base + rustup + Node 22 + pnpm.

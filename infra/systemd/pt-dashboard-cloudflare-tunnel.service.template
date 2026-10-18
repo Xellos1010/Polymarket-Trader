@@ -1,0 +1,30 @@
+# Polymarket Trader — Cloudflare tunnel adapter for the barebones Pi path.
+# Rendered by scripts/pi_dev_cloudflare.sh during `ensure` when
+# PI_CLOUDFLARE_MODE=anon-systemd (or when auto-detected).
+#
+#   ${PI_TUNNEL_SERVICE} systemd unit name for the tunnel adapter
+#   ${PI_SERVICE}        upstream application service name (e.g. pt-engine-dev)
+#   ${PI_USER}           Linux user account on the Pi
+#   ${PI_DEST}           Absolute deploy path on the Pi
+
+[Unit]
+Description=Polymarket Trader Cloudflare Tunnel (${PI_TUNNEL_SERVICE})
+After=network.target ${PI_SERVICE}.service
+BindsTo=${PI_SERVICE}.service
+Wants=${PI_SERVICE}.service
+
+[Service]
+Type=simple
+User=${PI_USER}
+WorkingDirectory=${PI_DEST}
+EnvironmentFile=-${PI_DEST}/.env.pi
+ExecStart=/bin/bash -lc 'exec /usr/local/bin/cloudflared tunnel --url "${PT_CLOUDFLARE_ORIGIN_URL:-http://127.0.0.1:8080}" --no-autoupdate'
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=${PI_TUNNEL_SERVICE}
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

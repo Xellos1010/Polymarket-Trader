@@ -6,7 +6,7 @@
 # Adapted for the Polymarket-Trader Pi dev deployment flow.
 #
 # Required environment (can be overridden by callers or .env):
-#   PI_USER          SSH user                        (default: pi)
+#   PI_USER          SSH user                        (default: polytrader)
 #   PI_HOST          Static host or IPv4 (skips discovery; preferred)
 #   PI_IP            Synonym for PI_HOST (set by tailscale resolver)
 #   PI_HOSTNAME      mDNS hostname to probe          (default: raspberrypi)
@@ -18,7 +18,7 @@
 #   SSH_CONNECT_TIMEOUT  ssh -o ConnectTimeout       (default: 8)
 
 # shellcheck disable=SC2034 # variables here are consumed by sourcing scripts
-PI_USER="${PI_USER:-pi}"
+PI_USER="${PI_USER:-polytrader}"
 PI_PORT="${PI_PORT:-22}"
 PI_HOSTNAME="${PI_HOSTNAME:-raspberrypi}"
 PI_KEY="${PI_KEY:-}"

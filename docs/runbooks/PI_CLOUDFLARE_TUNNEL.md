@@ -52,6 +52,7 @@ pt-engine logs / systemctl status pt-engine-dev
 2. `pi_lib.sh` resolves Pi IP via ARP → mDNS → hostname → /24 sweep.
 3. All `pi-dev-*` Nx targets work directly.
 4. Dashboard reachable at `http://<pi-ip>:8080`.
+5. If a Cloudflare tunnel is configured locally, `pi-dev-urls` also prints the public HTTPS URL.
 
 ```bash
 pnpm exec nx run polymarket-trader:pi-dev-scan    # confirm Pi IP cached
@@ -63,7 +64,58 @@ pnpm exec nx run polymarket-trader:pi-dev-urls    # print dashboard + tunnel URL
 
 ## Cloudflare Tunnel Path (Remote / Off-LAN)
 
-### One-time setup on Pi (run once, not automated by deploy scripts)
+### Repository-managed setup path
+
+The repo now exposes Cloudflare tunnel management directly:
+
+```bash
+# one-time install or repair for the barebones Pi path
+PI_HOST=<pi-host> \
+PI_USER=polytrader \
+PI_CLOUDFLARE_USER=<sudo-capable-user> \
+PI_CLOUDFLARE_KEY=<ssh-key-for-that-user> \
+  pnpm exec nx run polymarket-trader:pi-dev-cloudflare-setup-anon
+
+# or: managed tunnel path when you have a remotely managed tunnel token
+PI_HOST=<pi-host> \
+PI_USER=polytrader \
+PI_CLOUDFLARE_USER=<sudo-capable-user> \
+PI_CLOUDFLARE_KEY=<ssh-key-for-that-user> \
+CF_TUNNEL_TOKEN=<token> \
+  pnpm exec nx run polymarket-trader:pi-dev-cloudflare-setup
+
+# inspect the current service and any locally declared public hostnames
+PI_HOST=<pi-host> \
+PI_USER=polytrader \
+PI_CLOUDFLARE_USER=<sudo-capable-user> \
+PI_CLOUDFLARE_KEY=<ssh-key-for-that-user> \
+  pnpm exec nx run polymarket-trader:pi-dev-cloudflare-status
+
+# print the effective local service/config on the Pi
+PI_HOST=<pi-host> \
+PI_USER=polytrader \
+PI_CLOUDFLARE_USER=<sudo-capable-user> \
+PI_CLOUDFLARE_KEY=<ssh-key-for-that-user> \
+  pnpm exec nx run polymarket-trader:pi-dev-cloudflare-config
+```
+
+To make deploy ensure the tunnel after each successful Pi rollout:
+
+```bash
+PI_HOST=<pi-host> \
+PI_USER=polytrader \
+PI_CLOUDFLARE_USER=<sudo-capable-user> \
+PI_CLOUDFLARE_KEY=<ssh-key-for-that-user> \
+PI_CLOUDFLARE_ENSURE=1 \
+PI_CLOUDFLARE_MODE=anon-systemd \
+  pnpm exec nx run polymarket-trader:pi-dev-deploy
+```
+
+For the Cloudflare-managed service path, replace `PI_CLOUDFLARE_MODE=anon-systemd` with `PI_CLOUDFLARE_MODE=managed-service` and include `CF_TUNNEL_TOKEN` when the service is not yet installed.
+
+`PI_CLOUDFLARE_ENSURE=1` is optional. If omitted, Pi deploy does not touch Cloudflare.
+
+### One-time setup on Pi (manual path)
 
 ```bash
 # On Pi — install cloudflared
