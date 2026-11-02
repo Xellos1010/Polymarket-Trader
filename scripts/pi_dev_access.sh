@@ -32,6 +32,12 @@ EOF
 print_urls() {
   local host
   host="$(resolve_pi_host)"
+  local cloudflare_urls=""
+  if cloudflare_urls="$("$ROOT_DIR/scripts/pi_dev_cloudflare.sh" url 2>/dev/null)"; then
+    cloudflare_urls="$(printf '%s\n' "$cloudflare_urls" | awk 'NF')"
+  else
+    cloudflare_urls=""
+  fi
   cat <<EOF
 Dashboard: http://${host}:${PI_PUBLIC_PORT}/
 Health:    http://${host}:${PI_PUBLIC_PORT}/healthz
@@ -41,6 +47,13 @@ Metrics:   http://${host}:${PI_PUBLIC_PORT}/metrics
 Tunnel access (after \`scripts/pi_dev_access.sh tunnel\`):
   http://127.0.0.1:${PI_LOCAL_TUNNEL_PORT}/
 EOF
+  if [[ -n "$cloudflare_urls" ]]; then
+    echo
+    echo "Cloudflare access:"
+    while IFS= read -r url; do
+      [[ -n "$url" ]] && echo "  $url"
+    done <<< "$cloudflare_urls"
+  fi
 }
 
 start_tunnel() {
