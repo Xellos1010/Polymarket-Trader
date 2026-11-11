@@ -256,11 +256,41 @@
     "pi-dev-cloudflare-setup": {
       "executor": "nx:run-commands",
       "metadata": {
-        "description": "Install Cloudflare Tunnel on the Pi (requires CF_TUNNEL_TOKEN env var)"
+        "description": "Ensure Cloudflare Tunnel is installed/enabled on the Pi using the selected mode (auto, anon-systemd, managed-service)"
       },
       "options": {
         "cwd": "{workspaceRoot}",
-        "command": "./scripts/pi_dev_cloudflare.sh"
+        "command": "./scripts/pi_dev_cloudflare.sh ensure"
+      }
+    },
+    "pi-dev-cloudflare-setup-anon": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Ensure the barebones Cloudflare anonymous tunnel adapter service is installed/enabled on the Pi"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "PI_CLOUDFLARE_MODE=anon-systemd ./scripts/pi_dev_cloudflare.sh ensure"
+      }
+    },
+    "pi-dev-cloudflare-status": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Print Cloudflare Tunnel status and derived public URLs for the Pi"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_cloudflare.sh status"
+      }
+    },
+    "pi-dev-cloudflare-config": {
+      "executor": "nx:run-commands",
+      "metadata": {
+        "description": "Print the effective local Cloudflare Tunnel service/config on the Pi"
+      },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "./scripts/pi_dev_cloudflare.sh print-config"
       }
     }
   }

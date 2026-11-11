@@ -85,7 +85,7 @@ Confirm Nx sees both projects:
 pnpm exec nx show projects
 ```
 
-You should see `polymarket-trader` and `pt-dashboard-frontend`.
+You should see `polymarket-trader`, `pt-dashboard-frontend`, and `infra`.
 
 ### Common Nx commands
 
@@ -118,6 +118,14 @@ pnpm exec nx run pt-dashboard-frontend:typecheck
 pnpm exec nx run pt-dashboard-frontend:test
 pnpm exec nx run pt-dashboard-frontend:build
 pnpm exec nx run pt-dashboard-frontend:dev
+```
+
+Infra artifact rendering targets:
+
+```bash
+pnpm exec nx run infra:build
+pnpm exec nx run infra:print
+pnpm exec nx run infra:print-cloudflare
 ```
 
 Project layout: root `project.json` defines `polymarket-trader` targets; `crates/pt-dashboard/frontend/project.json` defines `pt-dashboard-frontend`. See `AGENTS.md` for the full verification matrix.
@@ -154,7 +162,7 @@ For a persistent Pi-hosted dev deployment that rebuilds and restarts on each loc
 
 ```bash
 export PI_HOST=<pi-host-or-ip>
-export PI_USER=pi
+export PI_USER=polytrader
 cp config/pi.env.example .env
 # edit .env or export values in your shell; keep secrets out of tracked files
 pnpm exec nx run polymarket-trader:pi-dev-init-env
@@ -166,6 +174,9 @@ Useful follow-ups:
 
 ```bash
 pnpm exec nx run polymarket-trader:pi-dev-urls
+pnpm exec nx run polymarket-trader:pi-dev-cloudflare-setup-anon
+pnpm exec nx run polymarket-trader:pi-dev-cloudflare-status
+pnpm exec nx run polymarket-trader:pi-dev-cloudflare-config
 pnpm exec nx run polymarket-trader:pi-dev-tunnel
 pnpm exec nx run polymarket-trader:pi-dev-watch-status
 pnpm exec nx run polymarket-trader:pi-dev-watch-logs
@@ -177,7 +188,12 @@ Notes:
 - The watch loop runs locally in the background and persists after you detach from the terminal.
 - The Pi service keeps running when you stop or detach from the watcher.
 - Frontend changes are built locally and synced as `crates/pt-dashboard/frontend/dist`; the Pi serves that bundle from the Rust dashboard.
+- Infra templates under `infra/` are rendered locally into `.local/infra/` before each Pi deploy so the installed `systemd` units match the repo-managed source of truth.
 - `config/config.toml`, `.env`, and credential JSON files are excluded from Pi sync; the Pi runtime reads its own `$PI_DEST/.env.pi`.
+- `pi-dev-init-env` and `pi-dev-deploy` preserve existing values already stored in `$PI_DEST/.env.pi` unless you explicitly override them in your current shell.
+- Set `PI_CLOUDFLARE_ENSURE=1` during deploy if you want the pipeline to ensure the Cloudflare tunnel after each successful Pi rollout.
+- For the barebones Pi path, `PI_CLOUDFLARE_MODE=anon-systemd` installs a local `systemd` adapter that runs `cloudflared tunnel --url "$PT_CLOUDFLARE_ORIGIN_URL"` and derives its origin from `$PI_DEST/.env.pi`.
+- For Cloudflare-managed tunnels, use `PI_CLOUDFLARE_MODE=managed-service`; when that service is not yet installed, provide `CF_TUNNEL_TOKEN` and, if needed, `PI_CLOUDFLARE_USER=<sudo-capable-user>` plus `PI_CLOUDFLARE_KEY=<ssh-key-for-that-user>`.
 - Keep the Pi config sandbox-only. Do not copy live credentials or enable live mode for this workflow.
 
 ## Environment variables
